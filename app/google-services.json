@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "911911093671",
+    "project_id": "kaishelvesapp",
+    "storage_bucket": "kaishelvesapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911911093671:android:d552d9061bcd41c908e282",
+        "android_client_info": {
+          "package_name": "com.example.kaishelvesapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9ftwtLnERtM46b8MgH5_H7FLuUb-0GAY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
