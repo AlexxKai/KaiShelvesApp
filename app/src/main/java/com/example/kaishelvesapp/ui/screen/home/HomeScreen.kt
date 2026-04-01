@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun HomeScreen(
+    userName: String?,
     onLogout: () -> Unit
 ) {
     Column(
@@ -22,7 +24,18 @@ fun HomeScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Sesión iniciada correctamente")
+        Text(
+            text = "Sesión iniciada correctamente",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        if (!userName.isNullOrBlank()) {
+            Text(
+                text = "Bienvenido, $userName",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
         Button(
             onClick = onLogout,
             modifier = Modifier.padding(top = 16.dp)

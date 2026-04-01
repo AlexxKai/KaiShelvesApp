@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 data class AuthUiState(
     val email: String = "",
     val password: String = "",
+    val username: String = "",
     val isLoading: Boolean = false,
     val user: Usuario? = null,
     val errorMessage: String? = null,
@@ -35,6 +36,10 @@ class AuthViewModel(
 
     fun onPasswordChange(value: String) {
         _uiState.value = _uiState.value.copy(password = value)
+    }
+
+    fun onUsernameChange(value: String) {
+        _uiState.value = _uiState.value.copy(username = value)
     }
 
     fun clearError() {
@@ -73,6 +78,51 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Error al iniciar sesión"
+                    )
+                }
+        }
+    }
+
+    fun register() {
+        val username = _uiState.value.username.trim()
+        val email = _uiState.value.email.trim()
+        val password = _uiState.value.password.trim()
+
+        if (username.isBlank() || email.isBlank() || password.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Completa usuario, email y contraseña"
+            )
+            return
+        }
+
+        if (password.length < 6) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.register(username, email, password)
+
+            result
+                .onSuccess { usuario ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = usuario,
+                        isLoggedIn = true,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Error al registrar usuario"
                     )
                 }
         }

@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.login
+package com.example.kaishelvesapp.ui.screen.register
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,17 +28,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 
 @Composable
-fun LoginScreen(
+fun RegisterScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: AuthViewModel,
-    onLoginSuccess: () -> Unit,
-    onGoToRegister: () -> Unit
+    onRegisterSuccess: () -> Unit,
+    onBackToLogin: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) {
-            onLoginSuccess()
+            onRegisterSuccess()
         }
     }
 
@@ -51,7 +51,7 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Kai Shelves",
+            text = "Crear cuenta",
             style = MaterialTheme.typography.headlineMedium
         )
 
@@ -63,6 +63,16 @@ fun LoginScreen(
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
+                OutlinedTextField(
+                    value = uiState.username,
+                    onValueChange = viewModel::onUsernameChange,
+                    label = { Text("Usuario") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 OutlinedTextField(
                     value = uiState.email,
                     onValueChange = viewModel::onEmailChange,
@@ -98,27 +108,24 @@ fun LoginScreen(
                 }
 
                 Button(
-                    onClick = { viewModel.login() },
+                    onClick = { viewModel.register() },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading
                 ) {
                     if (uiState.isLoading) {
                         CircularProgressIndicator()
                     } else {
-                        Text("Iniciar sesión")
+                        Text("Registrarse")
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(
-                    onClick = {
-                        viewModel.clearError()
-                        onGoToRegister()
-                    },
+                    onClick = onBackToLogin,
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Crear cuenta")
+                    Text("Ya tengo cuenta")
                 }
             }
         }

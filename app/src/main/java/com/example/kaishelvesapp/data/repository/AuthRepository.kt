@@ -38,6 +38,29 @@ class AuthRepository(
         }
     }
 
+    suspend fun register(usuario: String, email: String, password: String): Result<Usuario> {
+        return try {
+            val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+            val uid = authResult.user?.uid
+                ?: return Result.failure(Exception("No se pudo obtener el UID del usuario"))
+
+            val nuevoUsuario = Usuario(
+                uid = uid,
+                usuario = usuario,
+                email = email
+            )
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .set(nuevoUsuario)
+                .await()
+
+            Result.success(nuevoUsuario)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun logout() {
         auth.signOut()
     }
