@@ -72,4 +72,15 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    implementation("androidx.navigation:navigation-compose:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
+
+
+    //????
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.1")
+    ////??
 }
