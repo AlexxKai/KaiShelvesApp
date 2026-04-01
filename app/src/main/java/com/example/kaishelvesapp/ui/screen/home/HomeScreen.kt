@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HomeScreen(
     userName: String?,
+    onGoToCatalog: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -37,8 +38,15 @@ fun HomeScreen(
         }
 
         Button(
-            onClick = onLogout,
+            onClick = onGoToCatalog,
             modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text("Ir al catálogo")
+        }
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.padding(top = 12.dp)
         ) {
             Text("Cerrar sesión")
         }

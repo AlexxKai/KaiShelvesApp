@@ -8,15 +8,18 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
+import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
 
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val HOME = "home"
+    const val CATALOG = "catalog"
 }
 
 @Composable
@@ -24,6 +27,7 @@ fun AppNavigation(
     navController: NavHostController = rememberNavController()
 ) {
     val authViewModel: AuthViewModel = viewModel()
+    val catalogViewModel: CatalogViewModel = viewModel()
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     val startDestination = if (uiState.isLoggedIn) {
@@ -68,11 +72,28 @@ fun AppNavigation(
         composable(Routes.HOME) {
             HomeScreen(
                 userName = uiState.user?.usuario,
+                onGoToCatalog = {
+                    navController.navigate(Routes.CATALOG)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
+                }
+            )
+        }
+
+        composable(Routes.CATALOG) {
+            CatalogScreen(
+                viewModel = catalogViewModel,
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onBookClick = {
                 }
             )
         }
