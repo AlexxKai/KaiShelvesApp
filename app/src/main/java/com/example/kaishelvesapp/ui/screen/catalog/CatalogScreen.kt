@@ -38,8 +38,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.NightBlack
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -94,7 +96,8 @@ fun CatalogScreen(
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Buscar por título, autor o editorial") },
             shape = RoundedCornerShape(18.dp),
-            singleLine = true
+            singleLine = true,
+            colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -123,7 +126,7 @@ fun CatalogScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = TarnishedGold)
                 }
             }
 
@@ -140,7 +143,10 @@ fun CatalogScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    Button(onClick = { viewModel.cargarLibros() }) {
+                    Button(
+                        onClick = { viewModel.cargarLibros() },
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
                         Text("Reintentar")
                     }
                 }
@@ -178,7 +184,7 @@ fun CatalogScreen(
                     onClick = onLogout,
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Cerrar sesión")
+                    Text("Cerrar sesión", color = OldIvory)
                 }
             }
         }
@@ -231,32 +237,13 @@ private fun BookCard(
         Row(
             modifier = Modifier.padding(16.dp)
         ) {
-            Box(
+            BookCover(
+                imageUrl = libro.imagen,
+                title = libro.titulo,
                 modifier = Modifier
                     .width(64.dp)
                     .height(96.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(BloodWine)
-                    .border(
-                        width = 1.dp,
-                        color = TarnishedGold,
-                        shape = RoundedCornerShape(10.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 6.dp, height = 70.dp)
-                        .align(Alignment.CenterStart)
-                        .background(NightBlack.copy(alpha = 0.35f))
-                )
-
-                Text(
-                    text = "Tomo",
-                    color = OldIvory,
-                    style = MaterialTheme.typography.labelLarge
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.width(14.dp))
 

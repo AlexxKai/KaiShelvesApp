@@ -12,6 +12,7 @@ import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
+import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
@@ -25,6 +26,7 @@ object Routes {
     const val CATALOG = "catalog"
     const val DETAIL = "detail"
     const val READING_LIST = "reading_list"
+    const val PROFILE = "profile"
 }
 
 @Composable
@@ -80,6 +82,9 @@ fun AppNavigation(
                 onGoToReadingList = {
                     navController.navigate(Routes.READING_LIST)
                 },
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -127,6 +132,21 @@ fun AppNavigation(
                 viewModel = readingListViewModel,
                 onBack = {
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.PROFILE) {
+            ProfileScreen(
+                user = uiState.user,
+                onBack = {
+                    navController.popBackStack()
+                },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             )
         }

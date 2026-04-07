@@ -81,18 +81,36 @@ class ReadingListViewModel(
     fun actualizarPuntuacion(isbn: String, puntuacion: Int) {
         viewModelScope.launch {
             val result = repository.actualizarPuntuacion(isbn, puntuacion)
-            result.onSuccess {
-                cargarLecturas()
-            }
+            result
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        successMessage = "Puntuación actualizada"
+                    )
+                    cargarLecturas()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo actualizar la puntuación"
+                    )
+                }
         }
     }
 
     fun eliminarLibro(isbn: String) {
         viewModelScope.launch {
             val result = repository.eliminarLibroLeido(isbn)
-            result.onSuccess {
-                cargarLecturas()
-            }
+            result
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        successMessage = "Libro eliminado de tus lecturas"
+                    )
+                    cargarLecturas()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo eliminar el libro"
+                    )
+                }
         }
     }
 

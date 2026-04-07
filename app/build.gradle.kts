@@ -77,6 +77,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
 
 
+    implementation(libs.coil.compose)
+
+
     //????
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")

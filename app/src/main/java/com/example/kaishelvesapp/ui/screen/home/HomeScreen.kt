@@ -26,6 +26,7 @@ fun HomeScreen(
     userName: String?,
     onGoToCatalog: () -> Unit,
     onGoToReadingList: () -> Unit,
+    onGoToProfile: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -71,9 +72,17 @@ fun HomeScreen(
                 Button(
                     onClick = onGoToReadingList,
                     modifier = Modifier.padding(top = 12.dp),
-                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    colors = KaiShelvesThemeDefaults.secondaryButtonColors()
                 ) {
                     Text("Mis lecturas")
+                }
+
+                Button(
+                    onClick = onGoToProfile,
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                ) {
+                    Text("Perfil")
                 }
 
                 OutlinedButton(
