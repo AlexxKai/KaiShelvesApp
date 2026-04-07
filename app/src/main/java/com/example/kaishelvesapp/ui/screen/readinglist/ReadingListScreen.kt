@@ -27,7 +27,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +46,7 @@ import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiTopBar
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -231,10 +231,30 @@ private fun ReadingItem(
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(libro.titulo, style = MaterialTheme.typography.titleLarge, color = TarnishedGold)
+                    Text(
+                        text = libro.titulo,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TarnishedGold
+                    )
                     Text("Autor: ${libro.autor}", color = OldIvory)
                     Text("Leído el: ${libro.fechaLeido}", color = OldIvory)
-                    Text("Puntuación actual: ${libro.puntuacion}", color = OldIvory)
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    RatingStars(
+                        rating = libro.puntuacion
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = if (libro.puntuacion == 0) {
+                            "Sin puntuar todavía"
+                        } else {
+                            "Puntuación: ${libro.puntuacion}/5"
+                        },
+                        color = OldIvory
+                    )
                 }
             }
 

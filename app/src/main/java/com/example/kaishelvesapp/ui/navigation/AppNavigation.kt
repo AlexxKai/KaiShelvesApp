@@ -17,6 +17,7 @@ import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
+import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 
@@ -37,6 +38,7 @@ fun AppNavigation(
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
     val readingListViewModel: ReadingListViewModel = viewModel()
+    val bookDetailViewModel: BookDetailViewModel = viewModel()
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     val startDestination = if (uiState.isLoggedIn) Routes.HOME else Routes.LOGIN
@@ -121,11 +123,16 @@ fun AppNavigation(
             if (libro != null) {
                 BookDetailScreen(
                     libro = libro,
+                    viewModel = bookDetailViewModel,
                     onBack = { navController.popBackStack() },
                     onMarkAsRead = { selected ->
                         readingListViewModel.marcarComoLeido(selected) {
+                            bookDetailViewModel.refrescarLectura(selected.isbn)
                             navController.navigate(Routes.READING_LIST)
                         }
+                    },
+                    onGoToReadingList = {
+                        navController.navigate(Routes.READING_LIST)
                     }
                 )
             }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -25,33 +26,50 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
-import kotlinx.coroutines.CoroutineScope
+import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.graphics.Color
 
 @Composable
 fun BookDetailScreen(
     libro: Libro,
+    viewModel: BookDetailViewModel,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onBack: () -> Unit,
-    onMarkAsRead: (Libro) -> Unit
+    onMarkAsRead: (Libro) -> Unit,
+    onGoToReadingList: () -> Unit
 ) {
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(libro.isbn) {
+        viewModel.cargarEstadoLectura(libro.isbn)
+    }
+
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+        }
+    }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -151,27 +169,93 @@ fun BookDetailScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            Text(
-                                text = "Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo más tarde.",
-                                color = OldIvory,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                            if (uiState.isAlreadyRead && uiState.readBook != null) {
+                                Text(
+                                    text = "Este volumen ya forma parte de tus lecturas.",
+                                    color = OldIvory,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                DetailLine(
+                                    label = "Fecha de lectura",
+                                    value = uiState.readBook?.fechaLeido ?: "-"
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = "Valoración",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = TarnishedGold
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                RatingStars(
+                                    rating = uiState.readBook?.puntuacion ?: 0
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = if ((uiState.readBook?.puntuacion ?: 0) == 0) {
+                                        "Sin puntuar todavía"
+                                    } else {
+                                        "Puntuación registrada: ${uiState.readBook?.puntuacion}/5"
+                                    },
+                                    color = OldIvory,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            } else {
+                                Text(
+                                    text = "Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo más tarde.",
+                                    color = OldIvory,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    Button(
-                        onClick = {
-                            onMarkAsRead(libro)
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Libro añadido a tus lecturas")
+                    when {
+                        uiState.isLoading -> {
+                            Button(
+                                onClick = {},
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = false,
+                                colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                            ) {
+                                CircularProgressIndicator(color = OldIvory)
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                    ) {
-                        Text("Marcar como leído")
+                        }
+
+                        uiState.isAlreadyRead -> {
+                            Button(
+                                onClick = onGoToReadingList,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                            ) {
+                                Text("Ir a mis lecturas")
+                            }
+                        }
+
+                        else -> {
+                            Button(
+                                onClick = {
+                                    onMarkAsRead(libro)
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Libro añadido a tus lecturas")
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                            ) {
+                                Text("Marcar como leído")
+                            }
+                        }
                     }
 
                     if (libro.pdf.isNotBlank()) {

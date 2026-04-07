@@ -165,4 +165,41 @@ class BookRepository(
             Result.failure(e)
         }
     }
+
+//    suspend fun estaEnLecturas(isbn: String): Result<Boolean> {
+//        return try {
+//            val uid = auth.currentUser?.uid
+//                ?: return Result.failure(Exception("Usuario no autenticado"))
+//
+//            val snapshot = firestore.collection("usuarios")
+//                .document(uid)
+//                .collection("leidos")
+//                .document(isbn)
+//                .get()
+//                .await()
+//
+//            Result.success(snapshot.exists())
+//        } catch (e: Exception) {
+//            Result.failure(e)
+//        }
+//    }
+
+    suspend fun obtenerLibroLeido(isbn: String): Result<com.example.kaishelvesapp.data.model.LibroLeido?> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("Usuario no autenticado"))
+
+            val snapshot = firestore.collection("usuarios")
+                .document(uid)
+                .collection("leidos")
+                .document(isbn)
+                .get()
+                .await()
+
+            val libroLeido = snapshot.toObject(com.example.kaishelvesapp.data.model.LibroLeido::class.java)
+            Result.success(libroLeido)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
