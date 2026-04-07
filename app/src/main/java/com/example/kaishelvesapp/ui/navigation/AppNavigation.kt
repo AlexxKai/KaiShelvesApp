@@ -8,7 +8,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
+import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
@@ -20,6 +22,7 @@ object Routes {
     const val REGISTER = "register"
     const val HOME = "home"
     const val CATALOG = "catalog"
+    const val DETAIL = "detail"
 }
 
 @Composable
@@ -30,11 +33,7 @@ fun AppNavigation(
     val catalogViewModel: CatalogViewModel = viewModel()
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
-    val startDestination = if (uiState.isLoggedIn) {
-        Routes.HOME
-    } else {
-        Routes.LOGIN
-    }
+    val startDestination = if (uiState.isLoggedIn) Routes.HOME else Routes.LOGIN
 
     NavHost(
         navController = navController,
@@ -93,9 +92,25 @@ fun AppNavigation(
                         popUpTo(0) { inclusive = true }
                     }
                 },
-                onBookClick = {
+                onBookClick = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
                 }
             )
+        }
+
+        composable(Routes.DETAIL) {
+            val libro = catalogViewModel.uiState.value.selectedBook
+            if (libro != null) {
+                BookDetailScreen(
+                    libro = libro,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onMarkAsRead = {
+                    }
+                )
+            }
         }
     }
 }
