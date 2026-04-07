@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.ui.screen.register
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +27,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
+import com.example.kaishelvesapp.ui.theme.Obsidian
+import com.example.kaishelvesapp.ui.theme.OldIvory
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 
 @Composable
@@ -52,13 +58,16 @@ fun RegisterScreen(
     ) {
         Text(
             text = "Crear cuenta",
-            style = MaterialTheme.typography.headlineMedium
+            style = MaterialTheme.typography.headlineLarge,
+            color = TarnishedGold
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)
@@ -68,7 +77,8 @@ fun RegisterScreen(
                     onValueChange = viewModel::onUsernameChange,
                     label = { Text("Usuario") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -79,6 +89,7 @@ fun RegisterScreen(
                     label = { Text("Email") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email
                     )
@@ -92,6 +103,7 @@ fun RegisterScreen(
                     label = { Text("Contraseña") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                     visualTransformation = PasswordVisualTransformation()
                 )
 
@@ -110,10 +122,11 @@ fun RegisterScreen(
                 Button(
                     onClick = { viewModel.register() },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isLoading
+                    enabled = !uiState.isLoading,
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
                 ) {
                     if (uiState.isLoading) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = OldIvory)
                     } else {
                         Text("Registrarse")
                     }
@@ -125,7 +138,10 @@ fun RegisterScreen(
                     onClick = onBackToLogin,
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Ya tengo cuenta")
+                    Text(
+                        text = "Ya tengo cuenta",
+                        color = OldIvory
+                    )
                 }
             }
         }

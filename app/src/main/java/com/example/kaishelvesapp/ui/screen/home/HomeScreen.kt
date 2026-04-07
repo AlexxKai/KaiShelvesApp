@@ -16,14 +16,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.kaishelvesapp.ui.theme.AntiqueGold
-import com.example.kaishelvesapp.ui.theme.CharcoalBrown
-import com.example.kaishelvesapp.ui.theme.OldPaper
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
+import com.example.kaishelvesapp.ui.theme.Obsidian
+import com.example.kaishelvesapp.ui.theme.OldIvory
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 @Composable
 fun HomeScreen(
     userName: String?,
     onGoToCatalog: () -> Unit,
+    onGoToReadingList: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -35,8 +37,8 @@ fun HomeScreen(
     ) {
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = CharcoalBrown),
-            border = BorderStroke(1.dp, AntiqueGold)
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold)
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -45,7 +47,7 @@ fun HomeScreen(
                 Text(
                     text = "Kai Shelves",
                     style = MaterialTheme.typography.headlineLarge,
-                    color = AntiqueGold
+                    color = TarnishedGold
                 )
 
                 Text(
@@ -55,22 +57,31 @@ fun HomeScreen(
                         "Bienvenido a tu biblioteca oscura"
                     },
                     modifier = Modifier.padding(top = 8.dp),
-                    color = OldPaper
+                    color = OldIvory
                 )
 
                 Button(
                     onClick = onGoToCatalog,
-                    modifier = Modifier.padding(top = 20.dp)
+                    modifier = Modifier.padding(top = 20.dp),
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
                 ) {
                     Text("Explorar catálogo")
+                }
+
+                Button(
+                    onClick = onGoToReadingList,
+                    modifier = Modifier.padding(top = 12.dp),
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                ) {
+                    Text("Mis lecturas")
                 }
 
                 OutlinedButton(
                     onClick = onLogout,
                     modifier = Modifier.padding(top = 12.dp),
-                    border = BorderStroke(1.dp, AntiqueGold)
+                    border = BorderStroke(1.dp, TarnishedGold)
                 ) {
-                    Text("Cerrar sesión")
+                    Text("Cerrar sesión", color = TarnishedGold)
                 }
             }
         }

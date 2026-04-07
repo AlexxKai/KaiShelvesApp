@@ -8,14 +8,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
+import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
+import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 
 object Routes {
     const val LOGIN = "login"
@@ -23,6 +24,7 @@ object Routes {
     const val HOME = "home"
     const val CATALOG = "catalog"
     const val DETAIL = "detail"
+    const val READING_LIST = "reading_list"
 }
 
 @Composable
@@ -31,6 +33,7 @@ fun AppNavigation(
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
+    val readingListViewModel: ReadingListViewModel = viewModel()
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     val startDestination = if (uiState.isLoggedIn) Routes.HOME else Routes.LOGIN
@@ -74,6 +77,9 @@ fun AppNavigation(
                 onGoToCatalog = {
                     navController.navigate(Routes.CATALOG)
                 },
+                onGoToReadingList = {
+                    navController.navigate(Routes.READING_LIST)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -107,10 +113,22 @@ fun AppNavigation(
                     onBack = {
                         navController.popBackStack()
                     },
-                    onMarkAsRead = {
+                    onMarkAsRead = { selected ->
+                        readingListViewModel.marcarComoLeido(selected) {
+                            navController.navigate(Routes.READING_LIST)
+                        }
                     }
                 )
             }
+        }
+
+        composable(Routes.READING_LIST) {
+            ReadingListScreen(
+                viewModel = readingListViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

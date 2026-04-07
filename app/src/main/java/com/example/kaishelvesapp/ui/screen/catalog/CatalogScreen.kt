@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.ui.screen.catalog
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,12 +38,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.data.model.Libro
-import com.example.kaishelvesapp.ui.theme.AntiqueGold
-import com.example.kaishelvesapp.ui.theme.AshBlack
-import com.example.kaishelvesapp.ui.theme.BurgundyDark
-import com.example.kaishelvesapp.ui.theme.CharcoalBrown
-import com.example.kaishelvesapp.ui.theme.DarkWalnut
-import com.example.kaishelvesapp.ui.theme.OldPaper
+import com.example.kaishelvesapp.ui.theme.BloodWine
+import com.example.kaishelvesapp.ui.theme.DeepWalnut
+import com.example.kaishelvesapp.ui.theme.NightBlack
+import com.example.kaishelvesapp.ui.theme.Obsidian
+import com.example.kaishelvesapp.ui.theme.OldIvory
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
 
 @Composable
@@ -63,7 +64,7 @@ fun CatalogScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),
-            color = CharcoalBrown,
+            color = Obsidian,
             tonalElevation = 2.dp
         ) {
             Column(
@@ -72,7 +73,7 @@ fun CatalogScreen(
                 Text(
                     text = "Archivo de la biblioteca",
                     style = MaterialTheme.typography.headlineLarge,
-                    color = AntiqueGold
+                    color = TarnishedGold
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -80,7 +81,7 @@ fun CatalogScreen(
                 Text(
                     text = "Busca entre volúmenes, autores y géneros.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OldPaper
+                    color = OldIvory
                 )
             }
         }
@@ -153,7 +154,7 @@ fun CatalogScreen(
                 ) {
                     Text(
                         text = "No se han encontrado volúmenes",
-                        color = OldPaper
+                        color = OldIvory
                     )
                 }
             }
@@ -190,8 +191,8 @@ private fun GenreChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val background = if (selected) BurgundyDark else DarkWalnut
-    val textColor = if (selected) AntiqueGold else OldPaper
+    val background = if (selected) BloodWine else DeepWalnut
+    val textColor = if (selected) TarnishedGold else OldIvory
 
     Box(
         modifier = Modifier
@@ -199,7 +200,7 @@ private fun GenreChip(
             .background(background)
             .border(
                 width = 1.dp,
-                color = AntiqueGold,
+                color = TarnishedGold,
                 shape = RoundedCornerShape(20.dp)
             )
             .clickable { onClick() }
@@ -223,8 +224,8 @@ private fun BookCard(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = CharcoalBrown),
-        border = androidx.compose.foundation.BorderStroke(1.dp, AntiqueGold),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold),
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
     ) {
         Row(
@@ -235,10 +236,10 @@ private fun BookCard(
                     .width(64.dp)
                     .height(96.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(BurgundyDark)
+                    .background(BloodWine)
                     .border(
                         width = 1.dp,
-                        color = AntiqueGold,
+                        color = TarnishedGold,
                         shape = RoundedCornerShape(10.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -247,12 +248,12 @@ private fun BookCard(
                     modifier = Modifier
                         .size(width = 6.dp, height = 70.dp)
                         .align(Alignment.CenterStart)
-                        .background(AshBlack.copy(alpha = 0.35f))
+                        .background(NightBlack.copy(alpha = 0.35f))
                 )
 
                 Text(
                     text = "Tomo",
-                    color = OldPaper,
+                    color = OldIvory,
                     style = MaterialTheme.typography.labelLarge
                 )
             }
@@ -265,7 +266,7 @@ private fun BookCard(
                 Text(
                     text = libro.titulo,
                     style = MaterialTheme.typography.titleLarge,
-                    color = AntiqueGold
+                    color = TarnishedGold
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -273,26 +274,26 @@ private fun BookCard(
                 Text(
                     text = "Autor: ${libro.autor}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OldPaper
+                    color = OldIvory
                 )
 
                 Text(
                     text = "Género: ${libro.genero}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OldPaper
+                    color = OldIvory
                 )
 
                 Text(
                     text = "Editorial: ${libro.editorial}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OldPaper
+                    color = OldIvory
                 )
 
                 if (libro.fechaPublicacion != 0) {
                     Text(
                         text = "Publicación: ${libro.fechaPublicacion}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = OldPaper
+                        color = OldIvory
                     )
                 }
             }

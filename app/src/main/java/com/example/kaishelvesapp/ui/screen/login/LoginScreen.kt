@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.ui.screen.login
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,13 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +27,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
+import com.example.kaishelvesapp.ui.theme.Obsidian
+import com.example.kaishelvesapp.ui.theme.OldIvory
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 
 @Composable
@@ -52,13 +58,16 @@ fun LoginScreen(
     ) {
         Text(
             text = "Kai Shelves",
-            style = MaterialTheme.typography.headlineMedium
+            style = MaterialTheme.typography.headlineLarge,
+            color = TarnishedGold
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Card(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold)
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)
@@ -69,6 +78,7 @@ fun LoginScreen(
                     label = { Text("Email") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email
                     )
@@ -82,6 +92,7 @@ fun LoginScreen(
                     label = { Text("Contraseña") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                     visualTransformation = PasswordVisualTransformation()
                 )
 
@@ -100,10 +111,11 @@ fun LoginScreen(
                 Button(
                     onClick = { viewModel.login() },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isLoading
+                    enabled = !uiState.isLoading,
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
                 ) {
                     if (uiState.isLoading) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = OldIvory)
                     } else {
                         Text("Iniciar sesión")
                     }
@@ -118,7 +130,10 @@ fun LoginScreen(
                     },
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("Crear cuenta")
+                    Text(
+                        text = "Crear cuenta",
+                        color = OldIvory
+                    )
                 }
             }
         }

@@ -2,8 +2,6 @@ package com.example.kaishelvesapp.ui.screen.detail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -26,17 +24,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.data.model.Libro
-import com.example.kaishelvesapp.ui.theme.AntiqueGold
-import com.example.kaishelvesapp.ui.theme.BurgundyDark
-import com.example.kaishelvesapp.ui.theme.CharcoalBrown
-import com.example.kaishelvesapp.ui.theme.OldPaper
+import com.example.kaishelvesapp.ui.theme.BloodWine
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
+import com.example.kaishelvesapp.ui.theme.Obsidian
+import com.example.kaishelvesapp.ui.theme.OldIvory
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 @Composable
 fun BookDetailScreen(
     libro: Libro,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onBack: () -> Unit,
-    onMarkAsRead: (Libro) -> Unit = {}
+    onMarkAsRead: (Libro) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -46,9 +45,9 @@ fun BookDetailScreen(
     ) {
         OutlinedButton(
             onClick = onBack,
-            border = BorderStroke(1.dp, AntiqueGold)
+            border = BorderStroke(1.dp, TarnishedGold)
         ) {
-            Text("Volver")
+            Text("Volver", color = TarnishedGold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -56,7 +55,7 @@ fun BookDetailScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
-            color = CharcoalBrown
+            color = Obsidian
         ) {
             Column(
                 modifier = Modifier.padding(20.dp)
@@ -64,7 +63,7 @@ fun BookDetailScreen(
                 Text(
                     text = "Ficha del volumen",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = AntiqueGold
+                    color = TarnishedGold
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -72,19 +71,19 @@ fun BookDetailScreen(
                 Row(
                     verticalAlignment = Alignment.Top
                 ) {
-                    Box(
+                    androidx.compose.foundation.layout.Box(
                         modifier = Modifier
                             .width(110.dp)
                             .height(160.dp)
                             .background(
-                                color = BurgundyDark,
+                                color = BloodWine,
                                 shape = RoundedCornerShape(14.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "Libro",
-                            color = OldPaper,
+                            color = OldIvory,
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -97,7 +96,7 @@ fun BookDetailScreen(
                         Text(
                             text = libro.titulo,
                             style = MaterialTheme.typography.headlineMedium,
-                            color = AntiqueGold
+                            color = TarnishedGold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -123,24 +122,24 @@ fun BookDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = BurgundyDark),
-                    border = BorderStroke(1.dp, AntiqueGold),
+                    colors = CardDefaults.cardColors(containerColor = BloodWine),
+                    border = BorderStroke(1.dp, TarnishedGold),
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
                         Text(
-                            text = "Descripción archivística",
+                            text = "Nota del archivo",
                             style = MaterialTheme.typography.titleMedium,
-                            color = AntiqueGold
+                            color = TarnishedGold
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Este volumen forma parte del catálogo de tu biblioteca. Desde aquí podrás consultarlo y, en el siguiente paso, marcarlo como leído y añadirlo a tu colección personal.",
-                            color = OldPaper,
+                            text = "Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo más tarde.",
+                            color = OldIvory,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -150,7 +149,8 @@ fun BookDetailScreen(
 
                 Button(
                     onClick = { onMarkAsRead(libro) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
                 ) {
                     Text("Marcar como leído")
                 }
@@ -170,12 +170,12 @@ private fun DetailLine(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = AntiqueGold
+            color = TarnishedGold
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
-            color = OldPaper
+            color = OldIvory
         )
     }
 }
