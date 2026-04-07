@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.ui.components.KaiScreen
+import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -31,55 +33,52 @@ fun ProfileScreen(
     user: Usuario?,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onBack: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onSectionSelected: (KaiSection) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    KaiScreen(
+        title = "Perfil del lector",
+        subtitle = "Consulta tu identidad dentro del archivo.",
+        currentSection = KaiSection.PROFILE,
+        onSectionSelected = onSectionSelected
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Obsidian),
-            border = BorderStroke(1.dp, TarnishedGold)
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Obsidian),
+                border = BorderStroke(1.dp, TarnishedGold)
             ) {
-                Text(
-                    text = "Perfil del lector",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = TarnishedGold
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                ProfileLine("Usuario", user?.usuario ?: "Sin nombre")
-                ProfileLine("Email", user?.email ?: "Sin email")
-                ProfileLine("UID", user?.uid ?: "No disponible")
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onLogout,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                Column(
+                    modifier = Modifier.padding(24.dp)
                 ) {
-                    Text("Cerrar sesión")
-                }
+                    ProfileLine("Usuario", user?.usuario ?: "Sin nombre")
+                    ProfileLine("Email", user?.email ?: "Sin email")
+                    ProfileLine("UID", user?.uid ?: "No disponible")
 
-                Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                OutlinedButton(
-                    onClick = onBack,
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, TarnishedGold)
-                ) {
-                    Text("Volver", color = TarnishedGold)
+                    Button(
+                        onClick = onLogout,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        Text("Cerrar sesión")
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = onBack,
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, TarnishedGold)
+                    ) {
+                        Text("Volver", color = TarnishedGold)
+                    }
                 }
             }
         }

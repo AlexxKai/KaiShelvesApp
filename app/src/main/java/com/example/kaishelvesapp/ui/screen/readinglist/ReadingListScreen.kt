@@ -39,10 +39,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.KaiBottomBar
+import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.KaiTopBar
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -53,7 +57,8 @@ import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 fun ReadingListScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: ReadingListViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -75,9 +80,15 @@ fun ReadingListScreen(
     }
 
     Scaffold(
-        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        containerColor = Color.Transparent,
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
+        },
+        bottomBar = {
+            KaiBottomBar(
+                current = KaiSection.READING,
+                onSelect = onSectionSelected
+            )
         }
     ) { innerPadding ->
         Column(
@@ -87,49 +98,10 @@ fun ReadingListScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onBack,
-                    border = BorderStroke(1.dp, TarnishedGold)
-                ) {
-                    Text("Volver", color = TarnishedGold)
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Text(
-                    text = "Mis lecturas",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = TarnishedGold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = Obsidian
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp)
-                ) {
-                    Text(
-                        text = "Registro del lector",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TarnishedGold
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "Aquí se conservan los volúmenes que has leído.",
-                        color = OldIvory
-                    )
-                }
-            }
+            KaiTopBar(
+                title = "Mis lecturas",
+                subtitle = "Aquí se conservan los volúmenes que has leído."
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -215,18 +187,8 @@ private fun ReadingItem(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = {
-                Text(
-                    text = "Eliminar lectura",
-                    color = TarnishedGold
-                )
-            },
-            text = {
-                Text(
-                    text = "¿Quieres eliminar \"${libro.titulo}\" de tus lecturas?",
-                    color = OldIvory
-                )
-            },
+            title = { Text("Eliminar lectura", color = TarnishedGold) },
+            text = { Text("¿Quieres eliminar \"${libro.titulo}\" de tus lecturas?", color = OldIvory) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -238,9 +200,7 @@ private fun ReadingItem(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showDeleteDialog = false }
-                ) {
+                TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Cancelar", color = OldIvory)
                 }
             },
@@ -271,11 +231,7 @@ private fun ReadingItem(
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = libro.titulo,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TarnishedGold
-                    )
+                    Text(libro.titulo, style = MaterialTheme.typography.titleLarge, color = TarnishedGold)
                     Text("Autor: ${libro.autor}", color = OldIvory)
                     Text("Leído el: ${libro.fechaLeido}", color = OldIvory)
                     Text("Puntuación actual: ${libro.puntuacion}", color = OldIvory)
@@ -299,12 +255,7 @@ private fun ReadingItem(
                 ) {
                     (0..5).forEach { puntuacion ->
                         DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "$puntuacion",
-                                    color = OldIvory
-                                )
-                            },
+                            text = { Text("$puntuacion", color = OldIvory) },
                             onClick = {
                                 selectedRating = puntuacion
                                 expanded = false
@@ -317,9 +268,7 @@ private fun ReadingItem(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            TextButton(
-                onClick = { showDeleteDialog = true }
-            ) {
+            TextButton(onClick = { showDeleteDialog = true }) {
                 Text("Eliminar de mis lecturas", color = TarnishedGold)
             }
         }

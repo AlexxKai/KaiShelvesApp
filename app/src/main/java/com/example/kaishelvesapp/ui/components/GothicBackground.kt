@@ -25,17 +25,23 @@ fun GothicBackground(
     ) {
         Image(
             painter = painterResource(id = R.drawable.bg_bookshelf),
-            contentDescription = "Fondo de estantería",
+            contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(0.88f), // cambiar para modificar lo oscura que se ve la imagen de fondo
+                .alpha(0.18f),
             contentScale = ContentScale.Crop
         )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(NightBlack.copy(alpha = 0.78f))
+                .background(NightBlack.copy(alpha = 0.70f))
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(NightBlack.copy(alpha = 0.16f))
         )
 
         content()

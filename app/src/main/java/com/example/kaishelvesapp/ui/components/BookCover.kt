@@ -1,7 +1,9 @@
 package com.example.kaishelvesapp.ui.components
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +21,6 @@ import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.NightBlack
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
-import androidx.compose.foundation.border
 
 @Composable
 fun BookCover(
@@ -44,28 +45,33 @@ fun BookCover(
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (imageUrl.isNotBlank()) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = "Portada de $title",
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(BloodWine),
-                contentAlignment = Alignment.Center
-            ) {
-                placeholderContent()
-            }
+        Crossfade(
+            targetState = imageUrl.isNotBlank(),
+            label = "book_cover_crossfade"
+        ) { hasImage ->
+            if (hasImage) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Portada de $title",
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(BloodWine),
+                    contentAlignment = Alignment.Center
+                ) {
+                    placeholderContent()
+                }
 
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(width = 6.dp, height = 70.dp)
-                    .background(NightBlack.copy(alpha = 0.35f))
-            )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .size(width = 6.dp, height = 70.dp)
+                        .background(NightBlack.copy(alpha = 0.35f))
+                )
+            }
         }
     }
 }

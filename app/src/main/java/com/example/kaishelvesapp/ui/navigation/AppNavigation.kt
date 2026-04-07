@@ -8,6 +8,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
@@ -39,6 +40,15 @@ fun AppNavigation(
     val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     val startDestination = if (uiState.isLoggedIn) Routes.HOME else Routes.LOGIN
+
+    fun navigateSection(section: KaiSection) {
+        when (section) {
+            KaiSection.HOME -> navController.navigate(Routes.HOME)
+            KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
+            KaiSection.READING -> navController.navigate(Routes.READING_LIST)
+            KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
+        }
+    }
 
     NavHost(
         navController = navController,
@@ -76,21 +86,16 @@ fun AppNavigation(
         composable(Routes.HOME) {
             HomeScreen(
                 userName = uiState.user?.usuario,
-                onGoToCatalog = {
-                    navController.navigate(Routes.CATALOG)
-                },
-                onGoToReadingList = {
-                    navController.navigate(Routes.READING_LIST)
-                },
-                onGoToProfile = {
-                    navController.navigate(Routes.PROFILE)
-                },
+                onGoToCatalog = { navController.navigate(Routes.CATALOG) },
+                onGoToReadingList = { navController.navigate(Routes.READING_LIST) },
+                onGoToProfile = { navController.navigate(Routes.PROFILE) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
-                }
+                },
+                onSectionSelected = { navigateSection(it) }
             )
         }
 
@@ -106,7 +111,8 @@ fun AppNavigation(
                 onBookClick = { libro ->
                     catalogViewModel.selectBook(libro)
                     navController.navigate(Routes.DETAIL)
-                }
+                },
+                onSectionSelected = { navigateSection(it) }
             )
         }
 
@@ -115,9 +121,7 @@ fun AppNavigation(
             if (libro != null) {
                 BookDetailScreen(
                     libro = libro,
-                    onBack = {
-                        navController.popBackStack()
-                    },
+                    onBack = { navController.popBackStack() },
                     onMarkAsRead = { selected ->
                         readingListViewModel.marcarComoLeido(selected) {
                             navController.navigate(Routes.READING_LIST)
@@ -130,24 +134,22 @@ fun AppNavigation(
         composable(Routes.READING_LIST) {
             ReadingListScreen(
                 viewModel = readingListViewModel,
-                onBack = {
-                    navController.popBackStack()
-                }
+                onBack = { navController.popBackStack() },
+                onSectionSelected = { navigateSection(it) }
             )
         }
 
         composable(Routes.PROFILE) {
             ProfileScreen(
                 user = uiState.user,
-                onBack = {
-                    navController.popBackStack()
-                },
+                onBack = { navController.popBackStack() },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
-                }
+                },
+                onSectionSelected = { navigateSection(it) }
             )
         }
     }
