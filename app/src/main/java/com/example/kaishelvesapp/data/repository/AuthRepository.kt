@@ -14,6 +14,33 @@ class AuthRepository(
         return auth.currentUser != null
     }
 
+    fun getCurrentUid(): String? {
+        return auth.currentUser?.uid
+    }
+
+    suspend fun getCurrentUserProfile(): Result<Usuario> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+
+            val snapshot = firestore.collection("usuarios")
+                .document(uid)
+                .get()
+                .await()
+
+            val usuario = snapshot.toObject(Usuario::class.java)
+                ?: Usuario(
+                    uid = uid,
+                    usuario = auth.currentUser?.displayName ?: "",
+                    email = auth.currentUser?.email ?: ""
+                )
+
+            Result.success(usuario)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun login(email: String, password: String): Result<Usuario> {
         return try {
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
@@ -56,6 +83,30 @@ class AuthRepository(
                 .await()
 
             Result.success(nuevoUsuario)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateUsername(newUsername: String): Result<Usuario> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+
+            val email = auth.currentUser?.email ?: ""
+
+            val updatedUser = Usuario(
+                uid = uid,
+                usuario = newUsername,
+                email = email
+            )
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .set(updatedUser)
+                .await()
+
+            Result.success(updatedUser)
         } catch (e: Exception) {
             Result.failure(e)
         }

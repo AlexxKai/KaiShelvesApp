@@ -16,7 +16,9 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val user: Usuario? = null,
     val errorMessage: String? = null,
-    val isLoggedIn: Boolean = false
+    val successMessage: String? = null,
+    val isLoggedIn: Boolean = false,
+    val isEditingProfile: Boolean = false
 )
 
 class AuthViewModel(
@@ -29,6 +31,12 @@ class AuthViewModel(
         )
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    init {
+        if (repository.isAuthenticated()) {
+            loadCurrentUserProfile()
+        }
+    }
 
     fun onEmailChange(value: String) {
         _uiState.value = _uiState.value.copy(email = value)
@@ -46,6 +54,58 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
+    fun clearMessages() {
+        _uiState.value = _uiState.value.copy(
+            errorMessage = null,
+            successMessage = null
+        )
+    }
+
+    fun startEditingProfile() {
+        _uiState.value = _uiState.value.copy(
+            isEditingProfile = true,
+            username = _uiState.value.user?.usuario ?: "",
+            errorMessage = null,
+            successMessage = null
+        )
+    }
+
+    fun cancelEditingProfile() {
+        _uiState.value = _uiState.value.copy(
+            isEditingProfile = false,
+            username = _uiState.value.user?.usuario ?: "",
+            errorMessage = null
+        )
+    }
+
+    fun loadCurrentUserProfile() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.getCurrentUserProfile()
+
+            result
+                .onSuccess { usuario ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = usuario,
+                        username = usuario.usuario,
+                        isLoggedIn = true,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo cargar el perfil"
+                    )
+                }
+        }
+    }
+
     fun login() {
         val email = _uiState.value.email.trim()
         val password = _uiState.value.password.trim()
@@ -59,7 +119,8 @@ class AuthViewModel(
 
         _uiState.value = _uiState.value.copy(
             isLoading = true,
-            errorMessage = null
+            errorMessage = null,
+            successMessage = null
         )
 
         viewModelScope.launch {
@@ -70,6 +131,7 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
+                        username = usuario.usuario,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -104,7 +166,8 @@ class AuthViewModel(
 
         _uiState.value = _uiState.value.copy(
             isLoading = true,
-            errorMessage = null
+            errorMessage = null,
+            successMessage = null
         )
 
         viewModelScope.launch {
@@ -115,6 +178,7 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
+                        username = usuario.usuario,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -123,6 +187,44 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Error al registrar usuario"
+                    )
+                }
+        }
+    }
+
+    fun saveProfileChanges() {
+        val username = _uiState.value.username.trim()
+
+        if (username.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "El nombre de usuario no puede estar vacío"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.updateUsername(username)
+
+            result
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        username = updatedUser.usuario,
+                        isEditingProfile = false,
+                        successMessage = "Perfil actualizado correctamente"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo actualizar el perfil"
                     )
                 }
         }

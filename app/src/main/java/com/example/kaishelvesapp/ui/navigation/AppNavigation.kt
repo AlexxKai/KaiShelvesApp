@@ -141,7 +141,7 @@ fun AppNavigation(
 
         composable(Routes.PROFILE) {
             ProfileScreen(
-                user = uiState.user,
+                viewModel = authViewModel,
                 onBack = { navController.popBackStack() },
                 onLogout = {
                     authViewModel.logout()
