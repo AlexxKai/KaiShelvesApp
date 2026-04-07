@@ -11,7 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
-import com.example.kaishelvesapp.ui.screen.home.HomeScreen
+import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
@@ -24,7 +24,7 @@ import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
-    const val HOME = "home"
+    const val LIBRARY = "library"
     const val CATALOG = "catalog"
     const val DETAIL = "detail"
     const val READING_LIST = "reading_list"
@@ -39,13 +39,14 @@ fun AppNavigation(
     val catalogViewModel: CatalogViewModel = viewModel()
     val readingListViewModel: ReadingListViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
-    val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
+    val authState by authViewModel.uiState.collectAsStateWithLifecycle()
+    val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
 
-    val startDestination = if (uiState.isLoggedIn) Routes.HOME else Routes.LOGIN
+    val startDestination = if (authState.isLoggedIn) Routes.LIBRARY else Routes.LOGIN
 
     fun navigateSection(section: KaiSection) {
         when (section) {
-            KaiSection.HOME -> navController.navigate(Routes.HOME)
+            KaiSection.HOME -> navController.navigate(Routes.LIBRARY)
             KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
             KaiSection.READING -> navController.navigate(Routes.READING_LIST)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
@@ -60,7 +61,7 @@ fun AppNavigation(
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.LIBRARY) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -74,7 +75,7 @@ fun AppNavigation(
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.LIBRARY) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -85,16 +86,22 @@ fun AppNavigation(
             )
         }
 
-        composable(Routes.HOME) {
-            HomeScreen(
-                userName = uiState.user?.usuario,
-                onGoToCatalog = { navController.navigate(Routes.CATALOG) },
-                onGoToReadingList = { navController.navigate(Routes.READING_LIST) },
-                onGoToProfile = { navController.navigate(Routes.PROFILE) },
+        composable(Routes.LIBRARY) {
+            val genres = catalogState.generos.filter { it != "Todos" }
+            val genreCounts = catalogViewModel.getGenreCounts()
+
+            LibraryScreen(
+                userName = authState.user?.usuario,
+                genres = genres,
+                genreCounts = genreCounts,
+                onGenreClick = { genre ->
+                    catalogViewModel.applyInitialGenre(genre)
+                    navController.navigate(Routes.CATALOG)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 },
                 onSectionSelected = { navigateSection(it) }
@@ -119,7 +126,7 @@ fun AppNavigation(
         }
 
         composable(Routes.DETAIL) {
-            val libro = catalogViewModel.uiState.value.selectedBook
+            val libro = catalogState.selectedBook
             if (libro != null) {
                 BookDetailScreen(
                     libro = libro,

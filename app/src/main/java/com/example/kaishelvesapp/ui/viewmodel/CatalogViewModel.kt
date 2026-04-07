@@ -77,6 +77,21 @@ class CatalogViewModel(
         filtrarLibros()
     }
 
+    fun applyInitialGenre(genero: String?) {
+        if (genero.isNullOrBlank()) return
+
+        val state = _uiState.value
+        if (state.generos.contains(genero)) {
+            _uiState.value = state.copy(selectedGenero = genero)
+            filtrarLibros()
+        }
+    }
+
+    fun clearGenreFilter() {
+        _uiState.value = _uiState.value.copy(selectedGenero = "Todos")
+        filtrarLibros()
+    }
+
     fun selectBook(libro: Libro) {
         _uiState.value = _uiState.value.copy(selectedBook = libro)
     }
@@ -97,5 +112,12 @@ class CatalogViewModel(
         }
 
         _uiState.value = state.copy(libros = filtrados)
+    }
+
+    fun getGenreCounts(): Map<String, Int> {
+        return _uiState.value.allBooks
+            .filter { it.genero.isNotBlank() }
+            .groupingBy { it.genero }
+            .eachCount()
     }
 }
