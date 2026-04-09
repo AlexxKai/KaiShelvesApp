@@ -23,8 +23,8 @@ class BookDetailViewModel(
     private val _uiState = MutableStateFlow(BookDetailUiState())
     val uiState: StateFlow<BookDetailUiState> = _uiState.asStateFlow()
 
-    fun cargarEstadoLectura(isbn: String) {
-        if (isbn.isBlank()) return
+    fun cargarEstadoLectura(bookId: String) {
+        if (bookId.isBlank()) return
 
         _uiState.value = _uiState.value.copy(
             isLoading = true,
@@ -32,7 +32,7 @@ class BookDetailViewModel(
         )
 
         viewModelScope.launch {
-            val result = repository.obtenerLibroLeido(isbn)
+            val result = repository.obtenerLibroLeido(bookId)
 
             result
                 .onSuccess { libroLeido ->
@@ -52,16 +52,7 @@ class BookDetailViewModel(
         }
     }
 
-    fun marcarComoLeidoLocalmente(
-        libroLeido: LibroLeido? = null
-    ) {
-        _uiState.value = _uiState.value.copy(
-            isAlreadyRead = true,
-            readBook = libroLeido ?: _uiState.value.readBook
-        )
-    }
-
-    fun refrescarLectura(isbn: String) {
-        cargarEstadoLectura(isbn)
+    fun refrescarLectura(bookId: String) {
+        cargarEstadoLectura(bookId)
     }
 }

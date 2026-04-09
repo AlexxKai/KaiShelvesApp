@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -17,16 +18,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -57,9 +59,16 @@ fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Kai Shelves",
+            text = stringResource(R.string.login_screen_title),
             style = MaterialTheme.typography.headlineLarge,
             color = TarnishedGold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = stringResource(R.string.login_subtitle),
+            color = OldIvory
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -75,7 +84,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = uiState.email,
                     onValueChange = viewModel::onEmailChange,
-                    label = { Text("Email") },
+                    label = { Text(stringResource(R.string.email)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
@@ -89,7 +98,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
-                    label = { Text("Contraseña") },
+                    label = { Text(stringResource(R.string.password)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
@@ -117,7 +126,7 @@ fun LoginScreen(
                     if (uiState.isLoading) {
                         CircularProgressIndicator(color = OldIvory)
                     } else {
-                        Text("Iniciar sesión")
+                        Text(stringResource(R.string.login))
                     }
                 }
 
@@ -131,7 +140,7 @@ fun LoginScreen(
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text(
-                        text = "Crear cuenta",
+                        text = stringResource(R.string.create_account),
                         color = OldIvory
                     )
                 }

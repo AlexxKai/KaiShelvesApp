@@ -2,6 +2,9 @@ package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
+import com.example.kaishelvesapp.data.remote.openlibrary.LibraryGenres
+import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
+import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -14,16 +17,23 @@ class BookRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
 
+    private val api = OpenLibraryClient.api
+
+    private fun safeBookDocId(rawId: String): String {
+        return rawId
+            .trim()
+            .ifBlank { "unknown_book" }
+            .replace("/", "_")
+    }
+
     suspend fun obtenerLibros(): Result<List<Libro>> {
         return try {
-            val snapshot = firestore.collection("libros")
-                .get()
-                .await()
+            val response = api.searchBooks(
+                query = "subject:fiction",
+                limit = 40
+            )
 
-            val libros = snapshot.documents.mapNotNull { document ->
-                document.toObject(Libro::class.java)
-            }
-
+            val libros = response.docs.map { it.toLibro(fallbackGenero = "Ficción") }
             Result.success(libros)
         } catch (e: Exception) {
             Result.failure(e)
@@ -32,15 +42,17 @@ class BookRepository(
 
     suspend fun getBooksByGenre(genero: String): Result<List<Libro>> {
         return try {
-            val snapshot = firestore.collection("libros")
-                .whereEqualTo("genero", genero)
-                .get()
-                .await()
+            val subjectQuery = LibraryGenres.all
+                .firstOrNull { it.label == genero }
+                ?.subjectQuery
+                ?: genero.lowercase()
 
-            val libros = snapshot.documents.mapNotNull { document ->
-                document.toObject(Libro::class.java)
-            }
+            val response = api.searchBooks(
+                query = "subject:$subjectQuery",
+                limit = 40
+            )
 
+            val libros = response.docs.map { it.toLibro(fallbackGenero = genero) }
             Result.success(libros)
         } catch (e: Exception) {
             Result.failure(e)
@@ -49,23 +61,31 @@ class BookRepository(
 
     suspend fun searchBooks(genero: String?, query: String): Result<List<Libro>> {
         return try {
-            val baseQuery = if (genero.isNullOrBlank() || genero == "Todos") {
-                firestore.collection("libros")
+            val cleanQuery = query.trim()
+            val subjectPart = if (!genero.isNullOrBlank() && genero != "Todos") {
+                val subjectQuery = LibraryGenres.all
+                    .firstOrNull { it.label == genero }
+                    ?.subjectQuery
+                    ?: genero.lowercase()
+                " subject:$subjectQuery"
             } else {
-                firestore.collection("libros")
-                    .whereEqualTo("genero", genero)
+                ""
             }
 
-            val snapshot = baseQuery.get().await()
-            val texto = query.trim().lowercase()
+            val finalQuery = when {
+                cleanQuery.isBlank() && subjectPart.isNotBlank() -> subjectPart.trim()
+                cleanQuery.isNotBlank() -> "$cleanQuery$subjectPart"
+                else -> "subject:fiction"
+            }
 
-            val libros = snapshot.documents
-                .mapNotNull { it.toObject(Libro::class.java) }
-                .filter { libro ->
-                    libro.titulo.lowercase().contains(texto) ||
-                            libro.autor.lowercase().contains(texto) ||
-                            libro.editorial.lowercase().contains(texto)
-                }
+            val response = api.searchBooks(
+                query = finalQuery,
+                limit = 40
+            )
+
+            val libros = response.docs.map {
+                it.toLibro(fallbackGenero = genero ?: "")
+            }
 
             Result.success(libros)
         } catch (e: Exception) {
@@ -78,11 +98,16 @@ class BookRepository(
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
+            val docId = safeBookDocId(libro.id.ifBlank { libro.isbn })
+            if (docId == "unknown_book") {
+                return Result.failure(Exception("El libro no tiene identificador válido"))
+            }
+
             val fechaActual = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
                 .format(Date())
 
             val libroLeido = LibroLeido(
-                isbn = libro.isbn,
+                isbn = docId,
                 titulo = libro.titulo,
                 autor = libro.autor,
                 editorial = libro.editorial,
@@ -99,7 +124,7 @@ class BookRepository(
             firestore.collection("usuarios")
                 .document(uid)
                 .collection("leidos")
-                .document(libro.isbn)
+                .document(docId)
                 .set(libroLeido)
                 .await()
 
@@ -130,7 +155,7 @@ class BookRepository(
         }
     }
 
-    suspend fun actualizarPuntuacion(isbn: String, puntuacion: Int): Result<Unit> {
+    suspend fun actualizarPuntuacion(bookId: String, puntuacion: Int): Result<Unit> {
         return try {
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
@@ -138,7 +163,7 @@ class BookRepository(
             firestore.collection("usuarios")
                 .document(uid)
                 .collection("leidos")
-                .document(isbn)
+                .document(safeBookDocId(bookId))
                 .update("puntuacion", puntuacion)
                 .await()
 
@@ -148,7 +173,7 @@ class BookRepository(
         }
     }
 
-    suspend fun eliminarLibroLeido(isbn: String): Result<Unit> {
+    suspend fun eliminarLibroLeido(bookId: String): Result<Unit> {
         return try {
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
@@ -156,7 +181,7 @@ class BookRepository(
             firestore.collection("usuarios")
                 .document(uid)
                 .collection("leidos")
-                .document(isbn)
+                .document(safeBookDocId(bookId))
                 .delete()
                 .await()
 
@@ -166,25 +191,7 @@ class BookRepository(
         }
     }
 
-//    suspend fun estaEnLecturas(isbn: String): Result<Boolean> {
-//        return try {
-//            val uid = auth.currentUser?.uid
-//                ?: return Result.failure(Exception("Usuario no autenticado"))
-//
-//            val snapshot = firestore.collection("usuarios")
-//                .document(uid)
-//                .collection("leidos")
-//                .document(isbn)
-//                .get()
-//                .await()
-//
-//            Result.success(snapshot.exists())
-//        } catch (e: Exception) {
-//            Result.failure(e)
-//        }
-//    }
-
-    suspend fun obtenerLibroLeido(isbn: String): Result<com.example.kaishelvesapp.data.model.LibroLeido?> {
+    suspend fun obtenerLibroLeido(bookId: String): Result<LibroLeido?> {
         return try {
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
@@ -192,11 +199,11 @@ class BookRepository(
             val snapshot = firestore.collection("usuarios")
                 .document(uid)
                 .collection("leidos")
-                .document(isbn)
+                .document(safeBookDocId(bookId))
                 .get()
                 .await()
 
-            val libroLeido = snapshot.toObject(com.example.kaishelvesapp.data.model.LibroLeido::class.java)
+            val libroLeido = snapshot.toObject(LibroLeido::class.java)
             Result.success(libroLeido)
         } catch (e: Exception) {
             Result.failure(e)

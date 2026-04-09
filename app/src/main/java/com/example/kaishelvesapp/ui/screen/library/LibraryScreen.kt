@@ -32,7 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiTopBar
@@ -47,7 +49,6 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 fun LibraryScreen(
     userName: String?,
     genres: List<String>,
-    genreCounts: Map<String, Int>,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onGenreClick: (String) -> Unit,
     onLogout: () -> Unit,
@@ -70,13 +71,13 @@ fun LibraryScreen(
                 .padding(16.dp)
         ) {
             KaiTopBar(
-                title = "Gran Biblioteca",
+                title = stringResource(R.string.great_library),
                 subtitle = if (!userName.isNullOrBlank()) {
-                    "Bienvenido, $userName. Recorre las estanterías y elige un género."
+                    "$userName. ${stringResource(R.string.library_welcome_subtitle)}"
                 } else {
-                    "Recorre las estanterías y adéntrate en el archivo."
+                    stringResource(R.string.library_guest_subtitle)
                 },
-                actionText = "Cerrar sesión",
+                actionText = stringResource(R.string.logout),
                 onActionClick = onLogout
             )
 
@@ -96,7 +97,7 @@ fun LibraryScreen(
                     modifier = Modifier.padding(18.dp)
                 ) {
                     Text(
-                        text = "Estanterías por género",
+                        text = stringResource(R.string.shelves_by_genre),
                         style = MaterialTheme.typography.titleLarge,
                         color = TarnishedGold
                     )
@@ -104,7 +105,7 @@ fun LibraryScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Cada estantería te conduce a una sección distinta del catálogo.",
+                        text = stringResource(R.string.each_shelf_leads_to_a_catalog_section),
                         style = MaterialTheme.typography.bodyMedium,
                         color = OldIvory
                     )
@@ -120,7 +121,6 @@ fun LibraryScreen(
                         items(genres) { genre ->
                             BookshelfCard(
                                 title = genre,
-                                count = genreCounts[genre] ?: 0,
                                 onClick = { onGenreClick(genre) }
                             )
                         }
@@ -158,7 +158,7 @@ private fun ChamberCard() {
                 modifier = Modifier.align(Alignment.TopStart)
             ) {
                 Text(
-                    text = "Sala principal",
+                    text = stringResource(R.string.main_hall),
                     style = MaterialTheme.typography.headlineMedium,
                     color = TarnishedGold
                 )
@@ -166,7 +166,7 @@ private fun ChamberCard() {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Una estancia silenciosa, madera oscura y filas de volúmenes esperando ser abiertos.",
+                    text = stringResource(R.string.main_hall_description),
                     style = MaterialTheme.typography.bodyLarge,
                     color = OldIvory,
                     modifier = Modifier.width(260.dp)
@@ -243,7 +243,6 @@ private fun DecorativeShelf(
 @Composable
 private fun BookshelfCard(
     title: String,
-    count: Int,
     onClick: () -> Unit
 ) {
     Card(
@@ -284,14 +283,6 @@ private fun BookshelfCard(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = OldIvory
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = if (count == 1) "1 libro" else "$count libros",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TarnishedGold
             )
 
             Spacer(modifier = Modifier.height(8.dp))

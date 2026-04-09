@@ -23,10 +23,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -57,7 +59,7 @@ fun RegisterScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Crear cuenta",
+            text = stringResource(R.string.create_account),
             style = MaterialTheme.typography.headlineLarge,
             color = TarnishedGold
         )
@@ -75,7 +77,7 @@ fun RegisterScreen(
                 OutlinedTextField(
                     value = uiState.username,
                     onValueChange = viewModel::onUsernameChange,
-                    label = { Text("Usuario") },
+                    label = { Text(stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
@@ -86,7 +88,7 @@ fun RegisterScreen(
                 OutlinedTextField(
                     value = uiState.email,
                     onValueChange = viewModel::onEmailChange,
-                    label = { Text("Email") },
+                    label = { Text(stringResource(R.string.email)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
@@ -100,7 +102,7 @@ fun RegisterScreen(
                 OutlinedTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
-                    label = { Text("Contraseña") },
+                    label = { Text(stringResource(R.string.password)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
@@ -128,7 +130,7 @@ fun RegisterScreen(
                     if (uiState.isLoading) {
                         CircularProgressIndicator(color = OldIvory)
                     } else {
-                        Text("Registrarse")
+                        Text(stringResource(R.string.register))
                     }
                 }
 
@@ -139,7 +141,7 @@ fun RegisterScreen(
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text(
-                        text = "Ya tengo cuenta",
+                        text = stringResource(R.string.i_already_have_an_account),
                         color = OldIvory
                     )
                 }

@@ -88,12 +88,10 @@ fun AppNavigation(
 
         composable(Routes.LIBRARY) {
             val genres = catalogState.generos.filter { it != "Todos" }
-            val genreCounts = catalogViewModel.getGenreCounts()
 
             LibraryScreen(
                 userName = authState.user?.usuario,
                 genres = genres,
-                genreCounts = genreCounts,
                 onGenreClick = { genre ->
                     catalogViewModel.applyInitialGenre(genre)
                     navController.navigate(Routes.CATALOG)

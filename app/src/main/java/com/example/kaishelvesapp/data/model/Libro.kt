@@ -1,6 +1,7 @@
 package com.example.kaishelvesapp.data.model
 
 data class Libro(
+    val id: String = "",
     val isbn: String = "",
     val titulo: String = "",
     val autor: String = "",

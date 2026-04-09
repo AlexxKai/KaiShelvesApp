@@ -39,8 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
@@ -99,8 +101,8 @@ fun ReadingListScreen(
                 .padding(16.dp)
         ) {
             KaiTopBar(
-                title = "Mis lecturas",
-                subtitle = "Aquí se conservan los volúmenes que has leído."
+                title = stringResource(R.string.my_readings),
+                subtitle = stringResource(R.string.readings_subtitle)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -133,7 +135,7 @@ fun ReadingListScreen(
                             onClick = { viewModel.cargarLecturas() },
                             colors = KaiShelvesThemeDefaults.primaryButtonColors()
                         ) {
-                            Text("Reintentar")
+                            Text(stringResource(R.string.retry))
                         }
                     }
                 }
@@ -145,7 +147,7 @@ fun ReadingListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Aún no has marcado ningún libro como leído",
+                            text = stringResource(R.string.no_books_marked_as_read),
                             color = OldIvory
                         )
                     }
@@ -187,8 +189,18 @@ private fun ReadingItem(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Eliminar lectura", color = TarnishedGold) },
-            text = { Text("¿Quieres eliminar \"${libro.titulo}\" de tus lecturas?", color = OldIvory) },
+            title = {
+                Text(
+                    stringResource(R.string.delete_reading),
+                    color = TarnishedGold
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.delete_reading_confirmation, libro.titulo),
+                    color = OldIvory
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -196,12 +208,18 @@ private fun ReadingItem(
                         onDelete()
                     }
                 ) {
-                    Text("Eliminar", color = TarnishedGold)
+                    Text(
+                        stringResource(R.string.delete),
+                        color = TarnishedGold
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancelar", color = OldIvory)
+                    Text(
+                        stringResource(R.string.cancel),
+                        color = OldIvory
+                    )
                 }
             },
             containerColor = Obsidian
@@ -236,8 +254,16 @@ private fun ReadingItem(
                         style = MaterialTheme.typography.titleLarge,
                         color = TarnishedGold
                     )
-                    Text("Autor: ${libro.autor}", color = OldIvory)
-                    Text("Leído el: ${libro.fechaLeido}", color = OldIvory)
+
+                    Text(
+                        text = "${stringResource(R.string.author)}: ${libro.autor}",
+                        color = OldIvory
+                    )
+
+                    Text(
+                        text = "${stringResource(R.string.read_date)}: ${libro.fechaLeido}",
+                        color = OldIvory
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -249,9 +275,9 @@ private fun ReadingItem(
 
                     Text(
                         text = if (libro.puntuacion == 0) {
-                            "Sin puntuar todavía"
+                            stringResource(R.string.not_rated_yet)
                         } else {
-                            "Puntuación: ${libro.puntuacion}/5"
+                            stringResource(R.string.rating_value, libro.puntuacion)
                         },
                         color = OldIvory
                     )
@@ -265,7 +291,10 @@ private fun ReadingItem(
                     onClick = { expanded = true },
                     border = BorderStroke(1.dp, TarnishedGold)
                 ) {
-                    Text("Cambiar puntuación", color = TarnishedGold)
+                    Text(
+                        stringResource(R.string.change_rating),
+                        color = TarnishedGold
+                    )
                 }
 
                 DropdownMenu(
@@ -275,7 +304,9 @@ private fun ReadingItem(
                 ) {
                     (0..5).forEach { puntuacion ->
                         DropdownMenuItem(
-                            text = { Text("$puntuacion", color = OldIvory) },
+                            text = {
+                                Text("$puntuacion", color = OldIvory)
+                            },
                             onClick = {
                                 selectedRating = puntuacion
                                 expanded = false
@@ -288,8 +319,13 @@ private fun ReadingItem(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            TextButton(onClick = { showDeleteDialog = true }) {
-                Text("Eliminar de mis lecturas", color = TarnishedGold)
+            TextButton(
+                onClick = { showDeleteDialog = true }
+            ) {
+                Text(
+                    stringResource(R.string.remove_from_my_readings),
+                    color = TarnishedGold
+                )
             }
         }
     }

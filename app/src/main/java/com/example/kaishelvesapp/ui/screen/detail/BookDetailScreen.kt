@@ -34,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.RatingStars
@@ -61,8 +63,8 @@ fun BookDetailScreen(
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(libro.isbn) {
-        viewModel.cargarEstadoLectura(libro.isbn)
+    LaunchedEffect(libro.id, libro.isbn) {
+        viewModel.cargarEstadoLectura(libro.id.ifBlank { libro.isbn })
     }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -88,7 +90,10 @@ fun BookDetailScreen(
                 onClick = onBack,
                 border = BorderStroke(1.dp, TarnishedGold)
             ) {
-                Text("Volver", color = TarnishedGold)
+                Text(
+                    text = stringResource(R.string.back),
+                    color = TarnishedGold
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -102,7 +107,7 @@ fun BookDetailScreen(
                     modifier = Modifier.padding(20.dp)
                 ) {
                     Text(
-                        text = "Ficha del volumen",
+                        text = stringResource(R.string.book_record),
                         style = MaterialTheme.typography.headlineMedium,
                         color = TarnishedGold
                     )
@@ -126,27 +131,53 @@ fun BookDetailScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = libro.titulo,
+                                text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
                                 style = MaterialTheme.typography.headlineMedium,
                                 color = TarnishedGold
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            DetailLine("Autor", libro.autor)
-                            DetailLine("Editorial", libro.editorial)
-                            DetailLine("Género", libro.genero)
+                            if (libro.autor.isNotBlank()) {
+                                DetailLine(
+                                    label = stringResource(R.string.author),
+                                    value = libro.autor
+                                )
+                            }
+
+                            if (libro.editorial.isNotBlank()) {
+                                DetailLine(
+                                    label = stringResource(R.string.publisher),
+                                    value = libro.editorial
+                                )
+                            }
+
+                            if (libro.genero.isNotBlank()) {
+                                DetailLine(
+                                    label = stringResource(R.string.genre),
+                                    value = libro.genero
+                                )
+                            }
 
                             if (libro.fechaPublicacion != 0) {
-                                DetailLine("Publicación", libro.fechaPublicacion.toString())
+                                DetailLine(
+                                    label = stringResource(R.string.publication),
+                                    value = libro.fechaPublicacion.toString()
+                                )
                             }
 
                             if (libro.paginas != 0) {
-                                DetailLine("Páginas", libro.paginas.toString())
+                                DetailLine(
+                                    label = stringResource(R.string.pages),
+                                    value = libro.paginas.toString()
+                                )
                             }
 
                             if (libro.isbn.isNotBlank()) {
-                                DetailLine("ISBN", libro.isbn)
+                                DetailLine(
+                                    label = stringResource(R.string.isbn),
+                                    value = libro.isbn
+                                )
                             }
                         }
                     }
@@ -162,7 +193,7 @@ fun BookDetailScreen(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = "Nota del archivo",
+                                text = stringResource(R.string.archive_note),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = TarnishedGold
                             )
@@ -171,7 +202,7 @@ fun BookDetailScreen(
 
                             if (uiState.isAlreadyRead && uiState.readBook != null) {
                                 Text(
-                                    text = "Este volumen ya forma parte de tus lecturas.",
+                                    text = stringResource(R.string.book_already_in_readings),
                                     color = OldIvory,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -179,14 +210,14 @@ fun BookDetailScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 DetailLine(
-                                    label = "Fecha de lectura",
+                                    label = stringResource(R.string.read_date),
                                     value = uiState.readBook?.fechaLeido ?: "-"
                                 )
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Text(
-                                    text = "Valoración",
+                                    text = stringResource(R.string.rating),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = TarnishedGold
                                 )
@@ -201,16 +232,19 @@ fun BookDetailScreen(
 
                                 Text(
                                     text = if ((uiState.readBook?.puntuacion ?: 0) == 0) {
-                                        "Sin puntuar todavía"
+                                        stringResource(R.string.not_rated_yet)
                                     } else {
-                                        "Puntuación registrada: ${uiState.readBook?.puntuacion}/5"
+                                        stringResource(
+                                            R.string.registered_rating_value,
+                                            uiState.readBook?.puntuacion ?: 0
+                                        )
                                     },
                                     color = OldIvory,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             } else {
                                 Text(
-                                    text = "Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo más tarde.",
+                                    text = stringResource(R.string.book_can_be_added_to_readings),
                                     color = OldIvory,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
@@ -238,7 +272,7 @@ fun BookDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = KaiShelvesThemeDefaults.secondaryButtonColors()
                             ) {
-                                Text("Ir a mis lecturas")
+                                Text(stringResource(R.string.go_to_my_readings))
                             }
                         }
 
@@ -247,13 +281,15 @@ fun BookDetailScreen(
                                 onClick = {
                                     onMarkAsRead(libro)
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Libro añadido a tus lecturas")
+                                        snackbarHostState.showSnackbar(
+                                            context.getString(R.string.book_added_to_readings)
+                                        )
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = KaiShelvesThemeDefaults.primaryButtonColors()
                             ) {
-                                Text("Marcar como leído")
+                                Text(stringResource(R.string.mark_as_read))
                             }
                         }
                     }
@@ -268,18 +304,22 @@ fun BookDetailScreen(
                                     context.startActivity(intent)
                                 } catch (_: ActivityNotFoundException) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("No se pudo abrir el PDF")
+                                        snackbarHostState.showSnackbar(
+                                            context.getString(R.string.could_not_open_pdf)
+                                        )
                                     }
                                 } catch (_: Exception) {
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("Enlace PDF no válido")
+                                        snackbarHostState.showSnackbar(
+                                            context.getString(R.string.invalid_pdf_link)
+                                        )
                                     }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = KaiShelvesThemeDefaults.secondaryButtonColors()
                         ) {
-                            Text("Abrir PDF")
+                            Text(stringResource(R.string.open_pdf))
                         }
                     }
                 }

@@ -1,3 +1,86 @@
 <resources>
-    <string name="app_name">KaiShelvesApp</string>
+    <string name="app_name">Kai Shelves</string>
+
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
+    <string name="retry">Retry</string>
+    <string name="save">Save</string>
+    <string name="search">Search</string>
+    <string name="logout">Log out</string>
+
+    <string name="login">Log in</string>
+    <string name="register">Register</string>
+    <string name="create_account">Create account</string>
+    <string name="i_already_have_an_account">I already have an account</string>
+    <string name="email">Email</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+
+    <string name="great_library">Grand Library</string>
+    <string name="main_hall">Main Hall</string>
+    <string name="shelves_by_genre">Shelves by genre</string>
+    <string name="each_shelf_leads_to_a_catalog_section">Each shelf leads to a different catalog section.</string>
+    <string name="library_welcome_subtitle">Walk through the shelves and choose a genre.</string>
+    <string name="library_guest_subtitle">Walk through the shelves and enter the archive.</string>
+    <string name="main_hall_description">A silent chamber, dark wood and rows of volumes waiting to be opened.</string>
+
+    <string name="catalog">Catalog</string>
+    <string name="my_readings">My readings</string>
+    <string name="profile">Profile</string>
+    <string name="home">Home</string>
+
+    <string name="search_books">Search books</string>
+    <string name="catalog_title">Library archive</string>
+    <string name="catalog_subtitle">Search among volumes, authors and genres.</string>
+    <string name="search_by_title_author_publisher">Search by title, author or publisher</string>
+    <string name="no_books_found">No volumes found</string>
+    <string name="unknown_title">Unknown title</string>
+    <string name="year">Year</string>
+
+    <string name="book_record">Volume record</string>
+    <string name="archive_note">Archive note</string>
+    <string name="author">Author</string>
+    <string name="publisher">Publisher</string>
+    <string name="genre">Genre</string>
+    <string name="publication">Publication</string>
+    <string name="pages">Pages</string>
+    <string name="isbn">ISBN</string>
+    <string name="read_date">Read date</string>
+    <string name="rating">Rating</string>
+
+    <string name="book_already_in_readings">This volume is already part of your readings.</string>
+    <string name="book_can_be_added_to_readings">You can add this volume to your personal reading record and rate it later.</string>
+    <string name="not_rated_yet">Not rated yet</string>
+    <string name="registered_rating_value">Registered rating: %1$d/5</string>
+    <string name="rating_value">Rating: %1$d/5</string>
+    <string name="mark_as_read">Mark as read</string>
+    <string name="go_to_my_readings">Go to my readings</string>
+    <string name="book_added_to_readings">Book added to your readings</string>
+    <string name="open_pdf">Open PDF</string>
+    <string name="could_not_open_pdf">Could not open the PDF</string>
+    <string name="invalid_pdf_link">Invalid PDF link</string>
+
+    <string name="readings_subtitle">Here are the volumes you have read.</string>
+    <string name="no_books_marked_as_read">You have not marked any book as read yet</string>
+    <string name="delete_reading">Delete reading</string>
+    <string name="delete_reading_confirmation">Do you want to remove \"%1$s\" from your readings?</string>
+    <string name="change_rating">Change rating</string>
+    <string name="remove_from_my_readings">Remove from my readings</string>
+
+    <string name="language">Language</string>
+    <string name="spanish">Spanish</string>
+    <string name="english">English</string>
+    <string name="app_language">App language</string>
+
+    <string name="profile_subtitle">Check and edit your identity within the archive.</string>
+    <string name="edit_profile">Edit profile</string>
+
+    <string name="login_screen_title">Kai Shelves</string>
+    <string name="login_error_empty_fields">Please enter email and password</string>
+    <string name="register_error_empty_fields">Please enter username, email and password</string>
+    <string name="register_error_short_password">Password must be at least 6 characters long</string>
+    <string name="profile_error_empty_username">Username cannot be empty</string>
+    <string name="register_success">Account created successfully</string>
+    <string name="login_subtitle">Access your dark library</string>
 </resources>

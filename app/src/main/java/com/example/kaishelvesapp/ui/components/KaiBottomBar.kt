@@ -7,24 +7,26 @@ import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
-enum class KaiSection(val label: String) {
-    HOME("Inicio"),
-    CATALOG("Catálogo"),
-    READING("Lecturas"),
-    PROFILE("Perfil")
+enum class KaiSection {
+    HOME,
+    CATALOG,
+    READING,
+    PROFILE
 }
 
 @Composable
@@ -38,35 +40,25 @@ fun KaiBottomBar(
             .padding(horizontal = 12.dp),
         containerColor = Obsidian
     ) {
-        KaiSection.entries.forEach { item ->
+        val items = listOf(
+            Triple(KaiSection.HOME, stringResource(R.string.home), Icons.Filled.Home),
+            Triple(KaiSection.CATALOG, stringResource(R.string.catalog), Icons.Filled.MenuBook),
+            Triple(KaiSection.READING, stringResource(R.string.my_readings), Icons.Filled.AutoStories),
+            Triple(KaiSection.PROFILE, stringResource(R.string.profile), Icons.Filled.Person)
+        )
+
+        items.forEach { (section, label, icon) ->
             NavigationBarItem(
-                selected = current == item,
-                onClick = { onSelect(item) },
+                selected = current == section,
+                onClick = { onSelect(section) },
                 label = {
-                    Text(item.label)
+                    Text(label)
                 },
                 icon = {
-                    when (item) {
-                        KaiSection.HOME -> Icon(
-                            imageVector = Icons.Filled.Home,
-                            contentDescription = item.label
-                        )
-
-                        KaiSection.CATALOG -> Icon(
-                            imageVector = Icons.Filled.MenuBook,
-                            contentDescription = item.label
-                        )
-
-                        KaiSection.READING -> Icon(
-                            imageVector = Icons.Filled.AutoStories,
-                            contentDescription = item.label
-                        )
-
-                        KaiSection.PROFILE -> Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = item.label
-                        )
-                    }
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label
+                    )
                 },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = TarnishedGold,

@@ -2,6 +2,7 @@ package com.example.kaishelvesapp.ui.screen.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,15 +27,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiTopBar
+import com.example.kaishelvesapp.ui.language.LanguageManager
+import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -49,6 +59,9 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val activity = context.findActivity()
+    var expandedLanguage by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (uiState.user == null && uiState.isLoggedIn) {
@@ -88,8 +101,8 @@ fun ProfileScreen(
                 .padding(16.dp)
         ) {
             KaiTopBar(
-                title = "Perfil del lector",
-                subtitle = "Consulta y edita tu identidad dentro del archivo."
+                title = stringResource(R.string.profile),
+                subtitle = stringResource(R.string.profile_subtitle)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -119,7 +132,7 @@ fun ProfileScreen(
                                 OutlinedTextField(
                                     value = uiState.username,
                                     onValueChange = viewModel::onUsernameChange,
-                                    label = { Text("Nombre de usuario") },
+                                    label = { Text(stringResource(R.string.username)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                                     singleLine = true
@@ -127,8 +140,28 @@ fun ProfileScreen(
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                ProfileLine("Email", uiState.user?.email ?: "Sin email")
-                                ProfileLine("UID", uiState.user?.uid ?: "No disponible")
+                                ProfileLine(
+                                    stringResource(R.string.email),
+                                    uiState.user?.email ?: "Sin email"
+                                )
+
+                                ProfileLine(
+                                    "UID",
+                                    uiState.user?.uid ?: "No disponible"
+                                )
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                LanguageSection(
+                                    expandedLanguage = expandedLanguage,
+                                    onExpandedChange = { expandedLanguage = it },
+                                    onSelectLanguage = { language ->
+                                        expandedLanguage = false
+                                        activity?.let {
+                                            LanguageManager.setLanguage(it, language)
+                                        }
+                                    }
+                                )
 
                                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -141,7 +174,7 @@ fun ProfileScreen(
                                     if (uiState.isLoading) {
                                         CircularProgressIndicator(color = OldIvory)
                                     } else {
-                                        Text("Guardar cambios")
+                                        Text(stringResource(R.string.save))
                                     }
                                 }
 
@@ -152,12 +185,39 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     border = BorderStroke(1.dp, TarnishedGold)
                                 ) {
-                                    Text("Cancelar", color = TarnishedGold)
+                                    Text(
+                                        text = stringResource(R.string.cancel),
+                                        color = TarnishedGold
+                                    )
                                 }
                             } else {
-                                ProfileLine("Usuario", uiState.user?.usuario ?: "Sin nombre")
-                                ProfileLine("Email", uiState.user?.email ?: "Sin email")
-                                ProfileLine("UID", uiState.user?.uid ?: "No disponible")
+                                ProfileLine(
+                                    stringResource(R.string.username),
+                                    uiState.user?.usuario ?: "Sin nombre"
+                                )
+
+                                ProfileLine(
+                                    stringResource(R.string.email),
+                                    uiState.user?.email ?: "Sin email"
+                                )
+
+                                ProfileLine(
+                                    "UID",
+                                    uiState.user?.uid ?: "No disponible"
+                                )
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                LanguageSection(
+                                    expandedLanguage = expandedLanguage,
+                                    onExpandedChange = { expandedLanguage = it },
+                                    onSelectLanguage = { language ->
+                                        expandedLanguage = false
+                                        activity?.let {
+                                            LanguageManager.setLanguage(it, language)
+                                        }
+                                    }
+                                )
 
                                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -166,7 +226,7 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = KaiShelvesThemeDefaults.secondaryButtonColors()
                                 ) {
-                                    Text("Editar perfil")
+                                    Text(stringResource(R.string.edit_profile))
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -176,7 +236,7 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = KaiShelvesThemeDefaults.primaryButtonColors()
                                 ) {
-                                    Text("Cerrar sesión")
+                                    Text(stringResource(R.string.logout))
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -186,13 +246,76 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     border = BorderStroke(1.dp, TarnishedGold)
                                 ) {
-                                    Text("Volver", color = TarnishedGold)
+                                    Text(
+                                        text = stringResource(R.string.back),
+                                        color = TarnishedGold
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LanguageSection(
+    expandedLanguage: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelectLanguage: (String) -> Unit
+) {
+    Text(
+        text = stringResource(R.string.app_language),
+        style = MaterialTheme.typography.labelLarge,
+        color = TarnishedGold
+    )
+
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Box(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        OutlinedButton(
+            onClick = { onExpandedChange(true) },
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Text(
+                text = when (LanguageManager.getCurrentLanguage()) {
+                    "en" -> stringResource(R.string.english)
+                    else -> stringResource(R.string.spanish)
+                },
+                color = TarnishedGold
+            )
+        }
+
+        DropdownMenu(
+            expanded = expandedLanguage,
+            onDismissRequest = { onExpandedChange(false) },
+            containerColor = Obsidian,
+            modifier = Modifier.fillMaxWidth(0.85f)
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.spanish),
+                        color = OldIvory
+                    )
+                },
+                onClick = { onSelectLanguage("es") }
+            )
+
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = stringResource(R.string.english),
+                        color = OldIvory
+                    )
+                },
+                onClick = { onSelectLanguage("en") }
+            )
         }
     }
 }
