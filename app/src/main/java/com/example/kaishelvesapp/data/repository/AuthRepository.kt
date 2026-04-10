@@ -2,6 +2,8 @@ package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.model.Usuario
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
@@ -44,21 +46,9 @@ class AuthRepository(
     suspend fun login(email: String, password: String): Result<Usuario> {
         return try {
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
-            val uid = authResult.user?.uid
-                ?: return Result.failure(Exception("No se pudo obtener el UID del usuario"))
-
-            val snapshot = firestore.collection("usuarios")
-                .document(uid)
-                .get()
-                .await()
-
-            val usuario = snapshot.toObject(Usuario::class.java)
-                ?: Usuario(
-                    uid = uid,
-                    usuario = "",
-                    email = auth.currentUser?.email ?: email
-                )
-
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("No se pudo obtener el usuario autenticado"))
+            val usuario = getOrCreateUserProfile(firebaseUser)
             Result.success(usuario)
         } catch (e: Exception) {
             Result.failure(e)
@@ -83,6 +73,20 @@ class AuthRepository(
                 .await()
 
             Result.success(nuevoUsuario)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun signInWithGoogle(idToken: String): Result<Usuario> {
+        return try {
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            val authResult = auth.signInWithCredential(credential).await()
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("No se pudo obtener el usuario de Google"))
+
+            val usuario = getOrCreateUserProfile(firebaseUser)
+            Result.success(usuario)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -114,5 +118,36 @@ class AuthRepository(
 
     fun logout() {
         auth.signOut()
+    }
+
+    private suspend fun getOrCreateUserProfile(firebaseUser: FirebaseUser): Usuario {
+        val uid = firebaseUser.uid
+        val snapshot = firestore.collection("usuarios")
+            .document(uid)
+            .get()
+            .await()
+
+        val existingUser = snapshot.toObject(Usuario::class.java)
+        if (existingUser != null) {
+            return existingUser
+        }
+
+        val fallbackUsername = firebaseUser.displayName
+            ?.takeIf { it.isNotBlank() }
+            ?: firebaseUser.email?.substringBefore("@")
+            ?: "Lector"
+
+        val newUser = Usuario(
+            uid = uid,
+            usuario = fallbackUsername,
+            email = firebaseUser.email.orEmpty()
+        )
+
+        firestore.collection("usuarios")
+            .document(uid)
+            .set(newUser)
+            .await()
+
+        return newUser
     }
 }

@@ -7,80 +7,85 @@
     <string name="retry">Reintentar</string>
     <string name="save">Guardar</string>
     <string name="search">Buscar</string>
-    <string name="logout">Cerrar sesión</string>
+    <string name="logout">Cerrar sesion</string>
 
-    <string name="login">Iniciar sesión</string>
+    <string name="login">Iniciar sesion</string>
     <string name="register">Registrarse</string>
     <string name="create_account">Crear cuenta</string>
     <string name="i_already_have_an_account">Ya tengo cuenta</string>
-    <string name="email">Correo electrónico</string>
+    <string name="email">Correo electronico</string>
     <string name="username">Usuario</string>
-    <string name="password">Contraseña</string>
+    <string name="password">Contrasena</string>
+    <string name="continue_with_google">Continuar con Google</string>
+    <string name="or">o</string>
 
     <string name="great_library">Gran Biblioteca</string>
     <string name="main_hall">Sala principal</string>
-    <string name="shelves_by_genre">Estanterías por género</string>
-    <string name="each_shelf_leads_to_a_catalog_section">Cada estantería te conduce a una sección distinta del catálogo.</string>
-    <string name="library_welcome_subtitle">Recorre las estanterías y elige un género.</string>
-    <string name="library_guest_subtitle">Recorre las estanterías y adéntrate en el archivo.</string>
-    <string name="main_hall_description">Una estancia silenciosa, madera oscura y filas de volúmenes esperando ser abiertos.</string>
+    <string name="shelves_by_genre">Estanterias por genero</string>
+    <string name="each_shelf_leads_to_a_catalog_section">Cada estanteria te conduce a una seccion distinta del catalogo.</string>
+    <string name="library_welcome_subtitle">Recorre las estanterias y elige un genero.</string>
+    <string name="library_guest_subtitle">Recorre las estanterias y adentrate en el archivo.</string>
+    <string name="main_hall_description">Una estancia silenciosa, madera oscura y filas de volumenes esperando ser abiertos.</string>
 
-    <string name="catalog">Catálogo</string>
+    <string name="catalog">Catalogo</string>
     <string name="my_readings">Mis lecturas</string>
     <string name="profile">Perfil</string>
     <string name="home">Inicio</string>
 
     <string name="search_books">Buscar libros</string>
     <string name="catalog_title">Archivo de la biblioteca</string>
-    <string name="catalog_subtitle">Busca entre volúmenes, autores y géneros.</string>
-    <string name="search_by_title_author_publisher">Buscar por título, autor o editorial</string>
-    <string name="no_books_found">No se han encontrado volúmenes</string>
-    <string name="unknown_title">Título desconocido</string>
-    <string name="year">Año</string>
+    <string name="catalog_subtitle">Busca entre volumenes, autores y generos.</string>
+    <string name="search_by_title_author_publisher">Buscar por titulo, autor o editorial</string>
+    <string name="no_books_found">No se han encontrado volumenes</string>
+    <string name="unknown_title">Titulo desconocido</string>
+    <string name="year">Ano</string>
 
     <string name="book_record">Ficha del volumen</string>
     <string name="archive_note">Nota del archivo</string>
     <string name="author">Autor</string>
     <string name="publisher">Editorial</string>
-    <string name="genre">Género</string>
-    <string name="publication">Publicación</string>
-    <string name="pages">Páginas</string>
+    <string name="genre">Genero</string>
+    <string name="publication">Publicacion</string>
+    <string name="pages">Paginas</string>
     <string name="isbn">ISBN</string>
     <string name="read_date">Fecha de lectura</string>
-    <string name="rating">Valoración</string>
+    <string name="rating">Valoracion</string>
 
     <string name="book_already_in_readings">Este volumen ya forma parte de tus lecturas.</string>
-    <string name="book_can_be_added_to_readings">Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo más tarde.</string>
-    <string name="not_rated_yet">Sin puntuar todavía</string>
-    <string name="registered_rating_value">Puntuación registrada: %1$d/5</string>
-    <string name="rating_value">Puntuación: %1$d/5</string>
-    <string name="mark_as_read">Marcar como leído</string>
+    <string name="book_can_be_added_to_readings">Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo mas tarde.</string>
+    <string name="not_rated_yet">Sin puntuar todavia</string>
+    <string name="registered_rating_value">Puntuacion registrada: %1$d/5</string>
+    <string name="rating_value">Puntuacion: %1$d/5</string>
+    <string name="mark_as_read">Marcar como leido</string>
     <string name="go_to_my_readings">Ir a mis lecturas</string>
-    <string name="book_added_to_readings">Libro añadido a tus lecturas</string>
+    <string name="book_added_to_readings">Libro anadido a tus lecturas</string>
     <string name="open_pdf">Abrir PDF</string>
     <string name="could_not_open_pdf">No se pudo abrir el PDF</string>
-    <string name="invalid_pdf_link">Enlace PDF no válido</string>
+    <string name="invalid_pdf_link">Enlace PDF no valido</string>
 
-    <string name="readings_subtitle">Aquí se conservan los volúmenes que has leído.</string>
-    <string name="no_books_marked_as_read">Aún no has marcado ningún libro como leído</string>
+    <string name="readings_subtitle">Aqui se conservan los volumenes que has leido.</string>
+    <string name="no_books_marked_as_read">Aun no has marcado ningun libro como leido</string>
     <string name="delete_reading">Eliminar lectura</string>
-    <string name="delete_reading_confirmation">¿Quieres eliminar \"%1$s\" de tus lecturas?</string>
-    <string name="change_rating">Cambiar puntuación</string>
+    <string name="delete_reading_confirmation">Quieres eliminar "%1$s" de tus lecturas?</string>
+    <string name="change_rating">Cambiar puntuacion</string>
     <string name="remove_from_my_readings">Eliminar de mis lecturas</string>
 
     <string name="language">Idioma</string>
-    <string name="spanish">Español</string>
-    <string name="english">Inglés</string>
-    <string name="app_language">Idioma de la aplicación</string>
+    <string name="spanish">Espanol</string>
+    <string name="english">Ingles</string>
+    <string name="app_language">Idioma de la aplicacion</string>
 
     <string name="profile_subtitle">Consulta y edita tu identidad dentro del archivo.</string>
     <string name="edit_profile">Editar perfil</string>
 
     <string name="login_screen_title">Kai Shelves</string>
-    <string name="login_error_empty_fields">Completa correo y contraseña</string>
-    <string name="register_error_empty_fields">Completa usuario, correo y contraseña</string>
-    <string name="register_error_short_password">La contraseña debe tener al menos 6 caracteres</string>
-    <string name="profile_error_empty_username">El nombre de usuario no puede estar vacío</string>
+    <string name="login_error_empty_fields">Completa correo y contrasena</string>
+    <string name="register_error_empty_fields">Completa usuario, correo y contrasena</string>
+    <string name="register_error_short_password">La contrasena debe tener al menos 6 caracteres</string>
+    <string name="profile_error_empty_username">El nombre de usuario no puede estar vacio</string>
     <string name="register_success">Cuenta creada correctamente</string>
     <string name="login_subtitle">Accede a tu biblioteca oscura</string>
+    <string name="google_sign_in_cancelled">Se cancelo el inicio de sesion con Google</string>
+    <string name="google_sign_in_not_available">El acceso con Google todavia no esta configurado. Anade el Web client ID de Firebase.</string>
+    <string name="google_sign_in_failed">No se pudo completar el acceso con Google</string>
 </resources>

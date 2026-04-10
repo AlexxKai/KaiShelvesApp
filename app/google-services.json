@@ -12,7 +12,20 @@
           "package_name": "com.example.kaishelvesapp"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "911911093671-j82lfhr71d2ufp0i02ii9scm7rli4bmf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.kaishelvesapp",
+            "certificate_hash": "3f2d3e6e89a3dd5ae112cb84a68eb865089d6e92"
+          }
+        },
+        {
+          "client_id": "911911093671-8ibd36q2kb1ud3pclm2le43150uusm87.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyD9ftwtLnERtM46b8MgH5_H7FLuUb-0GAY"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "911911093671-8ibd36q2kb1ud3pclm2le43150uusm87.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

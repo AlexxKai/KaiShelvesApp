@@ -61,6 +61,14 @@ class AuthViewModel(
         )
     }
 
+    fun showError(message: String) {
+        _uiState.value = _uiState.value.copy(
+            errorMessage = message,
+            successMessage = null,
+            isLoading = false
+        )
+    }
+
     fun startEditingProfile() {
         _uiState.value = _uiState.value.copy(
             isEditingProfile = true,
@@ -140,6 +148,42 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Error al iniciar sesión"
+                    )
+                }
+        }
+    }
+
+    fun loginWithGoogle(idToken: String) {
+        if (idToken.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "No se pudo validar la cuenta de Google"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.signInWithGoogle(idToken)
+
+            result
+                .onSuccess { usuario ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = usuario,
+                        username = usuario.usuario,
+                        isLoggedIn = true,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Error al iniciar sesiÃ³n con Google"
                     )
                 }
         }

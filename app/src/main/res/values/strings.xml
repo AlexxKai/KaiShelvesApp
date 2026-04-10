@@ -16,6 +16,8 @@
     <string name="email">Email</string>
     <string name="username">Username</string>
     <string name="password">Password</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="or">or</string>
 
     <string name="great_library">Grand Library</string>
     <string name="main_hall">Main Hall</string>
@@ -83,4 +85,7 @@
     <string name="profile_error_empty_username">Username cannot be empty</string>
     <string name="register_success">Account created successfully</string>
     <string name="login_subtitle">Access your dark library</string>
+    <string name="google_sign_in_cancelled">Google sign-in was cancelled</string>
+    <string name="google_sign_in_not_available">Google sign-in is not configured yet. Add the Web client ID from Firebase.</string>
+    <string name="google_sign_in_failed">Google sign-in could not be completed</string>
 </resources>

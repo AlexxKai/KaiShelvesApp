@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -133,6 +135,18 @@ fun RegisterScreen(
                         Text(stringResource(R.string.register))
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HorizontalDivider(color = TarnishedGold.copy(alpha = 0.35f))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                GoogleSignInButton(
+                    enabled = !uiState.isLoading,
+                    onIdTokenReceived = viewModel::loginWithGoogle,
+                    onError = viewModel::showError
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
