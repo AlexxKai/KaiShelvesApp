@@ -1,6 +1,10 @@
 package com.example.kaishelvesapp.ui.screen.catalog
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,39 +12,53 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.components.BookCover
-import com.example.kaishelvesapp.ui.components.KaiScreen
+import com.example.kaishelvesapp.ui.components.KaiBottomBar
+import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
+import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
@@ -49,29 +67,222 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
+import kotlinx.coroutines.launch
+
+private enum class CatalogViewMode {
+    COMPACT,
+    DETAILED
+}
 
 @Composable
 fun CatalogScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: CatalogViewModel,
+    onGoToProfile: () -> Unit,
+    onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
     onBookClick: (Libro) -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var viewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(CatalogViewMode.DETAILED) }
+    val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    KaiScreen(
-        title = stringResource(R.string.catalog_title),
-        subtitle = stringResource(R.string.catalog_subtitle),
-        currentSection = KaiSection.CATALOG,
-        onSectionSelected = onSectionSelected
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            KaiNavigationDrawerContent(
+                currentSection = KaiSection.CATALOG,
+                subtitle = stringResource(R.string.catalog_subtitle),
+                onSectionSelected = { section ->
+                    scope.launch { drawerState.close() }
+                    onSectionSelected(section)
+                }
+            )
+        }
+    ) {
+        Scaffold(
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            topBar = {
+                KaiPrimaryTopBar(
+                    onOpenMenu = { scope.launch { drawerState.open() } },
+                    onGoToProfile = onGoToProfile,
+                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
+                    onLogout = onLogout
+                )
+            },
+            bottomBar = {
+                KaiBottomBar(
+                    current = KaiSection.CATALOG,
+                    onSelect = onSectionSelected
+                )
+            }
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(innerPadding)
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    CatalogControlsCard(
+                        title = stringResource(R.string.catalog_title),
+                        subtitle = stringResource(R.string.catalog_subtitle),
+                        searchQuery = uiState.searchQuery,
+                        onSearchQueryChange = viewModel::onSearchQueryChange,
+                        onSearch = { viewModel.ejecutarBusqueda() },
+                        genres = uiState.generos,
+                        selectedGenre = uiState.selectedGenero,
+                        onGenreSelected = viewModel::onGeneroSelected,
+                        viewMode = viewMode,
+                        onToggleCompact = { enabled ->
+                            viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
+                        }
+                    )
+                }
+
+                when {
+                    uiState.isLoading -> {
+                        item {
+                            CatalogMessageBox {
+                                CircularProgressIndicator(color = TarnishedGold)
+                            }
+                        }
+                    }
+
+                    uiState.errorMessage != null -> {
+                        item {
+                            CatalogMessageBox {
+                                Text(
+                                    text = uiState.errorMessage ?: "Error desconocido",
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Button(
+                                    onClick = { viewModel.cargarLibros() },
+                                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                                ) {
+                                    Text(stringResource(R.string.retry))
+                                }
+                            }
+                        }
+                    }
+
+                    uiState.libros.isEmpty() -> {
+                        item {
+                            CatalogMessageBox {
+                                Text(
+                                    text = stringResource(R.string.no_books_found),
+                                    color = OldIvory,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    else -> {
+                        item {
+                            AnimatedContent(
+                                targetState = viewMode,
+                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                label = "catalog_view_mode"
+                            ) { mode ->
+                                when (mode) {
+                                    CatalogViewMode.COMPACT -> CompactCatalogSection(
+                                        books = uiState.libros,
+                                        onBookClick = onBookClick
+                                    )
+
+                                    CatalogViewMode.DETAILED -> DetailedCatalogSection(
+                                        books = uiState.libros,
+                                        onBookClick = onBookClick
+                                    )
+                                }
+                            }
+                        }
+
+                        item {
+                            TextButton(
+                                onClick = onLogout,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.logout), color = OldIvory)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CatalogControlsCard(
+    title: String,
+    subtitle: String,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    genres: List<String>,
+    selectedGenre: String,
+    onGenreSelected: (String) -> Unit,
+    viewMode: CatalogViewMode,
+    onToggleCompact: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            BloodWine.copy(alpha = 0.18f),
+                            DeepWalnut,
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(18.dp)
         ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = TarnishedGold
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = stringResource(R.string.search_books),
+                style = MaterialTheme.typography.titleLarge,
+                color = TarnishedGold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = viewModel::onSearchQueryChange,
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.search_by_title_author_publisher)) },
                 shape = RoundedCornerShape(18.dp),
@@ -79,107 +290,163 @@ fun CatalogScreen(
                 colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Button(
-                onClick = { viewModel.ejecutarBusqueda() },
+                onClick = onSearch,
                 modifier = Modifier.fillMaxWidth(),
                 colors = KaiShelvesThemeDefaults.primaryButtonColors()
             ) {
                 Text(stringResource(R.string.search))
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CatalogViewSwitch(
+                compactSelected = viewMode == CatalogViewMode.COMPACT,
+                onToggleCompact = onToggleCompact
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
             ) {
-                uiState.generos.forEach { genero ->
+                genres.forEach { genero ->
                     GenreChip(
                         text = genero,
-                        selected = uiState.selectedGenero == genero,
-                        onClick = { viewModel.onGeneroSelected(genero) }
+                        selected = selectedGenre == genero,
+                        onClick = { onGenreSelected(genero) }
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun CatalogViewSwitch(
+    compactSelected: Boolean,
+    onToggleCompact: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(DeepWalnut.copy(alpha = 0.92f))
+            .border(1.dp, TarnishedGold.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = if (compactSelected) "Vista por portadas" else "Vista detallada",
+                style = MaterialTheme.typography.titleMedium,
+                color = TarnishedGold
+            )
 
-            when {
-                uiState.isLoading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = TarnishedGold)
-                    }
-                }
+            Spacer(modifier = Modifier.height(2.dp))
 
-                uiState.errorMessage != null -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.errorMessage ?: "Error desconocido",
-                            color = MaterialTheme.colorScheme.error
+            Text(
+                text = if (compactSelected) {
+                    "Muestra 2-3 libros por fila con la portada como protagonista."
+                } else {
+                    "Mantiene la lista con autor, año y género."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+        }
+
+        Switch(
+            checked = compactSelected,
+            onCheckedChange = onToggleCompact,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = TarnishedGold,
+                checkedTrackColor = BloodWine,
+                uncheckedThumbColor = OldIvory,
+                uncheckedTrackColor = DeepWalnut,
+                uncheckedBorderColor = TarnishedGold
+            )
+        )
+    }
+}
+
+@Composable
+private fun CatalogMessageBox(
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun CompactCatalogSection(
+    books: List<Libro>,
+    onBookClick: (Libro) -> Unit
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        val columns = if (maxWidth < 560.dp) 2 else 3
+        val rows = books.chunked(columns)
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            rows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    row.forEach { libro ->
+                        CompactBookCard(
+                            libro = libro,
+                            onClick = { onBookClick(libro) },
+                            modifier = Modifier.weight(1f)
                         )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { viewModel.cargarLibros() },
-                            colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                        ) {
-                            Text(stringResource(R.string.retry))
-                        }
-                    }
-                }
-
-                uiState.libros.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = stringResource(R.string.no_books_found),
-                            color = OldIvory
-                        )
-                    }
-                }
-
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        itemsIndexed(
-                            items = uiState.libros,
-                            key = { _, libro -> libro.id.ifBlank { libro.titulo } }
-                        ) { _, libro ->
-                            BookCard(
-                                libro = libro,
-                                onClick = { onBookClick(libro) }
-                            )
-                        }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    TextButton(
-                        onClick = onLogout,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text(stringResource(R.string.logout), color = OldIvory)
+                    repeat(columns - row.size) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DetailedCatalogSection(
+    books: List<Libro>,
+    onBookClick: (Libro) -> Unit
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        books.forEach { libro ->
+            BookCard(
+                libro = libro,
+                onClick = { onBookClick(libro) }
+            )
         }
     }
 }
@@ -215,6 +482,54 @@ private fun GenreChip(
 }
 
 @Composable
+private fun CompactBookCard(
+    libro: Libro,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .clickable { onClick() }
+            .animateContentSize(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            BloodWine.copy(alpha = 0.24f),
+                            DeepWalnut,
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(10.dp)
+        ) {
+            BookCover(
+                imageUrl = libro.imagen,
+                title = libro.titulo,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.68f)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory,
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
 private fun BookCard(
     libro: Libro,
     onClick: () -> Unit
@@ -230,7 +545,18 @@ private fun BookCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            BloodWine.copy(alpha = 0.16f),
+                            DeepWalnut,
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(16.dp)
         ) {
             BookCover(
                 imageUrl = libro.imagen,

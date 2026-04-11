@@ -20,9 +20,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -35,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,24 +49,31 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
+import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
+import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
-import com.example.kaishelvesapp.ui.components.KaiTopBar
 import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun ReadingListScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: ReadingListViewModel,
     onBack: () -> Unit,
+    onGoToProfile: () -> Unit,
+    onGoToSettingsPrivacy: () -> Unit,
+    onLogout: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.cargarLecturas()
@@ -81,93 +91,110 @@ fun ReadingListScreen(
         }
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
-        },
-        bottomBar = {
-            KaiBottomBar(
-                current = KaiSection.READING,
-                onSelect = onSectionSelected
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            KaiNavigationDrawerContent(
+                currentSection = KaiSection.READING,
+                subtitle = stringResource(R.string.readings_subtitle),
+                onSectionSelected = { section ->
+                    scope.launch { drawerState.close() }
+                    onSectionSelected(section)
+                }
             )
         }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(innerPadding)
-                .padding(16.dp)
-        ) {
-            KaiTopBar(
-                title = stringResource(R.string.my_readings),
-                subtitle = stringResource(R.string.readings_subtitle)
-            )
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+            },
+            topBar = {
+                KaiPrimaryTopBar(
+                    onOpenMenu = { scope.launch { drawerState.open() } },
+                    onGoToProfile = onGoToProfile,
+                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
+                    onLogout = onLogout
+                )
+            },
+            bottomBar = {
+                KaiBottomBar(
+                    current = KaiSection.READING,
+                    onSelect = onSectionSelected
+                )
+            }
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(innerPadding)
+                    .padding(16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            when {
-                uiState.isLoading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = TarnishedGold)
-                    }
-                }
-
-                uiState.errorMessage != null && uiState.libros.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = uiState.errorMessage ?: "Error",
-                            color = MaterialTheme.colorScheme.error
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { viewModel.cargarLecturas() },
-                            colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                when {
+                    uiState.isLoading -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(stringResource(R.string.retry))
+                            CircularProgressIndicator(color = TarnishedGold)
                         }
                     }
-                }
 
-                uiState.libros.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = stringResource(R.string.no_books_marked_as_read),
-                            color = OldIvory
-                        )
-                    }
-                }
-
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        items(uiState.libros) { libro ->
-                            ReadingItem(
-                                libro = libro,
-                                onUpdateRating = { rating ->
-                                    viewModel.actualizarPuntuacion(libro.isbn, rating)
-                                },
-                                onDelete = {
-                                    viewModel.eliminarLibro(libro.isbn)
-                                }
+                    uiState.errorMessage != null && uiState.libros.isEmpty() -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = uiState.errorMessage ?: "Error",
+                                color = MaterialTheme.colorScheme.error
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = { viewModel.cargarLecturas() },
+                                colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                            ) {
+                                Text(stringResource(R.string.retry))
+                            }
+                        }
+                    }
+
+                    uiState.libros.isEmpty() -> {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.no_books_marked_as_read),
+                                color = OldIvory
+                            )
+                        }
+                    }
+
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            items(uiState.libros) { libro ->
+                                ReadingItem(
+                                    libro = libro,
+                                    onUpdateRating = { rating ->
+                                        viewModel.actualizarPuntuacion(libro.isbn, rating)
+                                    },
+                                    onDelete = {
+                                        viewModel.eliminarLibro(libro.isbn)
+                                    }
+                                )
+                            }
                         }
                     }
                 }

@@ -8,6 +8,8 @@
     <string name="save">Save</string>
     <string name="search">Search</string>
     <string name="logout">Log out</string>
+    <string name="open_navigation_menu">Open navigation menu</string>
+    <string name="profile_menu">Open profile menu</string>
 
     <string name="login">Log in</string>
     <string name="register">Register</string>
@@ -31,6 +33,20 @@
     <string name="my_readings">My readings</string>
     <string name="profile">Profile</string>
     <string name="home">Home</string>
+    <string name="reading_statistics">Reading statistics</string>
+    <string name="reading_statistics_subtitle">Review your pace, your ratings and the shape of your library.</string>
+    <string name="reading_statistics_summary">You have %1$d recorded volumes in your reading archive.</string>
+    <string name="total_books_read">Books read</string>
+    <string name="average_rating">Average rating</string>
+    <string name="favorite_genre">Most repeated genre</string>
+    <string name="total_pages_read">Pages read</string>
+    <string name="unknown_genre">Unknown genre</string>
+    <string name="settings_privacy">Settings and privacy</string>
+    <string name="settings_privacy_subtitle">Control your archive, your visibility and the private corners of the app.</string>
+    <string name="settings_section_account">Account and preferences</string>
+    <string name="settings_section_account_body">This space will group language, notifications, session preferences and account behavior in future iterations.</string>
+    <string name="settings_section_privacy">Privacy and access</string>
+    <string name="settings_section_privacy_body">Here we will later add session protection, visibility, permissions and personal data controls.</string>
 
     <string name="search_books">Search books</string>
     <string name="catalog_title">Library archive</string>

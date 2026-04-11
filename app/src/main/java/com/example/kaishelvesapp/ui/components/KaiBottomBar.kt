@@ -1,12 +1,10 @@
 package com.example.kaishelvesapp.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -26,7 +24,8 @@ enum class KaiSection {
     HOME,
     CATALOG,
     READING,
-    PROFILE
+    PROFILE,
+    STATS
 }
 
 @Composable
@@ -35,16 +34,13 @@ fun KaiBottomBar(
     onSelect: (KaiSection) -> Unit
 ) {
     NavigationBar(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
+        modifier = Modifier.fillMaxWidth(),
         containerColor = Obsidian
     ) {
         val items = listOf(
             Triple(KaiSection.HOME, stringResource(R.string.home), Icons.Filled.Home),
-            Triple(KaiSection.CATALOG, stringResource(R.string.catalog), Icons.Filled.MenuBook),
-            Triple(KaiSection.READING, stringResource(R.string.my_readings), Icons.Filled.AutoStories),
-            Triple(KaiSection.PROFILE, stringResource(R.string.profile), Icons.Filled.Person)
+            Triple(KaiSection.CATALOG, stringResource(R.string.catalog), Icons.AutoMirrored.Filled.MenuBook),
+            Triple(KaiSection.READING, stringResource(R.string.my_readings), Icons.Filled.AutoStories)
         )
 
         items.forEach { (section, label, icon) ->

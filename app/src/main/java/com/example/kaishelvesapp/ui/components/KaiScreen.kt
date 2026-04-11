@@ -18,6 +18,7 @@ fun KaiScreen(
     subtitle: String? = null,
     currentSection: KaiSection? = null,
     onSectionSelected: ((KaiSection) -> Unit)? = null,
+    showTopBar: Boolean = true,
     content: @Composable (PaddingValues) -> Unit
 ) {
     Scaffold(
@@ -37,12 +38,14 @@ fun KaiScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            KaiTopBar(
-                title = title,
-                subtitle = subtitle
-            )
+            if (showTopBar) {
+                KaiTopBar(
+                    title = title,
+                    subtitle = subtitle
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             content(PaddingValues(0.dp))
         }

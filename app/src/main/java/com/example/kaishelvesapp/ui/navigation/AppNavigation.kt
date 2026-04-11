@@ -16,6 +16,8 @@ import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
+import com.example.kaishelvesapp.ui.screen.settings.SettingsPrivacyScreen
+import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
@@ -29,6 +31,8 @@ object Routes {
     const val DETAIL = "detail"
     const val READING_LIST = "reading_list"
     const val PROFILE = "profile"
+    const val SETTINGS_PRIVACY = "settings_privacy"
+    const val READING_STATS = "reading_stats"
 }
 
 @Composable
@@ -50,6 +54,7 @@ fun AppNavigation(
             KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
             KaiSection.READING -> navController.navigate(Routes.READING_LIST)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
+            KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
         }
     }
 
@@ -96,6 +101,12 @@ fun AppNavigation(
                     catalogViewModel.applyInitialGenre(genre)
                     navController.navigate(Routes.CATALOG)
                 },
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -109,6 +120,12 @@ fun AppNavigation(
         composable(Routes.CATALOG) {
             CatalogScreen(
                 viewModel = catalogViewModel,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -147,6 +164,37 @@ fun AppNavigation(
             ReadingListScreen(
                 viewModel = readingListViewModel,
                 onBack = { navController.popBackStack() },
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.READING_STATS) {
+            ReadingStatsScreen(
+                viewModel = readingListViewModel,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -155,6 +203,21 @@ fun AppNavigation(
             ProfileScreen(
                 viewModel = authViewModel,
                 onBack = { navController.popBackStack() },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.SETTINGS_PRIVACY) {
+            SettingsPrivacyScreen(
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
