@@ -81,6 +81,7 @@ dependencies {
 
 
     implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
