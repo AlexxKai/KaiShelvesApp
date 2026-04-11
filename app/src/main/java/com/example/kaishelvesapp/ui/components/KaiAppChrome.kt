@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,10 +11,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -30,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -124,6 +132,7 @@ fun KaiPrimaryTopBar(
 @Composable
 fun KaiNavigationDrawerContent(
     currentSection: KaiSection,
+    headerTitle: String,
     subtitle: String,
     onSectionSelected: (KaiSection) -> Unit
 ) {
@@ -137,18 +146,9 @@ fun KaiNavigationDrawerContent(
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.Top
         ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                color = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory
+            KaiDrawerHeaderCard(
+                title = headerTitle,
+                subtitle = subtitle
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -176,6 +176,124 @@ fun KaiNavigationDrawerContent(
                 selected = currentSection == KaiSection.STATS,
                 leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
                 onClick = { onSectionSelected(KaiSection.STATS) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun KaiDrawerHeaderCard(
+    title: String,
+    subtitle: String
+) {
+    val monogram = title
+        .split(" ")
+        .filter { it.isNotBlank() }
+        .take(2)
+        .joinToString("") { it.first().uppercase() }
+        .ifBlank { "KS" }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            BloodWine.copy(alpha = 0.62f),
+                            DeepWalnut,
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(68.dp)
+                            .blur(16.dp)
+                            .background(
+                                color = TarnishedGold.copy(alpha = 0.16f),
+                                shape = RoundedCornerShape(24.dp)
+                            )
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        TarnishedGold.copy(alpha = 0.32f),
+                                        BloodWine.copy(alpha = 0.52f),
+                                        DeepWalnut
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = monogram,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TarnishedGold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = TarnishedGold
+                    )
+
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.95f)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                TarnishedGold.copy(alpha = 0.22f),
+                                BloodWine.copy(alpha = 0.35f),
+                                DeepWalnut,
+                                TarnishedGold.copy(alpha = 0.18f)
+                            )
+                        )
+                    )
             )
         }
     }

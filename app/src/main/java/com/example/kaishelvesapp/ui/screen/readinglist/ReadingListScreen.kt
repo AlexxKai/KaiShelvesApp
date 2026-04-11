@@ -96,6 +96,7 @@ fun ReadingListScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.READING,
+                headerTitle = stringResource(R.string.my_readings),
                 subtitle = stringResource(R.string.readings_subtitle),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }

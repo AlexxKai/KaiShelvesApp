@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -94,6 +96,7 @@ fun CatalogScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.CATALOG,
+                headerTitle = stringResource(R.string.catalog_title),
                 subtitle = stringResource(R.string.catalog_subtitle),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
@@ -103,7 +106,7 @@ fun CatalogScreen(
         }
     ) {
         Scaffold(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            containerColor = Color.Transparent,
             topBar = {
                 KaiPrimaryTopBar(
                     onOpenMenu = { scope.launch { drawerState.open() } },
@@ -119,101 +122,104 @@ fun CatalogScreen(
                 )
             }
         ) { innerPadding ->
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(innerPadding)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                item {
-                    CatalogControlsCard(
-                        title = stringResource(R.string.catalog_title),
-                        subtitle = stringResource(R.string.catalog_subtitle),
-                        searchQuery = uiState.searchQuery,
-                        onSearchQueryChange = viewModel::onSearchQueryChange,
-                        onSearch = { viewModel.ejecutarBusqueda() },
-                        genres = uiState.generos,
-                        selectedGenre = uiState.selectedGenero,
-                        onGenreSelected = viewModel::onGeneroSelected,
-                        viewMode = viewMode,
-                        onToggleCompact = { enabled ->
-                            viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
-                        }
-                    )
-                }
+                CatalogIntroCard(
+                    title = stringResource(R.string.catalog_title),
+                    subtitle = stringResource(R.string.catalog_subtitle),
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                CatalogStickyControls(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = viewModel::onSearchQueryChange,
+                    onSearch = { viewModel.ejecutarBusqueda() },
+                    genres = uiState.generos,
+                    selectedGenre = uiState.selectedGenero,
+                    onGenreSelected = viewModel::onGeneroSelected,
+                    viewMode = viewMode,
+                    onToggleCompact = { enabled ->
+                        viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 when {
                     uiState.isLoading -> {
-                        item {
-                            CatalogMessageBox {
-                                CircularProgressIndicator(color = TarnishedGold)
-                            }
+                        CatalogMessageBox {
+                            CircularProgressIndicator(color = TarnishedGold)
                         }
                     }
 
                     uiState.errorMessage != null -> {
-                        item {
-                            CatalogMessageBox {
-                                Text(
-                                    text = uiState.errorMessage ?: "Error desconocido",
-                                    color = MaterialTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center
-                                )
+                        CatalogMessageBox {
+                            Text(
+                                text = uiState.errorMessage ?: "Error desconocido",
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center
+                            )
 
-                                Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                                Button(
-                                    onClick = { viewModel.cargarLibros() },
-                                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                                ) {
-                                    Text(stringResource(R.string.retry))
-                                }
+                            Button(
+                                onClick = { viewModel.cargarLibros() },
+                                colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                            ) {
+                                Text(stringResource(R.string.retry))
                             }
                         }
                     }
 
                     uiState.libros.isEmpty() -> {
-                        item {
-                            CatalogMessageBox {
-                                Text(
-                                    text = stringResource(R.string.no_books_found),
-                                    color = OldIvory,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                        CatalogMessageBox {
+                            Text(
+                                text = stringResource(R.string.no_books_found),
+                                color = OldIvory,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
 
                     else -> {
-                        item {
-                            AnimatedContent(
-                                targetState = viewMode,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                label = "catalog_view_mode"
-                            ) { mode ->
-                                when (mode) {
-                                    CatalogViewMode.COMPACT -> CompactCatalogSection(
-                                        books = uiState.libros,
-                                        onBookClick = onBookClick
-                                    )
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            contentPadding = PaddingValues(bottom = 20.dp)
+                        ) {
+                            item {
+                                AnimatedContent(
+                                    targetState = viewMode,
+                                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                    label = "catalog_view_mode"
+                                ) { mode ->
+                                    when (mode) {
+                                        CatalogViewMode.COMPACT -> CompactCatalogSection(
+                                            books = uiState.libros,
+                                            onBookClick = onBookClick
+                                        )
 
-                                    CatalogViewMode.DETAILED -> DetailedCatalogSection(
-                                        books = uiState.libros,
-                                        onBookClick = onBookClick
-                                    )
+                                        CatalogViewMode.DETAILED -> DetailedCatalogSection(
+                                            books = uiState.libros,
+                                            onBookClick = onBookClick
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        item {
-                            TextButton(
-                                onClick = onLogout,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(R.string.logout), color = OldIvory)
+                            item {
+                                TextButton(
+                                    onClick = onLogout,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(stringResource(R.string.logout), color = OldIvory)
+                                }
                             }
                         }
                     }
@@ -224,9 +230,49 @@ fun CatalogScreen(
 }
 
 @Composable
-private fun CatalogControlsCard(
+private fun CatalogIntroCard(
     title: String,
-    subtitle: String,
+    subtitle: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            BloodWine.copy(alpha = 0.16f),
+                            DeepWalnut,
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = TarnishedGold
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatalogStickyControls(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -237,10 +283,12 @@ private fun CatalogControlsCard(
     onToggleCompact: (Boolean) -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
-        border = BorderStroke(1.dp, TarnishedGold)
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.9f))
     ) {
         Column(
             modifier = Modifier
@@ -248,79 +296,61 @@ private fun CatalogControlsCard(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            BloodWine.copy(alpha = 0.18f),
-                            DeepWalnut,
+                            DeepWalnut.copy(alpha = 0.98f),
                             Obsidian
                         )
                     )
                 )
-                .padding(18.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = stringResource(R.string.search_books),
-                style = MaterialTheme.typography.titleLarge,
-                color = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchQueryChange,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.search_by_title_author_publisher)) },
-                shape = RoundedCornerShape(18.dp),
-                singleLine = true,
-                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = onSearch,
-                modifier = Modifier.fillMaxWidth(),
-                colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(stringResource(R.string.search))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.search)) },
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+
+                CatalogViewSwitch(
+                    compactSelected = viewMode == CatalogViewMode.COMPACT,
+                    onToggleCompact = onToggleCompact
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            CatalogViewSwitch(
-                compactSelected = viewMode == CatalogViewMode.COMPACT,
-                onToggleCompact = onToggleCompact
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                genres.forEach { genero ->
-                    GenreChip(
-                        text = genero,
-                        selected = selectedGenre == genero,
-                        onClick = { onGenreSelected(genero) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = onSearch,
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                ) {
+                    Text(stringResource(R.string.search))
+                }
+
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    genres.forEach { genero ->
+                        GenreChip(
+                            text = genero,
+                            selected = selectedGenre == genero,
+                            onClick = { onGenreSelected(genero) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                 }
             }
         }
@@ -334,34 +364,19 @@ private fun CatalogViewSwitch(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
             .background(DeepWalnut.copy(alpha = 0.92f))
             .border(1.dp, TarnishedGold.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = if (compactSelected) "Vista por portadas" else "Vista detallada",
-                style = MaterialTheme.typography.titleMedium,
-                color = TarnishedGold
-            )
+        Text(
+            text = if (compactSelected) "Portadas" else "Detalle",
+            style = MaterialTheme.typography.labelLarge,
+            color = TarnishedGold
+        )
 
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = if (compactSelected) {
-                    "Muestra 2-3 libros por fila con la portada como protagonista."
-                } else {
-                    "Mantiene la lista con autor, año y género."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory
-            )
-        }
+        Spacer(modifier = Modifier.width(8.dp))
 
         Switch(
             checked = compactSelected,
@@ -379,10 +394,11 @@ private fun CatalogViewSwitch(
 
 @Composable
 private fun CatalogMessageBox(
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
@@ -491,7 +507,7 @@ private fun CompactBookCard(
         modifier = modifier
             .clickable { onClick() }
             .animateContentSize(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
     ) {
@@ -507,7 +523,7 @@ private fun CompactBookCard(
                         )
                     )
                 )
-                .padding(10.dp)
+                .padding(8.dp)
         ) {
             BookCover(
                 imageUrl = libro.imagen,
@@ -517,13 +533,14 @@ private fun CompactBookCard(
                     .aspectRatio(0.68f)
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory,
-                maxLines = 2
+                maxLines = 2,
+                modifier = Modifier.heightIn(min = 36.dp)
             )
         }
     }

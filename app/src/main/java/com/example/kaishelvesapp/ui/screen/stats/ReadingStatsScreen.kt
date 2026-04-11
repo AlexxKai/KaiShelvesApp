@@ -70,6 +70,7 @@ fun ReadingStatsScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.STATS,
+                headerTitle = stringResource(R.string.reading_statistics),
                 subtitle = stringResource(R.string.reading_statistics_subtitle),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }

@@ -54,6 +54,7 @@ fun SettingsPrivacyScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.PROFILE,
+                headerTitle = stringResource(R.string.settings_privacy),
                 subtitle = stringResource(R.string.settings_privacy_subtitle),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
