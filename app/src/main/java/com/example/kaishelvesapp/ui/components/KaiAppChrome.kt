@@ -1,5 +1,10 @@
 package com.example.kaishelvesapp.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,11 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -29,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,26 +51,90 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 @Composable
 fun KaiPrimaryTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onScanResult: (String) -> Unit,
     onOpenMenu: () -> Unit,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit
 ) {
     var showUserMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scanOptions = remember {
+        ScanOptions().apply {
+            setDesiredBarcodeFormats(ScanOptions.EAN_13, ScanOptions.EAN_8, ScanOptions.UPC_A, ScanOptions.UPC_E)
+            setPrompt(context.getString(R.string.scan_isbn_prompt))
+            setBeepEnabled(false)
+            setOrientationLocked(false)
+        }
+    }
+    val barcodeLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val scannedValue = result.contents
+            .orEmpty()
+            .trim()
+            .replace("-", "")
+            .replace(" ", "")
 
-    Row(
+        when {
+            scannedValue.isBlank() -> Unit
+            scannedValue.length == 10 || scannedValue.length == 13 -> onScanResult(scannedValue)
+            else -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.invalid_isbn_barcode),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            barcodeLauncher.launch(scanOptions)
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.camera_permission_required),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    fun launchScanner() {
+        val hasCameraPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasCameraPermission) {
+            barcodeLauncher.launch(scanOptions)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(
@@ -71,62 +145,102 @@ fun KaiPrimaryTopBar(
                     )
                 )
             )
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        IconButton(onClick = onOpenMenu) {
-            Icon(
-                imageVector = Icons.Filled.Menu,
-                contentDescription = stringResource(R.string.open_navigation_menu),
-                tint = TarnishedGold
-            )
-        }
-
-        Text(
-            text = stringResource(R.string.app_name),
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.headlineMedium,
-            color = TarnishedGold
-        )
-
-        Box {
-            IconButton(onClick = { showUserMenu = true }) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onOpenMenu) {
                 Icon(
-                    imageVector = Icons.Filled.AccountCircle,
-                    contentDescription = stringResource(R.string.profile_menu),
+                    imageVector = Icons.Filled.Menu,
+                    contentDescription = stringResource(R.string.open_navigation_menu),
                     tint = TarnishedGold
                 )
             }
 
-            DropdownMenu(
-                expanded = showUserMenu,
-                onDismissRequest = { showUserMenu = false },
-                containerColor = Obsidian
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.profile), color = OldIvory) },
-                    onClick = {
-                        showUserMenu = false
-                        onGoToProfile()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.settings_privacy), color = OldIvory) },
-                    onClick = {
-                        showUserMenu = false
-                        onGoToSettingsPrivacy()
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.logout), color = TarnishedGold) },
-                    onClick = {
-                        showUserMenu = false
-                        onLogout()
-                    }
-                )
+            Text(
+                text = stringResource(R.string.app_name),
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.headlineMedium,
+                color = TarnishedGold
+            )
+
+            Box {
+                IconButton(onClick = { showUserMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.AccountCircle,
+                        contentDescription = stringResource(R.string.profile_menu),
+                        tint = TarnishedGold
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showUserMenu,
+                    onDismissRequest = { showUserMenu = false },
+                    containerColor = Obsidian
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.profile), color = OldIvory) },
+                        onClick = {
+                            showUserMenu = false
+                            onGoToProfile()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.settings_privacy), color = OldIvory) },
+                        onClick = {
+                            showUserMenu = false
+                            onGoToSettingsPrivacy()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.logout), color = TarnishedGold) },
+                        onClick = {
+                            showUserMenu = false
+                            onLogout()
+                        }
+                    )
+                }
             }
         }
+
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            placeholder = {
+                Text(stringResource(R.string.search_by_title_author_isbn))
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(20.dp),
+            leadingIcon = {
+                IconButton(onClick = onSearch) {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.search),
+                        tint = TarnishedGold
+                    )
+                }
+            },
+            trailingIcon = {
+                IconButton(onClick = ::launchScanner) {
+                    Icon(
+                        imageVector = Icons.Filled.CameraAlt,
+                        contentDescription = stringResource(R.string.scan_isbn),
+                        tint = TarnishedGold
+                    )
+                }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { onSearch() }
+            ),
+            colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+        )
     }
 }
 

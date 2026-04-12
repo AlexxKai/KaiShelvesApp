@@ -7,11 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,7 +23,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,7 +31,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -109,6 +104,13 @@ fun CatalogScreen(
             containerColor = Color.Transparent,
             topBar = {
                 KaiPrimaryTopBar(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = viewModel::onSearchQueryChange,
+                    onSearch = {
+                        viewModel.resetGenreFilterForSearch()
+                        viewModel.ejecutarBusqueda()
+                    },
+                    onScanResult = viewModel::buscarPorIsbn,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onGoToProfile = onGoToProfile,
                     onGoToSettingsPrivacy = onGoToSettingsPrivacy,
@@ -129,20 +131,7 @@ fun CatalogScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                CatalogIntroCard(
-                    title = stringResource(R.string.catalog_title),
-                    subtitle = stringResource(R.string.catalog_subtitle),
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                CatalogStickyControls(
-                    searchQuery = uiState.searchQuery,
-                    onSearchQueryChange = viewModel::onSearchQueryChange,
-                    onSearch = { viewModel.ejecutarBusqueda() },
-                    genres = uiState.generos,
-                    selectedGenre = uiState.selectedGenero,
-                    onGenreSelected = viewModel::onGeneroSelected,
+                CatalogDisplayControls(
                     viewMode = viewMode,
                     onToggleCompact = { enabled ->
                         viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
@@ -230,55 +219,7 @@ fun CatalogScreen(
 }
 
 @Composable
-private fun CatalogIntroCard(
-    title: String,
-    subtitle: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Obsidian),
-        border = BorderStroke(1.dp, TarnishedGold)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            BloodWine.copy(alpha = 0.16f),
-                            DeepWalnut,
-                            Obsidian
-                        )
-                    )
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory
-            )
-        }
-    }
-}
-
-@Composable
-private fun CatalogStickyControls(
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    genres: List<String>,
-    selectedGenre: String,
-    onGenreSelected: (String) -> Unit,
+private fun CatalogDisplayControls(
     viewMode: CatalogViewMode,
     onToggleCompact: (Boolean) -> Unit
 ) {
@@ -290,7 +231,7 @@ private fun CatalogStickyControls(
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.9f))
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -301,58 +242,14 @@ private fun CatalogStickyControls(
                         )
                     )
                 )
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    modifier = Modifier.weight(1f),
-                    label = { Text(stringResource(R.string.search)) },
-                    shape = RoundedCornerShape(16.dp),
-                    singleLine = true,
-                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
-                )
-
-                CatalogViewSwitch(
-                    compactSelected = viewMode == CatalogViewMode.COMPACT,
-                    onToggleCompact = onToggleCompact
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onSearch,
-                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                ) {
-                    Text(stringResource(R.string.search))
-                }
-
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState())
-                ) {
-                    genres.forEach { genero ->
-                        GenreChip(
-                            text = genero,
-                            selected = selectedGenre == genero,
-                            onClick = { onGenreSelected(genero) }
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                }
-            }
+            CatalogViewSwitch(
+                compactSelected = viewMode == CatalogViewMode.COMPACT,
+                onToggleCompact = onToggleCompact
+            )
         }
     }
 }
@@ -366,7 +263,6 @@ private fun CatalogViewSwitch(
         modifier = Modifier
             .clip(RoundedCornerShape(22.dp))
             .background(DeepWalnut.copy(alpha = 0.92f))
-            .border(1.dp, TarnishedGold.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -464,36 +360,6 @@ private fun DetailedCatalogSection(
                 onClick = { onBookClick(libro) }
             )
         }
-    }
-}
-
-@Composable
-private fun GenreChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val background = if (selected) BloodWine else DeepWalnut
-    val textColor = if (selected) TarnishedGold else OldIvory
-
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(background)
-            .border(
-                width = 1.dp,
-                color = TarnishedGold,
-                shape = RoundedCornerShape(20.dp)
-            )
-            .clickable { onClick() }
-            .animateContentSize()
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = text,
-            color = textColor,
-            style = MaterialTheme.typography.bodyMedium
-        )
     }
 }
 

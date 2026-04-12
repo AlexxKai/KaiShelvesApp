@@ -94,6 +94,5 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.mlkit:translate:17.0.3")
-
-    //????
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

@@ -42,6 +42,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsPrivacyScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onLogout: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
@@ -67,6 +71,10 @@ fun SettingsPrivacyScreen(
             containerColor = Color.Transparent,
             topBar = {
                 KaiPrimaryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onSearch = onSearch,
+                    onScanResult = onScanResult,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onGoToProfile = onGoToProfile,
                     onGoToSettingsPrivacy = {},

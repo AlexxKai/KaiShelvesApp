@@ -70,6 +70,21 @@ fun AppNavigation(
         }
     }
 
+    fun openCatalogAndSearch() {
+        catalogViewModel.resetGenreFilterForSearch()
+        catalogViewModel.ejecutarBusqueda()
+        navController.navigate(Routes.CATALOG)
+    }
+
+    fun searchFromSharedTopBar(query: String) {
+        catalogViewModel.onSearchQueryChange(query)
+    }
+
+    fun scanFromSharedTopBar(isbn: String) {
+        catalogViewModel.buscarPorIsbn(isbn)
+        navController.navigate(Routes.CATALOG)
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination
@@ -113,6 +128,10 @@ fun AppNavigation(
                     catalogViewModel.applyInitialGenre(genre)
                     navController.navigate(Routes.CATALOG)
                 },
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
@@ -176,6 +195,10 @@ fun AppNavigation(
             ReadingListScreen(
                 viewModel = readingListViewModel,
                 onBack = { navController.popBackStack() },
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
@@ -198,6 +221,10 @@ fun AppNavigation(
                 onOpenList = { listId ->
                     navController.navigate(listDetailRoute(listId))
                 },
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
@@ -233,6 +260,10 @@ fun AppNavigation(
         composable(Routes.READING_STATS) {
             ReadingStatsScreen(
                 viewModel = readingListViewModel,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
@@ -253,6 +284,13 @@ fun AppNavigation(
             ProfileScreen(
                 viewModel = authViewModel,
                 onBack = { navController.popBackStack() },
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
@@ -265,6 +303,10 @@ fun AppNavigation(
 
         composable(Routes.SETTINGS_PRIVACY) {
             SettingsPrivacyScreen(
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },

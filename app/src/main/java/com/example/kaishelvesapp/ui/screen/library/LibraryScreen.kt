@@ -67,6 +67,10 @@ fun LibraryScreen(
     genres: List<String>,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onGenreClick: (String) -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
@@ -165,6 +169,10 @@ fun LibraryScreen(
             containerColor = Color.Transparent,
             topBar = {
                 KaiPrimaryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onSearch = onSearch,
+                    onScanResult = onScanResult,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onGoToProfile = onGoToProfile,
                     onGoToSettingsPrivacy = onGoToSettingsPrivacy,

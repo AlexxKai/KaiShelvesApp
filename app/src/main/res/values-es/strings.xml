@@ -52,10 +52,15 @@
     <string name="search_books">Buscar libros</string>
     <string name="catalog_title">Archivo de la biblioteca</string>
     <string name="catalog_subtitle">Busca entre volumenes, autores y generos.</string>
-    <string name="search_by_title_author_publisher">Buscar por titulo, autor o editorial</string>
+    <string name="search_by_title_author_publisher">Buscar por titulo, autor, editorial o ISBN</string>
+    <string name="search_by_title_author_isbn">Busca por titulo, autor o ISBN</string>
     <string name="no_books_found">No se han encontrado volumenes</string>
     <string name="unknown_title">Titulo desconocido</string>
     <string name="year">Ano</string>
+    <string name="scan_isbn">Escanear ISBN</string>
+    <string name="scan_isbn_prompt">Alinea el codigo de barras del libro dentro del marco</string>
+    <string name="camera_permission_required">Hace falta permiso de camara para escanear codigos</string>
+    <string name="invalid_isbn_barcode">El codigo escaneado no parece un ISBN valido</string>
 
     <string name="book_record">Ficha del volumen</string>
     <string name="archive_note">Nota del archivo</string>

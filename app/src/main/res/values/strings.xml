@@ -52,10 +52,15 @@
     <string name="search_books">Search books</string>
     <string name="catalog_title">Library archive</string>
     <string name="catalog_subtitle">Search among volumes, authors and genres.</string>
-    <string name="search_by_title_author_publisher">Search by title, author or publisher</string>
+    <string name="search_by_title_author_publisher">Search by title, author, publisher or ISBN</string>
+    <string name="search_by_title_author_isbn">Search by title, author or ISBN</string>
     <string name="no_books_found">No volumes found</string>
     <string name="unknown_title">Unknown title</string>
     <string name="year">Year</string>
+    <string name="scan_isbn">Scan ISBN</string>
+    <string name="scan_isbn_prompt">Align the book barcode inside the frame</string>
+    <string name="camera_permission_required">Camera permission is required to scan barcodes</string>
+    <string name="invalid_isbn_barcode">The scanned barcode does not look like a valid ISBN</string>
 
     <string name="book_record">Volume record</string>
     <string name="archive_note">Archive note</string>

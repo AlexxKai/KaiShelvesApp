@@ -65,6 +65,10 @@ class CatalogViewModel(
         _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
+    fun resetGenreFilterForSearch() {
+        _uiState.value = _uiState.value.copy(selectedGenero = "Todos")
+    }
+
     fun ejecutarBusqueda() {
         val state = _uiState.value
 
@@ -91,6 +95,39 @@ class CatalogViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "Error al buscar libros"
+                    )
+                }
+        }
+    }
+
+    fun buscarPorIsbn(isbn: String) {
+        val normalizedIsbn = isbn
+            .trim()
+            .replace("-", "")
+            .replace(" ", "")
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            searchQuery = normalizedIsbn,
+            selectedGenero = "Todos"
+        )
+
+        viewModelScope.launch {
+            val result = repository.searchBooksByIsbn(normalizedIsbn)
+
+            result
+                .onSuccess { libros ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        libros = libros,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Error al buscar el ISBN"
                     )
                 }
         }

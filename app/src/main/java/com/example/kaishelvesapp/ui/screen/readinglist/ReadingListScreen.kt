@@ -65,6 +65,10 @@ fun ReadingListScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: ReadingListViewModel,
     onBack: () -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
@@ -112,6 +116,10 @@ fun ReadingListScreen(
             },
             topBar = {
                 KaiPrimaryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onSearch = onSearch,
+                    onScanResult = onScanResult,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onGoToProfile = onGoToProfile,
                     onGoToSettingsPrivacy = onGoToSettingsPrivacy,

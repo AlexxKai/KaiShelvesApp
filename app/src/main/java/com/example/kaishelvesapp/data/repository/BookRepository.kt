@@ -28,6 +28,22 @@ class BookRepository(
             .replace("/", "_")
     }
 
+    private fun normalizeIsbnQuery(rawValue: String): String {
+        return rawValue
+            .trim()
+            .removePrefix("ISBN")
+            .removePrefix("isbn")
+            .replace(":", "")
+            .replace("-", "")
+            .replace(" ", "")
+            .uppercase()
+    }
+
+    private fun looksLikeIsbn(rawValue: String): Boolean {
+        val normalized = normalizeIsbnQuery(rawValue)
+        return normalized.length == 10 || normalized.length == 13
+    }
+
     suspend fun obtenerLibros(): Result<List<Libro>> {
         return try {
             val response = api.searchBooks(
@@ -70,7 +86,8 @@ class BookRepository(
     suspend fun searchBooks(genero: String?, query: String): Result<List<Libro>> {
         return try {
             val cleanQuery = query.trim()
-            val subjectPart = if (!genero.isNullOrBlank() && genero != "Todos") {
+            val isbnQuery = normalizeIsbnQuery(cleanQuery)
+            val subjectPart = if (!genero.isNullOrBlank() && genero != "Todos" && !looksLikeIsbn(cleanQuery)) {
                 val subjectQuery = LibraryGenres.all
                     .firstOrNull { it.label == genero }
                     ?.subjectQuery
@@ -81,6 +98,7 @@ class BookRepository(
             }
 
             val finalQuery = when {
+                looksLikeIsbn(cleanQuery) -> "isbn:$isbnQuery"
                 cleanQuery.isBlank() && subjectPart.isNotBlank() -> subjectPart.trim()
                 cleanQuery.isNotBlank() -> "$cleanQuery$subjectPart"
                 else -> "subject:fiction"
@@ -93,6 +111,28 @@ class BookRepository(
 
             val libros = response.docs
                 .map { it.toLibro(fallbackGenero = genero ?: "") }
+                .localizeForCurrentLanguage()
+
+            Result.success(libros)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchBooksByIsbn(isbn: String): Result<List<Libro>> {
+        return try {
+            val normalizedIsbn = normalizeIsbnQuery(isbn)
+            if (normalizedIsbn.isBlank()) {
+                return Result.success(emptyList())
+            }
+
+            val response = api.searchBooks(
+                query = "isbn:$normalizedIsbn",
+                limit = 10
+            )
+
+            val libros = response.docs
+                .map { it.toLibro() }
                 .localizeForCurrentLanguage()
 
             Result.success(libros)

@@ -50,6 +50,10 @@ import kotlinx.coroutines.launch
 fun ReadingStatsScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: ReadingListViewModel,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
@@ -83,6 +87,10 @@ fun ReadingStatsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 KaiPrimaryTopBar(
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onSearch = onSearch,
+                    onScanResult = onScanResult,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     onGoToProfile = onGoToProfile,
                     onGoToSettingsPrivacy = onGoToSettingsPrivacy,
