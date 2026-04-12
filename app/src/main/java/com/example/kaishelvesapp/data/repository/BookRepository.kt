@@ -1,10 +1,12 @@
 package com.example.kaishelvesapp.data.repository
 
+import com.example.kaishelvesapp.data.localization.BookMetadataLocalizer
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.remote.openlibrary.LibraryGenres
 import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
 import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
+import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -33,7 +35,10 @@ class BookRepository(
                 limit = 40
             )
 
-            val libros = response.docs.map { it.toLibro(fallbackGenero = "Ficción") }
+            val libros = response.docs
+                .map { it.toLibro(fallbackGenero = "Ficcion") }
+                .localizeForCurrentLanguage()
+
             Result.success(libros)
         } catch (e: Exception) {
             Result.failure(e)
@@ -52,7 +57,10 @@ class BookRepository(
                 limit = 40
             )
 
-            val libros = response.docs.map { it.toLibro(fallbackGenero = genero) }
+            val libros = response.docs
+                .map { it.toLibro(fallbackGenero = genero) }
+                .localizeForCurrentLanguage()
+
             Result.success(libros)
         } catch (e: Exception) {
             Result.failure(e)
@@ -83,9 +91,9 @@ class BookRepository(
                 limit = 40
             )
 
-            val libros = response.docs.map {
-                it.toLibro(fallbackGenero = genero ?: "")
-            }
+            val libros = response.docs
+                .map { it.toLibro(fallbackGenero = genero ?: "") }
+                .localizeForCurrentLanguage()
 
             Result.success(libros)
         } catch (e: Exception) {
@@ -100,7 +108,7 @@ class BookRepository(
 
             val docId = safeBookDocId(libro.id.ifBlank { libro.isbn })
             if (docId == "unknown_book") {
-                return Result.failure(Exception("El libro no tiene identificador válido"))
+                return Result.failure(Exception("El libro no tiene identificador valido"))
             }
 
             val fechaActual = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -207,6 +215,17 @@ class BookRepository(
             Result.success(libroLeido)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private suspend fun List<Libro>.localizeForCurrentLanguage(): List<Libro> {
+        val targetLanguage = LanguageManager.getCurrentLanguage()
+
+        return map { book ->
+            BookMetadataLocalizer.localize(
+                book = book,
+                targetLanguageTag = targetLanguage
+            )
         }
     }
 }
