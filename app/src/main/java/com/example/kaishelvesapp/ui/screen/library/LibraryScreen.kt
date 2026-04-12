@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Card
@@ -113,6 +114,22 @@ fun LibraryScreen(
                         onClick = {
                             scope.launch { drawerState.close() }
                             onSectionSelected(KaiSection.CATALOG)
+                        }
+                    )
+
+                    DrawerSectionItem(
+                        label = stringResource(R.string.lists),
+                        selected = false,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
+                                contentDescription = null,
+                                tint = TarnishedGold
+                            )
+                        },
+                        onClick = {
+                            scope.launch { drawerState.close() }
+                            onSectionSelected(KaiSection.LISTS)
                         }
                     )
 

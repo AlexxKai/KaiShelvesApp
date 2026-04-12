@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -13,10 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,11 +30,15 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,15 +71,43 @@ fun BookDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showListsDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(libro.id, libro.isbn) {
-        viewModel.cargarEstadoLectura(libro.id.ifBlank { libro.isbn })
+        val safeBookId = libro.id.ifBlank { libro.isbn }
+        viewModel.cargarEstadoLectura(safeBookId)
+        viewModel.cargarListasParaLibro(safeBookId)
     }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+    LaunchedEffect(uiState.errorMessageRes, uiState.successMessageRes) {
+        uiState.errorMessageRes?.let {
+            snackbarHostState.showSnackbar(context.getString(it))
+            viewModel.clearMessages()
         }
+
+        uiState.successMessageRes?.let {
+            snackbarHostState.showSnackbar(context.getString(it))
+            viewModel.clearMessages()
+        }
+    }
+
+    if (showListsDialog) {
+        SelectListsDialog(
+            lists = uiState.availableLists,
+            initiallySelected = uiState.selectedListIds,
+            isSaving = uiState.isSavingLists,
+            onDismiss = {
+                if (!uiState.isSavingLists) {
+                    showListsDialog = false
+                }
+            },
+            onConfirm = { selectedIds ->
+                viewModel.guardarListas(libro, selectedIds)
+                if (!uiState.isSavingLists) {
+                    showListsDialog = false
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -82,6 +119,7 @@ fun BookDetailScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
                 .padding(innerPadding)
                 .padding(16.dp)
@@ -252,6 +290,14 @@ fun BookDetailScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    ListsSummaryCard(
+                        totalLists = uiState.availableLists.size,
+                        selectedListsCount = uiState.selectedListIds.size,
+                        isLoading = uiState.isListsLoading
+                    )
+
                     Spacer(modifier = Modifier.height(20.dp))
 
                     when {
@@ -294,6 +340,41 @@ fun BookDetailScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = { showListsDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isListsLoading && !uiState.isSavingLists && uiState.availableLists.isNotEmpty(),
+                        border = BorderStroke(1.dp, TarnishedGold)
+                    ) {
+                        if (uiState.isSavingLists) {
+                            CircularProgressIndicator(
+                                color = TarnishedGold,
+                                modifier = Modifier.width(18.dp).height(18.dp)
+                            )
+                        } else {
+                            Text(
+                                text = if (uiState.selectedListIds.isEmpty()) {
+                                    stringResource(R.string.select_lists_for_book)
+                                } else {
+                                    stringResource(R.string.manage_book_lists)
+                                },
+                                color = TarnishedGold
+                            )
+                        }
+                    }
+
+                    if (uiState.availableLists.isEmpty() && !uiState.isListsLoading) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = stringResource(R.string.no_user_lists_available),
+                            color = OldIvory,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
                     if (libro.pdf.isNotBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
 
@@ -326,6 +407,150 @@ fun BookDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ListsSummaryCard(
+    totalLists: Int,
+    selectedListsCount: Int,
+    isLoading: Boolean
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.user_lists),
+                style = MaterialTheme.typography.titleMedium,
+                color = TarnishedGold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(color = TarnishedGold)
+                }
+
+                totalLists == 0 -> {
+                    Text(
+                        text = stringResource(R.string.no_user_lists_available),
+                        color = OldIvory,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = stringResource(
+                            R.string.book_in_lists_summary,
+                            selectedListsCount,
+                            totalLists
+                        ),
+                        color = OldIvory,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectListsDialog(
+    lists: List<com.example.kaishelvesapp.data.model.UserBookList>,
+    initiallySelected: Set<String>,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit
+) {
+    var selectedIds by remember(initiallySelected, lists) {
+        mutableStateOf(initiallySelected.intersect(lists.map { it.id }.toSet()))
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(R.string.select_lists_dialog_title),
+                color = TarnishedGold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.select_lists_dialog_body),
+                    color = OldIvory,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                lists.forEach { list ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = selectedIds.contains(list.id),
+                            onCheckedChange = { checked ->
+                                selectedIds = if (checked) {
+                                    selectedIds + list.id
+                                } else {
+                                    selectedIds - list.id
+                                }
+                            }
+                        )
+
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = list.name,
+                                color = TarnishedGold,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            if (list.description.isNotBlank()) {
+                                Text(
+                                    text = list.description,
+                                    color = OldIvory,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selectedIds) },
+                enabled = !isSaving
+            ) {
+                Text(
+                    text = stringResource(R.string.save),
+                    color = TarnishedGold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSaving
+            ) {
+                Text(
+                    text = stringResource(R.string.cancel),
+                    color = OldIvory
+                )
+            }
+        },
+        containerColor = Obsidian
+    )
 }
 
 @Composable

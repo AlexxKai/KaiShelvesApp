@@ -8,10 +8,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
+import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
+import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
@@ -22,18 +25,24 @@ import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
+import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
+import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val LIBRARY = "library"
     const val CATALOG = "catalog"
+    const val LISTS = "lists"
+    const val LIST_DETAIL = "list_detail/{listId}"
     const val DETAIL = "detail"
     const val READING_LIST = "reading_list"
     const val PROFILE = "profile"
     const val SETTINGS_PRIVACY = "settings_privacy"
     const val READING_STATS = "reading_stats"
 }
+
+fun listDetailRoute(listId: String): String = "list_detail/$listId"
 
 @Composable
 fun AppNavigation(
@@ -42,6 +51,8 @@ fun AppNavigation(
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
     val readingListViewModel: ReadingListViewModel = viewModel()
+    val userListsViewModel: UserListsViewModel = viewModel()
+    val userListDetailViewModel: UserListDetailViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
@@ -52,6 +63,7 @@ fun AppNavigation(
         when (section) {
             KaiSection.HOME -> navController.navigate(Routes.LIBRARY)
             KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
+            KaiSection.LISTS -> navController.navigate(Routes.LISTS)
             KaiSection.READING -> navController.navigate(Routes.READING_LIST)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
@@ -177,6 +189,44 @@ fun AppNavigation(
                     }
                 },
                 onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.LISTS) {
+            UserListsScreen(
+                viewModel = userListsViewModel,
+                onOpenList = { listId ->
+                    navController.navigate(listDetailRoute(listId))
+                },
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(
+            route = Routes.LIST_DETAIL,
+            arguments = listOf(navArgument("listId") { defaultValue = "" })
+        ) { backStackEntry ->
+            val listId = backStackEntry.arguments?.getString("listId").orEmpty()
+            UserListDetailScreen(
+                listId = listId,
+                viewModel = userListDetailViewModel,
+                onBack = { navController.popBackStack() },
+                onBookClick = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
+                }
             )
         }
 

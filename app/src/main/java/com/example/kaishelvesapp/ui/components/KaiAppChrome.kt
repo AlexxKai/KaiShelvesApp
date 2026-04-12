@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Menu
@@ -163,6 +164,13 @@ fun KaiNavigationDrawerContent(
                 label = stringResource(R.string.catalog),
                 selected = currentSection == KaiSection.CATALOG,
                 onClick = { onSectionSelected(KaiSection.CATALOG) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.lists),
+                selected = currentSection == KaiSection.LISTS,
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.LISTS) }
             )
 
             KaiDrawerItem(
