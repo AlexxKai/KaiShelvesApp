@@ -3,13 +3,14 @@ package com.example.kaishelvesapp.data.repository
 import com.example.kaishelvesapp.data.localization.BookMetadataLocalizer
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
-import com.example.kaishelvesapp.data.remote.openlibrary.LibraryGenres
-import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
-import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
+import com.example.kaishelvesapp.data.remote.googlebooks.GoogleBooksClient
+import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
+import com.example.kaishelvesapp.data.remote.googlebooks.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import retrofit2.HttpException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -19,7 +20,8 @@ class BookRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) {
 
-    private val api = OpenLibraryClient.api
+    private val api = GoogleBooksClient.api
+    private val publicApi = GoogleBooksClient.publicApi
 
     private fun safeBookDocId(rawId: String): String {
         return rawId
@@ -44,14 +46,48 @@ class BookRepository(
         return normalized.length == 10 || normalized.length == 13
     }
 
+    private fun currentGoogleBooksLanguage(): String? {
+        return when (LanguageManager.getCurrentLanguage()) {
+            "es" -> "es"
+            "en" -> "en"
+            else -> null
+        }
+    }
+
+    private fun Throwable.shouldRetryGoogleBooksWithoutApiKey(): Boolean {
+        val httpException = this as? HttpException ?: return false
+        return httpException.code() == 403 && GoogleBooksClient.hasApiKey
+    }
+
+    private suspend fun searchGoogleBooks(
+        query: String,
+        maxResults: Int
+    ) = try {
+        api.searchBooks(
+            query = query,
+            maxResults = maxResults,
+            langRestrict = currentGoogleBooksLanguage()
+        )
+    } catch (error: Exception) {
+        if (!error.shouldRetryGoogleBooksWithoutApiKey()) {
+            throw error
+        }
+
+        publicApi.searchBooks(
+            query = query,
+            maxResults = maxResults,
+            langRestrict = currentGoogleBooksLanguage()
+        )
+    }
+
     suspend fun obtenerLibros(): Result<List<Libro>> {
         return try {
-            val response = api.searchBooks(
+            val response = searchGoogleBooks(
                 query = "subject:fiction",
-                limit = 40
+                maxResults = 40
             )
 
-            val libros = response.docs
+            val libros = response.items
                 .map { it.toLibro(fallbackGenero = "Ficcion") }
                 .localizeForCurrentLanguage()
 
@@ -68,12 +104,12 @@ class BookRepository(
                 ?.subjectQuery
                 ?: genero.lowercase()
 
-            val response = api.searchBooks(
+            val response = searchGoogleBooks(
                 query = "subject:$subjectQuery",
-                limit = 40
+                maxResults = 40
             )
 
-            val libros = response.docs
+            val libros = response.items
                 .map { it.toLibro(fallbackGenero = genero) }
                 .localizeForCurrentLanguage()
 
@@ -104,12 +140,12 @@ class BookRepository(
                 else -> "subject:fiction"
             }
 
-            val response = api.searchBooks(
+            val response = searchGoogleBooks(
                 query = finalQuery,
-                limit = 40
+                maxResults = 40
             )
 
-            val libros = response.docs
+            val libros = response.items
                 .map { it.toLibro(fallbackGenero = genero ?: "") }
                 .localizeForCurrentLanguage()
 
@@ -126,12 +162,12 @@ class BookRepository(
                 return Result.success(emptyList())
             }
 
-            val response = api.searchBooks(
+            val response = searchGoogleBooks(
                 query = "isbn:$normalizedIsbn",
-                limit = 10
+                maxResults = 10
             )
 
-            val libros = response.docs
+            val libros = response.items
                 .map { it.toLibro() }
                 .localizeForCurrentLanguage()
 

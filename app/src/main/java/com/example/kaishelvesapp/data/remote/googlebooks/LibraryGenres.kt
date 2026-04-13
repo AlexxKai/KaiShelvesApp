@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.data.remote.openlibrary
+package com.example.kaishelvesapp.data.remote.googlebooks
 
 data class LibraryGenre(
     val label: String,
@@ -7,13 +7,13 @@ data class LibraryGenre(
 
 object LibraryGenres {
     val all = listOf(
-        LibraryGenre("Fantasía", "fantasy"),
+        LibraryGenre("Fantasia", "fantasy"),
         LibraryGenre("Misterio", "mystery"),
         LibraryGenre("Terror", "horror"),
         LibraryGenre("Romance", "romance"),
-        LibraryGenre("Ciencia ficción", "science fiction"),
+        LibraryGenre("Ciencia ficcion", "science fiction"),
         LibraryGenre("Historia", "history"),
         LibraryGenre("Aventura", "adventure"),
-        LibraryGenre("Poesía", "poetry")
+        LibraryGenre("Poesia", "poetry")
     )
 }

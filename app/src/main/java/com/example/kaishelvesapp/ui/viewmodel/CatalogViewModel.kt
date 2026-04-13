@@ -3,7 +3,7 @@ package com.example.kaishelvesapp.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.model.Libro
-import com.example.kaishelvesapp.data.remote.openlibrary.LibraryGenres
+import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
 import com.example.kaishelvesapp.data.repository.BookRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
