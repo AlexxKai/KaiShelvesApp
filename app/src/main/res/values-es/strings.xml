@@ -31,6 +31,7 @@
 
     <string name="catalog">Catalogo</string>
     <string name="lists">Listas</string>
+    <string name="my_books">Mis libros</string>
     <string name="my_readings">Mis lecturas</string>
     <string name="profile">Perfil</string>
     <string name="home">Inicio</string>
@@ -79,7 +80,7 @@
     <string name="registered_rating_value">Puntuacion registrada: %1$d/5</string>
     <string name="rating_value">Puntuacion: %1$d/5</string>
     <string name="mark_as_read">Marcar como leido</string>
-    <string name="go_to_my_readings">Ir a mis lecturas</string>
+    <string name="go_to_my_readings">Ir a mis libros</string>
     <string name="book_added_to_readings">Libro anadido a tus lecturas</string>
     <string name="book_status_error">No se pudo comprobar el estado del libro</string>
     <string name="open_pdf">Abrir PDF</string>
@@ -102,10 +103,11 @@
     <string name="delete_reading_confirmation">Quieres eliminar "%1$s" de tus lecturas?</string>
     <string name="change_rating">Cambiar puntuacion</string>
     <string name="remove_from_my_readings">Eliminar de mis lecturas</string>
-    <string name="lists_subtitle">Crea y organiza tus propias colecciones de lectura.</string>
-    <string name="lists_intro_title">Estanterias personales</string>
-    <string name="lists_intro_body">Agrupa lecturas pendientes, favoritas o cualquier coleccion personalizada que quieras tener a mano.</string>
+    <string name="lists_subtitle">Reune en un solo sitio tus listas fijas y las personalizadas que vayas creando.</string>
+    <string name="lists_intro_title">Mis libros</string>
+    <string name="lists_intro_body">Siempre veras arriba Quiero leer, Leyendo y Leido, junto a las listas personalizadas que crees.</string>
     <string name="create_new_list">Crear nueva lista</string>
+    <string name="predefined_list_badge">Fija</string>
     <string name="edit_list">Editar lista</string>
     <string name="delete_list">Eliminar lista</string>
     <string name="open_list">Abrir lista</string>

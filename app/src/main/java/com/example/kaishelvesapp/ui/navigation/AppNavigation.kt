@@ -64,7 +64,7 @@ fun AppNavigation(
             KaiSection.HOME -> navController.navigate(Routes.LIBRARY)
             KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
             KaiSection.LISTS -> navController.navigate(Routes.LISTS)
-            KaiSection.READING -> navController.navigate(Routes.READING_LIST)
+            KaiSection.READING -> navController.navigate(Routes.LISTS)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
         }
@@ -181,11 +181,11 @@ fun AppNavigation(
                     onMarkAsRead = { selected ->
                         readingListViewModel.marcarComoLeido(selected) {
                             bookDetailViewModel.refrescarLectura(selected.isbn)
-                            navController.navigate(Routes.READING_LIST)
+                            navController.navigate(Routes.LISTS)
                         }
                     },
                     onGoToReadingList = {
-                        navController.navigate(Routes.READING_LIST)
+                        navController.navigate(Routes.LISTS)
                     }
                 )
             }

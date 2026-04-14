@@ -17,7 +17,8 @@ import java.util.Locale
 
 class BookRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val userListsRepository: UserListsRepository = UserListsRepository(firestore, auth)
 ) {
 
     private val api = GoogleBooksClient.api
@@ -211,6 +212,8 @@ class BookRepository(
                 .document(docId)
                 .set(libroLeido)
                 .await()
+
+            userListsRepository.syncBookIntoSystemReadList(libro).getOrThrow()
 
             Result.success(Unit)
         } catch (e: Exception) {

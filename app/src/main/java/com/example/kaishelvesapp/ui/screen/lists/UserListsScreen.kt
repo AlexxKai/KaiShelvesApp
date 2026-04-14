@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,16 +22,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,6 +72,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
@@ -75,7 +80,6 @@ import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
-import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
@@ -99,7 +103,6 @@ fun UserListsScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val listItemsStartIndex = 1
-    val showDragDebug = false
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -113,7 +116,12 @@ fun UserListsScreen(
     var draggingItemId by remember { mutableStateOf<String?>(null) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
     var autoScrollDelta by remember { mutableFloatStateOf(0f) }
-    var dragDebugMessage by remember { mutableStateOf("") }
+    fun currentCustomOrder(lists: List<UserBookList>) = lists.filterNot { it.isSystem }.map { it.id }
+    fun isProtectedSystemList(list: UserBookList) = list.isSystem || list.id in setOf(
+        UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID,
+        UserListsRepository.SYSTEM_LIST_READING_ID,
+        UserListsRepository.SYSTEM_LIST_READ_ID
+    )
 
     LaunchedEffect(Unit) {
         viewModel.loadLists()
@@ -223,7 +231,7 @@ fun UserListsScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.LISTS,
-                headerTitle = stringResource(R.string.lists),
+                headerTitle = stringResource(R.string.my_books),
                 subtitle = stringResource(R.string.lists_subtitle),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
@@ -252,6 +260,18 @@ fun UserListsScreen(
                     current = KaiSection.LISTS,
                     onSelect = onSectionSelected
                 )
+            },
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = { showCreateDialog = true },
+                    containerColor = BloodWine,
+                    contentColor = TarnishedGold
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.create_new_list)
+                    )
+                }
             }
         ) { innerPadding ->
             LazyColumn(
@@ -260,15 +280,9 @@ fun UserListsScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(innerPadding),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item {
-                    ListsHeroCard(
-                        onCreateList = { showCreateDialog = true }
-                    )
-                }
-
                 if (uiState.isLoading && uiState.lists.isEmpty()) {
                     item {
                         Box(
@@ -282,9 +296,7 @@ fun UserListsScreen(
                     }
                 } else if (uiState.lists.isEmpty()) {
                     item {
-                        EmptyListsCard(
-                            onCreateList = { showCreateDialog = true }
-                        )
+                        EmptyListsCard()
                     }
                 } else {
                     itemsIndexed(
@@ -292,198 +304,170 @@ fun UserListsScreen(
                         key = { _, list -> list.id }
                     ) { index, list ->
                         val isDragging = draggingItemId == list.id
-                        UserListCard(
-                            userList = list,
-                            onOpen = { onOpenList(list.id) },
-                            onEdit = { editingList = list },
-                            onDelete = { deletingList = list },
-                            isDragging = isDragging,
-                            dragHandleModifier = Modifier.pointerInput(list.id, displayedLists.size) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        draggingItemId = list.id
-                                        draggingTranslationY = 0f
-                                        autoScrollDelta = 0f
-                                        dragDebugMessage = "start id=${list.id} index=$index"
-                                    },
-                                    onDragCancel = {
-                                        val orderedIds = displayedLists.map { it.id }
-                                        val orderChanged = orderedIds != uiState.lists.map { it.id }
-                                        draggingItemId = null
-                                        draggingTranslationY = 0f
-                                        autoScrollDelta = 0f
-                                        dragDebugMessage = "cancel changed=$orderChanged order=$orderedIds"
-                                        if (orderChanged) {
-                                            viewModel.updateListOrder(orderedIds)
-                                        } else {
-                                            displayedLists.clear()
-                                            displayedLists.addAll(uiState.lists)
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        val orderedIds = displayedLists.map { it.id }
-                                        val orderChanged = orderedIds != uiState.lists.map { it.id }
-                                        draggingItemId = null
-                                        draggingTranslationY = 0f
-                                        autoScrollDelta = 0f
-                                        dragDebugMessage = "end changed=$orderChanged order=$orderedIds"
-                                        if (orderChanged) {
-                                            viewModel.updateListOrder(orderedIds)
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        val currentDraggingId = draggingItemId ?: return@detectDragGesturesAfterLongPress
-                                        val currentIndex = displayedLists.indexOfFirst { it.id == currentDraggingId }
-                                        if (currentIndex == -1) return@detectDragGesturesAfterLongPress
-
-                                        draggingTranslationY += dragAmount.y
-
-                                        val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                        val currentLayoutIndex = currentIndex + listItemsStartIndex
-                                        val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
-                                            ?: return@detectDragGesturesAfterLongPress
-                                        val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
-                                        val viewportStart = listState.layoutInfo.viewportStartOffset
-                                        val viewportEnd = listState.layoutInfo.viewportEndOffset
-                                        val currentTop = currentItem.offset + draggingTranslationY
-                                        val currentBottom = currentTop + currentItem.size
-
-                                        autoScrollDelta = when {
-                                            currentBottom > viewportEnd - 120 -> {
-                                                val intensity = ((currentBottom - (viewportEnd - 120)) / 120f)
-                                                    .coerceIn(0.2f, 1f)
-                                                10f + (24f * intensity)
-                                            }
-                                            currentTop < viewportStart + 120 -> {
-                                                val intensity = (((viewportStart + 120) - currentTop) / 120f)
-                                                    .coerceIn(0.2f, 1f)
-                                                -(10f + (24f * intensity))
-                                            }
-                                            else -> 0f
-                                        }
-
-                                        val previousItem = visibleItems.firstOrNull {
-                                            it.index == currentLayoutIndex - 1 && it.index >= listItemsStartIndex
-                                        }
-                                        val nextItem = visibleItems.firstOrNull {
-                                            it.index == currentLayoutIndex + 1
-                                        }
-
-                                        when {
-                                            nextItem != null && currentMidPoint > nextItem.offset + nextItem.size / 2 -> {
-                                                val targetListIndex = (nextItem.index - listItemsStartIndex)
-                                                    .coerceAtMost(displayedLists.lastIndex)
-                                                val deltaToTarget = (nextItem.offset - currentItem.offset).toFloat()
-                                                displayedLists.move(currentIndex, targetListIndex)
-                                                draggingTranslationY -= deltaToTarget
-                                                dragDebugMessage = "down from=$currentIndex to=$targetListIndex mid=$currentMidPoint"
-                                            }
-
-                                            previousItem != null && currentMidPoint < previousItem.offset + previousItem.size / 2 -> {
-                                                val targetListIndex = (previousItem.index - listItemsStartIndex)
-                                                    .coerceAtLeast(0)
-                                                val deltaToTarget = (currentItem.offset - previousItem.offset).toFloat()
-                                                displayedLists.move(currentIndex, targetListIndex)
-                                                draggingTranslationY += deltaToTarget
-                                                dragDebugMessage = "up from=$currentIndex to=$targetListIndex mid=$currentMidPoint"
-                                            }
-
-                                            showDragDebug -> {
-                                                dragDebugMessage = "drag idx=$currentIndex y=${draggingTranslationY.toInt()} mid=${currentMidPoint.toInt()}"
-                                            }
-                                        }
-                                    }
-                                )
-                            },
-                            modifier = Modifier
-                                .zIndex(if (isDragging) 1f else 0f)
-                                .shadow(
-                                    elevation = if (isDragging) 18.dp else 0.dp,
-                                    shape = RoundedCornerShape(24.dp),
-                                    clip = false
-                                )
-                                .graphicsLayer {
-                                    translationY = if (isDragging) draggingTranslationY else 0f
-                                    scaleX = if (isDragging) 1.02f else 1f
-                                    scaleY = if (isDragging) 1.02f else 1f
+                        val isEditable = !isProtectedSystemList(list)
+                        val dismissThreshold: (Float) -> Float = { it * 0.35f }
+                        val dismissState = rememberSaveable(
+                            list.id,
+                            saver = SwipeToDismissBoxState.Saver(positionalThreshold = dismissThreshold)
+                        ) {
+                            SwipeToDismissBoxState(
+                                initialValue = SwipeToDismissBoxValue.Settled,
+                                positionalThreshold = dismissThreshold
+                            )
+                        }
+                        LaunchedEffect(dismissState.targetValue, isEditable) {
+                            if (isEditable && dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                                deletingList = list
+                                dismissState.reset()
+                            }
+                        }
+                        LaunchedEffect(deletingList?.id, uiState.lists, isEditable) {
+                            if (isEditable && deletingList?.id != list.id && dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+                                dismissState.reset()
+                            }
+                        }
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            enableDismissFromEndToStart = isEditable,
+                            backgroundContent = {
+                                val swipeProgress = dismissState.progress.coerceIn(0f, 1f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            color = Color(0xFF7A1F1F).copy(alpha = 0.18f + (0.62f * swipeProgress)),
+                                            shape = RoundedCornerShape(24.dp)
+                                        )
+                                        .padding(end = 20.dp),
+                                    contentAlignment = Alignment.CenterEnd
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = stringResource(R.string.delete_list),
+                                        tint = OldIvory.copy(alpha = 0.35f + (0.65f * swipeProgress)),
+                                        modifier = Modifier.size((18 + (8 * swipeProgress)).dp)
+                                    )
                                 }
-                        )
+                            },
+                            modifier = Modifier.animateItem()
+                        ) {
+                            UserListCard(
+                                userList = list,
+                                onOpen = { onOpenList(list.id) },
+                                onEdit = { if (isEditable) editingList = list },
+                                isDragging = isDragging,
+                                isEditable = isEditable,
+                                dragHandleModifier = if (isEditable) Modifier.pointerInput(list.id, displayedLists.size) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = {
+                                            draggingItemId = list.id
+                                            draggingTranslationY = 0f
+                                            autoScrollDelta = 0f
+                                        },
+                                        onDragCancel = {
+                                            val orderedIds = currentCustomOrder(displayedLists)
+                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists)
+                                            draggingItemId = null
+                                            draggingTranslationY = 0f
+                                            autoScrollDelta = 0f
+                                            if (orderChanged) {
+                                                viewModel.updateListOrder(orderedIds)
+                                            } else {
+                                                displayedLists.clear()
+                                                displayedLists.addAll(uiState.lists)
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            val orderedIds = currentCustomOrder(displayedLists)
+                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists)
+                                            draggingItemId = null
+                                            draggingTranslationY = 0f
+                                            autoScrollDelta = 0f
+                                            if (orderChanged) {
+                                                viewModel.updateListOrder(orderedIds)
+                                            }
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            val currentDraggingId = draggingItemId ?: return@detectDragGesturesAfterLongPress
+                                            val currentIndex = displayedLists.indexOfFirst { it.id == currentDraggingId }
+                                            if (currentIndex == -1) return@detectDragGesturesAfterLongPress
+
+                                            draggingTranslationY += dragAmount.y
+
+                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                            val currentLayoutIndex = currentIndex + listItemsStartIndex
+                                            val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
+                                                ?: return@detectDragGesturesAfterLongPress
+                                            val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
+                                            val viewportStart = listState.layoutInfo.viewportStartOffset
+                                            val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                            val currentTop = currentItem.offset + draggingTranslationY
+                                            val currentBottom = currentTop + currentItem.size
+
+                                            autoScrollDelta = when {
+                                                currentBottom > viewportEnd - 120 -> {
+                                                    val intensity = ((currentBottom - (viewportEnd - 120)) / 120f)
+                                                        .coerceIn(0.2f, 1f)
+                                                    10f + (24f * intensity)
+                                                }
+                                                currentTop < viewportStart + 120 -> {
+                                                    val intensity = (((viewportStart + 120) - currentTop) / 120f)
+                                                        .coerceIn(0.2f, 1f)
+                                                    -(10f + (24f * intensity))
+                                                }
+                                                else -> 0f
+                                            }
+
+                                            val previousItem = visibleItems.firstOrNull {
+                                                it.index == currentLayoutIndex - 1 && it.index >= listItemsStartIndex
+                                            }
+                                            val nextItem = visibleItems.firstOrNull {
+                                                it.index == currentLayoutIndex + 1
+                                            }
+
+                                            when {
+                                                nextItem != null && currentMidPoint > nextItem.offset + nextItem.size / 2 -> {
+                                                    val targetListIndex = (nextItem.index - listItemsStartIndex)
+                                                        .coerceAtMost(displayedLists.lastIndex)
+                                                    if (displayedLists.getOrNull(targetListIndex)?.isSystem == false) {
+                                                        val deltaToTarget = (nextItem.offset - currentItem.offset).toFloat()
+                                                        displayedLists.move(currentIndex, targetListIndex)
+                                                        draggingTranslationY -= deltaToTarget
+                                                    }
+                                                }
+
+                                                previousItem != null && currentMidPoint < previousItem.offset + previousItem.size / 2 -> {
+                                                    val targetListIndex = (previousItem.index - listItemsStartIndex)
+                                                        .coerceAtLeast(0)
+                                                    if (displayedLists.getOrNull(targetListIndex)?.isSystem == false) {
+                                                        val deltaToTarget = (currentItem.offset - previousItem.offset).toFloat()
+                                                        displayedLists.move(currentIndex, targetListIndex)
+                                                        draggingTranslationY += deltaToTarget
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                } else Modifier,
+                                modifier = Modifier
+                                    .zIndex(if (isDragging) 1f else 0f)
+                                    .shadow(
+                                        elevation = if (isDragging) 18.dp else 0.dp,
+                                        shape = RoundedCornerShape(24.dp),
+                                        clip = false
+                                    )
+                                    .graphicsLayer {
+                                        translationY = if (isDragging) draggingTranslationY else 0f
+                                        scaleX = if (isDragging) 1.02f else 1f
+                                        scaleY = if (isDragging) 1.02f else 1f
+                                    }
+                            )
+                        }
                     }
                 }
 
-                if (showDragDebug) {
-                    item {
-                        Text(
-                            text = dragDebugMessage.ifBlank { "drag-debug" },
-                            color = TarnishedGold,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ListsHeroCard(
-    onCreateList: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = BorderStroke(1.dp, TarnishedGold)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            DeepWalnut,
-                            BloodWine.copy(alpha = 0.55f),
-                            Obsidian
-                        )
-                    )
-                )
-                .padding(20.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
-                contentDescription = null,
-                tint = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = stringResource(R.string.lists_intro_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = TarnishedGold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.lists_intro_body),
-                style = MaterialTheme.typography.bodyLarge,
-                color = OldIvory
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Button(
-                onClick = onCreateList,
-                colors = KaiShelvesThemeDefaults.primaryButtonColors()
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PostAdd,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = stringResource(R.string.create_new_list))
             }
         }
     }
@@ -491,7 +475,6 @@ private fun ListsHeroCard(
 
 @Composable
 private fun EmptyListsCard(
-    onCreateList: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -516,18 +499,6 @@ private fun EmptyListsCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = onCreateList,
-                border = BorderStroke(1.dp, TarnishedGold)
-            ) {
-                Text(
-                    text = stringResource(R.string.create_new_list),
-                    color = TarnishedGold
-                )
-            }
         }
     }
 }
@@ -537,8 +508,8 @@ private fun UserListCard(
     userList: UserBookList,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit,
     isDragging: Boolean,
+    isEditable: Boolean,
     dragHandleModifier: Modifier = Modifier,
     modifier: Modifier = Modifier
 ) {
@@ -562,7 +533,7 @@ private fun UserListCard(
                         )
                     )
                 )
-                .padding(14.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -573,7 +544,7 @@ private fun UserListCard(
                 ) {
                     Text(
                         text = userList.name,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = TarnishedGold,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -581,7 +552,7 @@ private fun UserListCard(
                     )
 
                     Text(
-                        text = userList.description.ifBlank { stringResource(R.string.lists_subtitle) },
+                        text = userList.description,
                         style = MaterialTheme.typography.bodySmall,
                         color = OldIvory,
                         maxLines = 2,
@@ -592,36 +563,30 @@ private fun UserListCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = dragHandleModifier.padding(horizontal = 8.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.DragIndicator,
-                            contentDescription = stringResource(R.string.drag_to_reorder),
-                            tint = OldIvory.copy(alpha = 0.75f)
-                        )
-                    }
+                    if (isEditable) {
+                        Box(
+                            modifier = dragHandleModifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.DragIndicator,
+                                contentDescription = stringResource(R.string.drag_to_reorder),
+                                tint = OldIvory.copy(alpha = 0.75f)
+                            )
+                        }
 
-                    IconButton(onClick = onEdit) {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = stringResource(R.string.edit_list),
-                            tint = TarnishedGold
-                        )
-                    }
-
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = stringResource(R.string.delete_list),
-                            tint = TarnishedGold
-                        )
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = stringResource(R.string.edit_list),
+                                tint = TarnishedGold
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -641,16 +606,10 @@ private fun UserListCard(
                     color = OldIvory,
                     modifier = Modifier.weight(1f)
                 )
-
-                Text(
-                    text = stringResource(R.string.open_list),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TarnishedGold
-                )
             }
 
             if (userList.previewImageUrls.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -684,16 +643,6 @@ private fun UserListCard(
                         }
                     }
                 }
-            }
-
-            if (userList.previewImageUrls.isEmpty() && userList.bookCount == 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = stringResource(R.string.list_preview_empty_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = OldIvory.copy(alpha = 0.8f)
-                )
             }
         }
     }

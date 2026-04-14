@@ -31,6 +31,7 @@
 
     <string name="catalog">Catalog</string>
     <string name="lists">Lists</string>
+    <string name="my_books">My books</string>
     <string name="my_readings">My readings</string>
     <string name="profile">Profile</string>
     <string name="home">Home</string>
@@ -79,7 +80,7 @@
     <string name="registered_rating_value">Registered rating: %1$d/5</string>
     <string name="rating_value">Rating: %1$d/5</string>
     <string name="mark_as_read">Mark as read</string>
-    <string name="go_to_my_readings">Go to my readings</string>
+    <string name="go_to_my_readings">Go to my books</string>
     <string name="book_added_to_readings">Book added to your readings</string>
     <string name="book_status_error">Could not check the book status</string>
     <string name="open_pdf">Open PDF</string>
@@ -102,10 +103,11 @@
     <string name="delete_reading_confirmation">Do you want to remove \"%1$s\" from your readings?</string>
     <string name="change_rating">Change rating</string>
     <string name="remove_from_my_readings">Remove from my readings</string>
-    <string name="lists_subtitle">Create and organize your own reading collections.</string>
-    <string name="lists_intro_title">Personal shelves</string>
-    <string name="lists_intro_body">Group pending reads, favorites or any custom collection you want to keep close.</string>
+    <string name="lists_subtitle">Keep your predefined shelves and your custom lists together in one place.</string>
+    <string name="lists_intro_title">My books</string>
+    <string name="lists_intro_body">You will always have Want to read, Reading and Read at the top, plus any custom lists you create.</string>
     <string name="create_new_list">Create new list</string>
+    <string name="predefined_list_badge">Fixed</string>
     <string name="edit_list">Edit list</string>
     <string name="delete_list">Delete list</string>
     <string name="open_list">Open list</string>

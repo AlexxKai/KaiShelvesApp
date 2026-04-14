@@ -6,5 +6,7 @@ data class UserBookList(
     val description: String = "",
     val bookCount: Int = 0,
     val position: Int = 0,
-    val previewImageUrls: List<String> = emptyList()
+    val previewImageUrls: List<String> = emptyList(),
+    val isSystem: Boolean = false,
+    val systemKey: String = ""
 )

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -42,8 +41,7 @@ fun KaiBottomBar(
         val items = listOf(
             Triple(KaiSection.HOME, stringResource(R.string.home), Icons.Filled.Home),
             Triple(KaiSection.CATALOG, stringResource(R.string.catalog), Icons.AutoMirrored.Filled.MenuBook),
-            Triple(KaiSection.LISTS, stringResource(R.string.lists), Icons.AutoMirrored.Filled.LibraryBooks),
-            Triple(KaiSection.READING, stringResource(R.string.my_readings), Icons.Filled.AutoStories)
+            Triple(KaiSection.LISTS, stringResource(R.string.my_books), Icons.AutoMirrored.Filled.LibraryBooks)
         )
 
         items.forEach { (section, label, icon) ->
