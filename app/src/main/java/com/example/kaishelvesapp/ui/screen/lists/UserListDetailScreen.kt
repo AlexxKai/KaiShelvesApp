@@ -1,6 +1,7 @@
 package com.example.kaishelvesapp.ui.screen.lists
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -43,17 +48,27 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
+
+private enum class ListDetailSortOption {
+    TITLE,
+    AUTHOR,
+    RATING,
+    READ_DATE
+}
 
 @Composable
 fun UserListDetailScreen(
@@ -67,9 +82,26 @@ fun UserListDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     var removingBook by remember { mutableStateOf<Libro?>(null) }
+    var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
+    val isReadList = listId == com.example.kaishelvesapp.data.repository.UserListsRepository.SYSTEM_LIST_READ_ID
+    val sortedBooks = remember(uiState.books, sortOption, isReadList) {
+        when (sortOption) {
+            ListDetailSortOption.TITLE -> uiState.books.sortedBy { it.book.titulo.lowercase() }
+            ListDetailSortOption.AUTHOR -> uiState.books.sortedBy { it.book.autor.lowercase() }
+            ListDetailSortOption.RATING -> uiState.books.sortedWith(
+                compareByDescending<UserListDetailBookItem> { it.rating ?: -1 }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+            ListDetailSortOption.READ_DATE -> uiState.books.sortedWith(
+                compareByDescending<UserListDetailBookItem> { it.readDate.orEmpty() }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+        }
+    }
 
     LaunchedEffect(listId) {
         viewModel.loadListDetail(listId)
+        sortOption = if (isReadList) ListDetailSortOption.READ_DATE else ListDetailSortOption.TITLE
     }
 
     LaunchedEffect(uiState.errorMessageRes, uiState.successMessageRes) {
@@ -131,63 +163,29 @@ fun UserListDetailScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(paddingValues)
                 .padding(innerPadding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                OutlinedButton(
-                    onClick = onBack,
-                    border = BorderStroke(1.dp, TarnishedGold)
-                ) {
-                    Text(
-                        text = stringResource(R.string.back),
-                        color = TarnishedGold
-                    )
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    border = BorderStroke(1.dp, TarnishedGold)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp)
-                    ) {
-                        Text(
-                            text = uiState.userList?.name ?: stringResource(R.string.list_detail_title),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = TarnishedGold
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = uiState.userList?.description?.ifBlank {
-                                context.getString(R.string.lists_subtitle)
-                            } ?: stringResource(R.string.lists_subtitle),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = OldIvory
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = stringResource(
-                                R.string.list_books_count,
-                                uiState.userList?.bookCount ?: uiState.books.size
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OldIvory
-                        )
+                ListDetailHeaderCard(
+                    userList = uiState.userList,
+                    books = sortedBooks,
+                    sortOption = sortOption,
+                    isReadList = isReadList,
+                    onBack = onBack,
+                    onSortChange = {
+                        sortOption = when {
+                            !isReadList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
+                            !isReadList -> ListDetailSortOption.TITLE
+                            sortOption == ListDetailSortOption.READ_DATE -> ListDetailSortOption.RATING
+                            sortOption == ListDetailSortOption.RATING -> ListDetailSortOption.TITLE
+                            else -> ListDetailSortOption.READ_DATE
+                        }
                     }
-                }
+                )
             }
 
             when {
@@ -234,11 +232,12 @@ fun UserListDetailScreen(
                 }
 
                 else -> {
-                    items(uiState.books, key = { it.id.ifBlank { it.isbn } }) { libro ->
+                    items(sortedBooks, key = { it.book.id.ifBlank { it.book.isbn } }) { item ->
                         ListBookCard(
-                            libro = libro,
-                            onOpen = { onBookClick(libro) },
-                            onRemove = { removingBook = libro }
+                            item = item,
+                            isReadList = isReadList,
+                            onOpen = { onBookClick(item.book) },
+                            onRemove = { removingBook = item.book }
                         )
                     }
                 }
@@ -248,11 +247,144 @@ fun UserListDetailScreen(
 }
 
 @Composable
+private fun ListDetailHeaderCard(
+    userList: com.example.kaishelvesapp.data.model.UserBookList?,
+    books: List<UserListDetailBookItem>,
+    sortOption: ListDetailSortOption,
+    isReadList: Boolean,
+    onBack: () -> Unit,
+    onSortChange: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Obsidian),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            DeepWalnut.copy(alpha = 0.96f),
+                            Obsidian
+                        )
+                    )
+                )
+                .padding(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                        tint = TarnishedGold
+                    )
+                }
+
+                Text(
+                    text = userList?.name ?: stringResource(R.string.list_detail_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = TarnishedGold,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (books.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        books.take(3).forEach { item ->
+                            BookCover(
+                                imageUrl = item.book.imagen,
+                                title = item.book.titulo,
+                                modifier = Modifier
+                                    .width(28.dp)
+                                    .height(42.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            userList?.description?.takeIf { it.isNotBlank() }?.let { description ->
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = OldIvory
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = stringResource(
+                    R.string.list_books_count,
+                    userList?.bookCount ?: books.size
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .background(
+                        color = BloodWine.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .clickable { onSortChange() }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.sort_by_label),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Text(
+                    text = when {
+                        !isReadList && sortOption == ListDetailSortOption.AUTHOR -> stringResource(R.string.sort_option_author)
+                        !isReadList -> stringResource(R.string.sort_option_title)
+                        sortOption == ListDetailSortOption.READ_DATE -> stringResource(R.string.sort_option_read_date)
+                        sortOption == ListDetailSortOption.RATING -> stringResource(R.string.sort_option_rating)
+                        else -> stringResource(R.string.sort_option_title)
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TarnishedGold,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                    contentDescription = stringResource(R.string.sort_action),
+                    tint = TarnishedGold,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ListBookCard(
-    libro: Libro,
+    item: UserListDetailBookItem,
+    isReadList: Boolean,
     onOpen: () -> Unit,
     onRemove: () -> Unit
 ) {
+    val libro = item.book
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -303,6 +435,40 @@ private fun ListBookCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = OldIvory
                     )
+                }
+
+                if (isReadList) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if ((item.rating ?: 0) > 0) {
+                        RatingStars(
+                            rating = item.rating ?: 0
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = stringResource(R.string.rating_value, item.rating ?: 0),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.not_rated_yet),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory
+                        )
+                    }
+
+                    item.readDate?.takeIf { it.isNotBlank() }?.let { readDate ->
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = stringResource(R.string.read_date_value, readDate),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory.copy(alpha = 0.88f)
+                        )
+                    }
                 }
             }
 

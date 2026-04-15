@@ -2,10 +2,14 @@ package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTag
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class UserListsRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -22,6 +26,18 @@ class UserListsRepository(
         const val SYSTEM_LIST_READ_KEY = "read"
     }
 
+    private val systemListIds = setOf(
+        SYSTEM_LIST_WANT_TO_READ_ID,
+        SYSTEM_LIST_READING_ID,
+        SYSTEM_LIST_READ_ID
+    )
+
+    private val systemListPriority = listOf(
+        SYSTEM_LIST_READ_ID,
+        SYSTEM_LIST_READING_ID,
+        SYSTEM_LIST_WANT_TO_READ_ID
+    )
+
     private fun requireUid(): String {
         return auth.currentUser?.uid
             ?: throw IllegalStateException("Usuario no autenticado")
@@ -35,11 +51,71 @@ class UserListsRepository(
         .document(uid)
         .collection("leidos")
 
+    private fun userTagsCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("etiquetas")
+
+    private fun userBookMetadataCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("libros_metadata")
+
     private fun safeBookDocId(rawId: String): String {
         return rawId
             .trim()
             .ifBlank { "unknown_book" }
             .replace("/", "_")
+    }
+
+    private suspend fun normalizeSelectedListIds(
+        uid: String,
+        selectedListIds: Set<String>
+    ): Set<String> {
+        val candidateIds = selectedListIds.toList()
+        if (candidateIds.isEmpty()) return emptySet()
+
+        val selectedSystemId = systemListPriority.firstOrNull { candidateIds.contains(it) }
+        if (selectedSystemId != null) {
+            return setOf(selectedSystemId)
+        }
+
+        val customLists = userListsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                document.toObject(UserBookList::class.java)?.copy(id = document.id)
+            }
+            .filterNot { it.isSystem }
+            .sortedWith(compareBy<UserBookList> { it.position }.thenBy { it.name.lowercase() })
+
+        val selectedCustom = customLists.firstOrNull { it.id in candidateIds }
+        return selectedCustom?.let { setOf(it.id) } ?: candidateIds.firstOrNull()?.let(::setOf).orEmpty()
+    }
+
+    private fun buildBookPayload(libro: Libro, safeBookId: String): Map<String, Any> {
+        return mapOf(
+            "id" to safeBookId,
+            "isbn" to libro.isbn,
+            "titulo" to libro.titulo,
+            "autor" to libro.autor,
+            "editorial" to libro.editorial,
+            "genero" to libro.genero,
+            "fechaPublicacion" to libro.fechaPublicacion,
+            "paginas" to libro.paginas,
+            "imagen" to libro.imagen,
+            "pdf" to libro.pdf
+        )
+    }
+
+    private fun buildReadBookPayload(libro: Libro, safeBookId: String): Map<String, Any> {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        return buildBookPayload(libro, safeBookId) + mapOf(
+            "fechaLeido" to today,
+            "puntuacion" to 0,
+            "resena" to "",
+            "contieneSpoilers" to false,
+            "siNo" to "si"
+        )
     }
 
     private fun defaultSystemLists() = listOf(
@@ -253,7 +329,45 @@ class UserListsRepository(
                 document.id.takeIf { exists }
             }.toSet()
 
-            Result.success(selectedIds)
+            Result.success(normalizeSelectedListIds(uid, selectedIds))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getUserTags(): Result<List<UserBookTag>> {
+        return try {
+            val uid = requireUid()
+            val tags = userTagsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    document.toObject(UserBookTag::class.java)?.copy(id = document.id)
+                }
+                .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
+
+            Result.success(tags)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSelectedTagIdsForBook(bookId: String): Result<Set<String>> {
+        return try {
+            val uid = requireUid()
+            val safeBookId = safeBookDocId(bookId)
+            if (safeBookId == "unknown_book") {
+                return Result.success(emptySet())
+            }
+
+            val snapshot = userBookMetadataCollection(uid)
+                .document(safeBookId)
+                .get()
+                .await()
+
+            val tagIds = snapshot.get("tagIds") as? List<*>
+            Result.success(tagIds.orEmpty().filterIsInstance<String>().toSet())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -303,6 +417,8 @@ class UserListsRepository(
                 return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
             }
 
+            val normalizedSelectedIds = normalizeSelectedListIds(uid, selectedListIds)
+
             val allListsSnapshot = userListsCollection(uid)
                 .get()
                 .await()
@@ -318,26 +434,15 @@ class UserListsRepository(
                 document.id.takeIf { exists }
             }.toSet()
 
-            val idsToAdd = selectedListIds - currentSelectedIds
-            val idsToRemove = currentSelectedIds - selectedListIds
+            val idsToAdd = normalizedSelectedIds - currentSelectedIds
+            val idsToRemove = currentSelectedIds - normalizedSelectedIds
 
             if (idsToAdd.isEmpty() && idsToRemove.isEmpty()) {
                 return Result.success(Unit)
             }
 
             val batch = firestore.batch()
-            val bookPayload = mapOf(
-                "id" to safeBookId,
-                "isbn" to libro.isbn,
-                "titulo" to libro.titulo,
-                "autor" to libro.autor,
-                "editorial" to libro.editorial,
-                "genero" to libro.genero,
-                "fechaPublicacion" to libro.fechaPublicacion,
-                "paginas" to libro.paginas,
-                "imagen" to libro.imagen,
-                "pdf" to libro.pdf
-            )
+            val bookPayload = buildBookPayload(libro, safeBookId)
 
             idsToAdd.forEach { listId ->
                 val listRef = userListsCollection(uid).document(listId)
@@ -346,6 +451,13 @@ class UserListsRepository(
                 batch.set(bookRef, bookPayload)
                 if (!alreadyExists) {
                     batch.update(listRef, "bookCount", FieldValue.increment(1))
+                }
+
+                if (listId == SYSTEM_LIST_READ_ID) {
+                    batch.set(
+                        userReadCollection(uid).document(safeBookId),
+                        buildReadBookPayload(libro, safeBookId)
+                    )
                 }
             }
 
@@ -356,6 +468,10 @@ class UserListsRepository(
                 if (alreadyExists) {
                     batch.delete(bookRef)
                     batch.update(listRef, "bookCount", FieldValue.increment(-1))
+                }
+
+                if (listId == SYSTEM_LIST_READ_ID) {
+                    batch.delete(userReadCollection(uid).document(safeBookId))
                 }
             }
 
@@ -505,25 +621,104 @@ class UserListsRepository(
             val alreadyExists = bookRef.get().await().exists()
             val batch = firestore.batch()
 
-            batch.set(
-                bookRef,
-                mapOf(
-                    "id" to safeBookId,
-                    "isbn" to libro.isbn,
-                    "titulo" to libro.titulo,
-                    "autor" to libro.autor,
-                    "editorial" to libro.editorial,
-                    "genero" to libro.genero,
-                    "fechaPublicacion" to libro.fechaPublicacion,
-                    "paginas" to libro.paginas,
-                    "imagen" to libro.imagen,
-                    "pdf" to libro.pdf
-                )
-            )
+            userListsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .filter { it.id != SYSTEM_LIST_READ_ID }
+                .forEach { document ->
+                    val otherBookRef = document.reference.collection("libros").document(safeBookId)
+                    if (otherBookRef.get().await().exists()) {
+                        batch.delete(otherBookRef)
+                        batch.update(document.reference, "bookCount", FieldValue.increment(-1))
+                    }
+                }
+
+            batch.set(bookRef, buildBookPayload(libro, safeBookId))
             if (!alreadyExists) {
                 batch.update(readListRef, "bookCount", FieldValue.increment(1))
             }
             batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateBookTags(bookId: String, tagIds: Set<String>): Result<Unit> {
+        return try {
+            val uid = requireUid()
+            val safeBookId = safeBookDocId(bookId)
+            if (safeBookId == "unknown_book") {
+                return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+            }
+
+            val metadataRef = userBookMetadataCollection(uid).document(safeBookId)
+            if (tagIds.isEmpty()) {
+                val currentSelectedListIds = getSelectedListIdsForBook(safeBookId).getOrDefault(emptySet())
+                if (currentSelectedListIds.isEmpty()) {
+                    metadataRef.delete().await()
+                } else {
+                    metadataRef.set(mapOf("tagIds" to emptyList<String>()), com.google.firebase.firestore.SetOptions.merge()).await()
+                }
+            } else {
+                metadataRef.set(mapOf("tagIds" to tagIds.toList()), com.google.firebase.firestore.SetOptions.merge()).await()
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun clearBookOrganization(bookId: String): Result<Unit> {
+        return try {
+            val uid = requireUid()
+            val safeBookId = safeBookDocId(bookId)
+            if (safeBookId == "unknown_book") {
+                return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+            }
+
+            val allListsSnapshot = userListsCollection(uid).get().await()
+            val batch = firestore.batch()
+
+            allListsSnapshot.documents.forEach { document ->
+                val bookRef = document.reference.collection("libros").document(safeBookId)
+                if (bookRef.get().await().exists()) {
+                    batch.delete(bookRef)
+                    batch.update(document.reference, "bookCount", FieldValue.increment(-1))
+                }
+            }
+
+            batch.delete(userBookMetadataCollection(uid).document(safeBookId))
+            batch.delete(userReadCollection(uid).document(safeBookId))
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createTag(name: String): Result<Unit> {
+        return try {
+            val uid = requireUid()
+            val newDocument = userTagsCollection(uid).document()
+            val nextPosition = (userTagsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { it.toObject(UserBookTag::class.java)?.position }
+                .maxOrNull() ?: -1) + 1
+
+            newDocument.set(
+                UserBookTag(
+                    id = newDocument.id,
+                    name = name.trim(),
+                    position = nextPosition
+                )
+            ).await()
 
             Result.success(Unit)
         } catch (e: Exception) {

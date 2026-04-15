@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.repository.BookRepository
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,17 +12,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+data class UserListDetailBookItem(
+    val book: Libro,
+    val rating: Int? = null,
+    val readDate: String? = null
+)
+
 data class UserListDetailUiState(
     val isLoading: Boolean = false,
     val isRemoving: Boolean = false,
     val userList: UserBookList? = null,
-    val books: List<Libro> = emptyList(),
+    val books: List<UserListDetailBookItem> = emptyList(),
     val errorMessageRes: Int? = null,
     val successMessageRes: Int? = null
 )
 
 class UserListDetailViewModel(
-    private val repository: UserListsRepository = UserListsRepository()
+    private val repository: UserListsRepository = UserListsRepository(),
+    private val bookRepository: BookRepository = BookRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UserListDetailUiState())
@@ -39,12 +47,26 @@ class UserListDetailViewModel(
         viewModelScope.launch {
             val listResult = repository.getListById(listId)
             val booksResult = repository.getBooksInList(listId)
+            val readBooksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
+                bookRepository.obtenerListaLecturas()
+            } else {
+                Result.success(emptyList())
+            }
 
-            if (listResult.isSuccess && booksResult.isSuccess) {
+            if (listResult.isSuccess && booksResult.isSuccess && readBooksResult.isSuccess) {
+                val readBooksById = readBooksResult.getOrDefault(emptyList()).associateBy { it.isbn }
+                val items = booksResult.getOrDefault(emptyList()).map { book ->
+                    val readBook = readBooksById[book.id.ifBlank { book.isbn }]
+                    UserListDetailBookItem(
+                        book = book,
+                        rating = readBook?.puntuacion,
+                        readDate = readBook?.fechaLeido
+                    )
+                }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     userList = listResult.getOrNull(),
-                    books = booksResult.getOrDefault(emptyList()),
+                    books = items,
                     errorMessageRes = null
                 )
             } else {

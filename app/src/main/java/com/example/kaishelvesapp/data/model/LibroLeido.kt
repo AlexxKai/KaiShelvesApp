@@ -12,5 +12,7 @@ data class LibroLeido(
     val pdf: String = "",
     val fechaLeido: String = "",
     val puntuacion: Int = 0,
+    val resena: String = "",
+    val contieneSpoilers: Boolean = false,
     val siNo: String = "si"
 )

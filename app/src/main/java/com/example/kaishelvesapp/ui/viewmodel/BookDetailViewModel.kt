@@ -6,6 +6,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.repository.BookRepository
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,8 @@ data class BookDetailUiState(
     val readBook: LibroLeido? = null,
     val availableLists: List<UserBookList> = emptyList(),
     val selectedListIds: Set<String> = emptySet(),
+    val availableTags: List<UserBookTag> = emptyList(),
+    val selectedTagIds: Set<String> = emptySet(),
     val errorMessageRes: Int? = null,
     val successMessageRes: Int? = null
 )
@@ -70,17 +73,25 @@ class BookDetailViewModel(
 
         viewModelScope.launch {
             val listsResult = userListsRepository.getUserLists()
+            val tagsResult = userListsRepository.getUserTags()
             val selectedResult = if (bookId.isBlank()) {
                 Result.success(emptySet())
             } else {
                 userListsRepository.getSelectedListIdsForBook(bookId)
             }
+            val selectedTagsResult = if (bookId.isBlank()) {
+                Result.success(emptySet())
+            } else {
+                userListsRepository.getSelectedTagIdsForBook(bookId)
+            }
 
-            if (listsResult.isSuccess && selectedResult.isSuccess) {
+            if (listsResult.isSuccess && selectedResult.isSuccess && tagsResult.isSuccess && selectedTagsResult.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     isListsLoading = false,
                     availableLists = listsResult.getOrDefault(emptyList()),
                     selectedListIds = selectedResult.getOrDefault(emptySet()),
+                    availableTags = tagsResult.getOrDefault(emptyList()),
+                    selectedTagIds = selectedTagsResult.getOrDefault(emptySet()),
                     errorMessageRes = null
                 )
             } else {
@@ -92,7 +103,7 @@ class BookDetailViewModel(
         }
     }
 
-    fun guardarListas(libro: Libro, selectedListIds: Set<String>) {
+    fun guardarOrganizacion(libro: Libro, selectedListIds: Set<String>, selectedTagIds: Set<String>) {
         _uiState.value = _uiState.value.copy(
             isSavingLists = true,
             errorMessageRes = null,
@@ -100,19 +111,136 @@ class BookDetailViewModel(
         )
 
         viewModelScope.launch {
-            userListsRepository.updateBookAssignments(libro, selectedListIds)
+            val listsResult = userListsRepository.updateBookAssignments(libro, selectedListIds)
+            val tagsResult = userListsRepository.updateBookTags(
+                libro.id.ifBlank { libro.isbn },
+                selectedTagIds
+            )
+
+            if (listsResult.isSuccess && tagsResult.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    isSavingLists = false,
+                    selectedListIds = selectedListIds,
+                    selectedTagIds = selectedTagIds,
+                    successMessageRes = R.string.book_lists_updated
+                )
+                cargarListasParaLibro(libro.id.ifBlank { libro.isbn })
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isSavingLists = false,
+                    errorMessageRes = R.string.book_lists_update_error
+                )
+            }
+        }
+    }
+
+    fun guardarListas(libro: Libro, selectedListIds: Set<String>) {
+        guardarOrganizacion(libro, selectedListIds, _uiState.value.selectedTagIds)
+    }
+
+    fun guardarLecturaConResena(
+        libro: Libro,
+        selectedTagIds: Set<String>,
+        puntuacion: Int,
+        resena: String,
+        contieneSpoilers: Boolean
+    ) {
+        _uiState.value = _uiState.value.copy(
+            isSavingLists = true,
+            errorMessageRes = null,
+            successMessageRes = null
+        )
+
+        viewModelScope.launch {
+            val listsResult = userListsRepository.updateBookAssignments(
+                libro,
+                setOf(UserListsRepository.SYSTEM_LIST_READ_ID)
+            )
+            val tagsResult = userListsRepository.updateBookTags(
+                libro.id.ifBlank { libro.isbn },
+                selectedTagIds
+            )
+            val reviewResult = repository.actualizarResenaLectura(
+                bookId = libro.id.ifBlank { libro.isbn },
+                puntuacion = puntuacion,
+                resena = resena,
+                contieneSpoilers = contieneSpoilers
+            )
+
+            if (listsResult.isSuccess && tagsResult.isSuccess && reviewResult.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    isSavingLists = false,
+                    selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_READ_ID),
+                    selectedTagIds = selectedTagIds,
+                    successMessageRes = R.string.book_lists_updated
+                )
+                cargarListasParaLibro(libro.id.ifBlank { libro.isbn })
+                cargarEstadoLectura(libro.id.ifBlank { libro.isbn })
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isSavingLists = false,
+                    errorMessageRes = R.string.book_lists_update_error
+                )
+            }
+        }
+    }
+
+    fun clearBookOrganization(bookId: String) {
+        _uiState.value = _uiState.value.copy(
+            isSavingLists = true,
+            errorMessageRes = null,
+            successMessageRes = null
+        )
+
+        viewModelScope.launch {
+            userListsRepository.clearBookOrganization(bookId)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
                         isSavingLists = false,
-                        selectedListIds = selectedListIds,
+                        selectedListIds = emptySet(),
+                        selectedTagIds = emptySet(),
                         successMessageRes = R.string.book_lists_updated
                     )
-                    cargarListasParaLibro(libro.id.ifBlank { libro.isbn })
+                    cargarListasParaLibro(bookId)
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isSavingLists = false,
                         errorMessageRes = R.string.book_lists_update_error
+                    )
+                }
+        }
+    }
+
+    fun createList(name: String, bookId: String, description: String = "") {
+        viewModelScope.launch {
+            userListsRepository.createList(name, description)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        successMessageRes = R.string.list_created
+                    )
+                    cargarListasParaLibro(bookId)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessageRes = R.string.list_create_error
+                    )
+                }
+        }
+    }
+
+    fun createTag(name: String, bookId: String) {
+        viewModelScope.launch {
+            userListsRepository.createTag(name)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        successMessageRes = R.string.tag_created
+                    )
+                    cargarListasParaLibro(bookId)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessageRes = R.string.tag_create_error
                     )
                 }
         }

@@ -75,7 +75,14 @@
     <string name="pages">Paginas</string>
     <string name="isbn">ISBN</string>
     <string name="read_date">Fecha de lectura</string>
+    <string name="read_date_value">Leido el %1$s</string>
     <string name="rating">Valoracion</string>
+    <string name="sort_by_label">Ordenar por</string>
+    <string name="sort_action">Cambiar orden</string>
+    <string name="sort_option_title">Titulo</string>
+    <string name="sort_option_author">Autor</string>
+    <string name="sort_option_rating">Tu valoracion</string>
+    <string name="sort_option_read_date">Fecha de lectura</string>
 
     <string name="book_already_in_readings">Este volumen ya forma parte de tus lecturas.</string>
     <string name="book_can_be_added_to_readings">Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo mas tarde.</string>
@@ -99,6 +106,27 @@
     <string name="book_lists_load_error">No se pudieron cargar tus listas para este libro</string>
     <string name="book_lists_update_error">No se pudieron actualizar las listas del libro</string>
     <string name="book_lists_updated">Listas del libro actualizadas</string>
+    <string name="want_to_read">Quiero leer</string>
+    <string name="add_to_my_books">Añadir a Mis libros</string>
+    <string name="select_shelf">Seleccionar estantería</string>
+    <string name="select_tags">Seleccionar etiquetas</string>
+    <string name="no_tags_available">Todavía no tienes etiquetas creadas.</string>
+    <string name="create_new_tag_or_shelf">+ Crear una etiqueta o estantería nueva</string>
+    <string name="remove_from_my_books">Eliminar de Mis libros</string>
+    <string name="open_book_organizer">Abrir organizador del libro</string>
+    <string name="create">Crear</string>
+    <string name="tag">Etiqueta</string>
+    <string name="shelf">Estantería</string>
+    <string name="single_shelf_note">Un libro no puede estar en dos estanterías distintas al mismo tiempo. Las estanterías predeterminadas son Quiero leer, Leyendo y Leído.</string>
+    <string name="tag_create_note">Añade todas las etiquetas que quieras. Prueba a crear una etiqueta, como, por ejemplo, realismo mágico, autores africanos o protagonistas femeninas.</string>
+    <string name="shelf_name_hint">Nombre de la estantería</string>
+    <string name="tag_name_hint">Nombre de la etiqueta</string>
+    <string name="tag_created">Etiqueta creada</string>
+    <string name="tag_create_error">No se pudo crear la etiqueta</string>
+    <string name="write_a_review">Escribe una reseña</string>
+    <string name="rate_it">Califícalo</string>
+    <string name="write_review_optional">Escribe una reseña (opcional)</string>
+    <string name="contains_spoilers">¿Contiene spoilers?</string>
 
     <string name="readings_subtitle">Aqui se conservan los volumenes que has leido.</string>
     <string name="no_books_marked_as_read">Aun no has marcado ningun libro como leido</string>

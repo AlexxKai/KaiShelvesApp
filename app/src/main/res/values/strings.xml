@@ -75,7 +75,14 @@
     <string name="pages">Pages</string>
     <string name="isbn">ISBN</string>
     <string name="read_date">Read date</string>
+    <string name="read_date_value">Read on %1$s</string>
     <string name="rating">Rating</string>
+    <string name="sort_by_label">Sort by</string>
+    <string name="sort_action">Change sorting</string>
+    <string name="sort_option_title">Title</string>
+    <string name="sort_option_author">Author</string>
+    <string name="sort_option_rating">Your rating</string>
+    <string name="sort_option_read_date">Read date</string>
 
     <string name="book_already_in_readings">This volume is already part of your readings.</string>
     <string name="book_can_be_added_to_readings">You can add this volume to your personal reading record and rate it later.</string>
@@ -99,6 +106,27 @@
     <string name="book_lists_load_error">Could not load your lists for this book</string>
     <string name="book_lists_update_error">Could not update the book lists</string>
     <string name="book_lists_updated">Book lists updated</string>
+    <string name="want_to_read">Want to read</string>
+    <string name="add_to_my_books">Add to My books</string>
+    <string name="select_shelf">Select shelf</string>
+    <string name="select_tags">Select tags</string>
+    <string name="no_tags_available">You do not have any tags yet.</string>
+    <string name="create_new_tag_or_shelf">+ Create a new tag or shelf</string>
+    <string name="remove_from_my_books">Remove from My books</string>
+    <string name="open_book_organizer">Open book organizer</string>
+    <string name="create">Create</string>
+    <string name="tag">Tag</string>
+    <string name="shelf">Shelf</string>
+    <string name="single_shelf_note">A book cannot belong to two different shelves at the same time. The predefined shelves are Want to read, Reading and Read.</string>
+    <string name="tag_create_note">Add all the tags you want. Try creating a tag such as magical realism, African authors or female protagonists.</string>
+    <string name="shelf_name_hint">Shelf name</string>
+    <string name="tag_name_hint">Tag name</string>
+    <string name="tag_created">Tag created</string>
+    <string name="tag_create_error">Could not create the tag</string>
+    <string name="write_a_review">Write a review</string>
+    <string name="rate_it">Rate it</string>
+    <string name="write_review_optional">Write a review (optional)</string>
+    <string name="contains_spoilers">Contains spoilers?</string>
 
     <string name="readings_subtitle">Here are the volumes you have read.</string>
     <string name="no_books_marked_as_read">You have not marked any book as read yet</string>

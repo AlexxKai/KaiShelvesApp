@@ -203,6 +203,8 @@ class BookRepository(
                 pdf = libro.pdf,
                 fechaLeido = fechaActual,
                 puntuacion = 0,
+                resena = "",
+                contieneSpoilers = false,
                 siNo = "si"
             )
 
@@ -252,6 +254,35 @@ class BookRepository(
                 .collection("leidos")
                 .document(safeBookDocId(bookId))
                 .update("puntuacion", puntuacion)
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun actualizarResenaLectura(
+        bookId: String,
+        puntuacion: Int,
+        resena: String,
+        contieneSpoilers: Boolean
+    ): Result<Unit> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("Usuario no autenticado"))
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .collection("leidos")
+                .document(safeBookDocId(bookId))
+                .update(
+                    mapOf(
+                        "puntuacion" to puntuacion,
+                        "resena" to resena.trim(),
+                        "contieneSpoilers" to contieneSpoilers
+                    )
+                )
                 .await()
 
             Result.success(Unit)
