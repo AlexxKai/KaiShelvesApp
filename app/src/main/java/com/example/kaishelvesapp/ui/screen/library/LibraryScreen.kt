@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +54,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.NightBlack
@@ -64,6 +66,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LibraryScreen(
     userName: String?,
+    profileImageUrl: String?,
     genres: List<String>,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onGenreClick: (String) -> Unit,
@@ -90,6 +93,9 @@ fun LibraryScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxWidth(0.68f)
+                    .widthIn(max = 420.dp),
                 drawerContainerColor = DeepWalnut,
                 drawerContentColor = OldIvory
             ) {
@@ -100,6 +106,7 @@ fun LibraryScreen(
                 ) {
                     DrawerHeader(
                         userName = userName,
+                        profileImageUrl = profileImageUrl,
                         welcomeText = welcomeText,
                         expanded = drawerExpanded
                     )
@@ -246,6 +253,7 @@ private fun DrawerSectionItem(
 @Composable
 private fun DrawerHeader(
     userName: String?,
+    profileImageUrl: String?,
     welcomeText: String,
     expanded: Boolean
 ) {
@@ -265,13 +273,6 @@ private fun DrawerHeader(
         label = "drawerHeaderOffset"
     )
     val displayName = if (!userName.isNullOrBlank()) userName else stringResource(R.string.app_name)
-    val monogram = displayName
-        .split(" ")
-        .filter { it.isNotBlank() }
-        .take(2)
-        .joinToString("") { it.first().uppercase() }
-        .ifBlank { "KS" }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -298,41 +299,10 @@ private fun DrawerHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .blur(16.dp)
-                            .background(
-                                color = TarnishedGold.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(24.dp)
-                            )
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        TarnishedGold.copy(alpha = 0.32f),
-                                        BloodWine.copy(alpha = 0.52f),
-                                        DeepWalnut
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = monogram,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TarnishedGold
-                        )
-                    }
-                }
+                KaiUserAvatar(
+                    displayName = displayName,
+                    imageUrl = profileImageUrl.orEmpty()
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 

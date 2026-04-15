@@ -24,16 +24,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,6 +78,8 @@ private enum class CatalogViewMode {
 fun CatalogScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: CatalogViewModel,
+    userName: String? = null,
+    profileImageUrl: String? = null,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
@@ -93,6 +98,8 @@ fun CatalogScreen(
                 currentSection = KaiSection.CATALOG,
                 headerTitle = stringResource(R.string.catalog_title),
                 subtitle = stringResource(R.string.catalog_subtitle),
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -122,6 +129,14 @@ fun CatalogScreen(
                     current = KaiSection.CATALOG,
                     onSelect = onSectionSelected
                 )
+            },
+            floatingActionButton = {
+                CatalogViewFab(
+                    compactSelected = viewMode == CatalogViewMode.COMPACT,
+                    onToggleCompact = { enabled ->
+                        viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
+                    }
+                )
             }
         ) { innerPadding ->
             Column(
@@ -131,15 +146,6 @@ fun CatalogScreen(
                     .padding(innerPadding)
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                CatalogDisplayControls(
-                    viewMode = viewMode,
-                    onToggleCompact = { enabled ->
-                        viewMode = if (enabled) CatalogViewMode.COMPACT else CatalogViewMode.DETAILED
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 when {
                     uiState.isLoading -> {
                         CatalogMessageBox {
@@ -219,71 +225,36 @@ fun CatalogScreen(
 }
 
 @Composable
-private fun CatalogDisplayControls(
-    viewMode: CatalogViewMode,
+private fun CatalogViewFab(
+    compactSelected: Boolean,
     onToggleCompact: (Boolean) -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Obsidian),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.9f))
+    FloatingActionButton(
+        onClick = { onToggleCompact(!compactSelected) },
+        containerColor = DeepWalnut.copy(alpha = 0.96f),
+        contentColor = TarnishedGold
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            DeepWalnut.copy(alpha = 0.98f),
-                            Obsidian
-                        )
-                    )
-                )
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CatalogViewSwitch(
-                compactSelected = viewMode == CatalogViewMode.COMPACT,
-                onToggleCompact = onToggleCompact
-            )
-        }
+        Icon(
+            imageVector = if (compactSelected) Icons.Filled.ViewModule else Icons.Filled.ViewAgenda,
+            contentDescription = if (compactSelected) "Cambiar a vista detalle" else "Cambiar a vista portadas",
+            tint = TarnishedGold
+        )
     }
 }
 
 @Composable
-private fun CatalogViewSwitch(
-    compactSelected: Boolean,
+private fun CatalogDisplayControls(
+    viewMode: CatalogViewMode,
     onToggleCompact: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(DeepWalnut.copy(alpha = 0.92f))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = if (compactSelected) "Portadas" else "Detalle",
-            style = MaterialTheme.typography.labelLarge,
-            color = TarnishedGold
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Switch(
-            checked = compactSelected,
-            onCheckedChange = onToggleCompact,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = TarnishedGold,
-                checkedTrackColor = BloodWine,
-                uncheckedThumbColor = OldIvory,
-                uncheckedTrackColor = DeepWalnut,
-                uncheckedBorderColor = TarnishedGold
-            )
+        CatalogViewFab(
+            compactSelected = viewMode == CatalogViewMode.COMPACT,
+            onToggleCompact = onToggleCompact
         )
     }
 }

@@ -64,8 +64,11 @@
     <string name="invalid_isbn_barcode">The scanned barcode does not look like a valid ISBN</string>
 
     <string name="book_record">Volume record</string>
+    <string name="book_description_section">Book description</string>
+    <string name="book_by_author">by %1$s</string>
     <string name="archive_note">Archive note</string>
     <string name="author">Author</string>
+    <string name="title">Title</string>
     <string name="publisher">Publisher</string>
     <string name="genre">Genre</string>
     <string name="publication">Publication</string>
@@ -147,6 +150,8 @@
 
     <string name="profile_subtitle">Check and edit your identity within the archive.</string>
     <string name="edit_profile">Edit profile</string>
+    <string name="change_profile_photo">Change profile photo</string>
+    <string name="save_profile_changes">Save changes</string>
 
     <string name="login_screen_title">Kai Shelves</string>
     <string name="login_error_empty_fields">Please enter email and password</string>

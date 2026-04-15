@@ -1,5 +1,7 @@
 package com.example.kaishelvesapp.ui.screen.profile
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,7 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -18,6 +25,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
@@ -45,6 +54,7 @@ import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
@@ -58,6 +68,8 @@ import kotlinx.coroutines.launch
 fun ProfileScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: AuthViewModel,
+    userName: String? = null,
+    profileImageUrl: String? = null,
     onBack: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
@@ -68,12 +80,21 @@ fun ProfileScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val hasProfileChanges = uiState.isEditingProfile && (
+        uiState.username.trim() != uiState.user?.usuario.orEmpty().trim() ||
+            uiState.profilePhotoUri.trim() != uiState.user?.photoUrl.orEmpty().trim()
+        )
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val activity = context.findActivity()
     var expandedLanguage by remember { mutableStateOf(false) }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.toString()?.let(viewModel::onProfilePhotoSelected)
+    }
 
     LaunchedEffect(Unit) {
         if (uiState.user == null && uiState.isLoggedIn) {
@@ -100,6 +121,8 @@ fun ProfileScreen(
                 currentSection = KaiSection.PROFILE,
                 headerTitle = stringResource(R.string.profile),
                 subtitle = stringResource(R.string.profile_subtitle),
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -123,6 +146,37 @@ fun ProfileScreen(
                     onGoToSettingsPrivacy = onGoToSettingsPrivacy,
                     onLogout = onLogout
                 )
+            },
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = {
+                        when {
+                            uiState.isLoading -> Unit
+                            !uiState.isEditingProfile -> viewModel.startEditingProfile()
+                            hasProfileChanges -> viewModel.saveProfileChanges()
+                            else -> viewModel.cancelEditingProfile()
+                        }
+                    },
+                    containerColor = TarnishedGold,
+                    contentColor = Obsidian
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(color = Obsidian)
+                    } else {
+                        Icon(
+                            imageVector = when {
+                                !uiState.isEditingProfile -> Icons.Filled.Edit
+                                hasProfileChanges -> Icons.Filled.Save
+                                else -> Icons.AutoMirrored.Filled.Undo
+                            },
+                            contentDescription = when {
+                                !uiState.isEditingProfile -> stringResource(R.string.edit_profile)
+                                hasProfileChanges -> stringResource(R.string.save_profile_changes)
+                                else -> stringResource(R.string.cancel)
+                            }
+                        )
+                    }
+                }
             },
             bottomBar = {
                 KaiBottomBar(
@@ -161,6 +215,19 @@ fun ProfileScreen(
                             Column(
                                 modifier = Modifier.padding(24.dp)
                             ) {
+                                ProfileAvatarSection(
+                                    displayName = uiState.username.ifBlank {
+                                        userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
+                                    },
+                                    imageUrl = uiState.profilePhotoUri.ifBlank {
+                                        profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
+                                    },
+                                    isEditing = uiState.isEditingProfile,
+                                    onChangePhoto = { photoPickerLauncher.launch("image/*") }
+                                )
+
+                                Spacer(modifier = Modifier.height(20.dp))
+
                                 if (uiState.isEditingProfile) {
                                     OutlinedTextField(
                                         value = uiState.username,
@@ -197,32 +264,6 @@ fun ProfileScreen(
                                     )
 
                                     Spacer(modifier = Modifier.height(20.dp))
-
-                                    Button(
-                                        onClick = { viewModel.saveProfileChanges() },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = KaiShelvesThemeDefaults.primaryButtonColors(),
-                                        enabled = !uiState.isLoading
-                                    ) {
-                                        if (uiState.isLoading) {
-                                            CircularProgressIndicator(color = OldIvory)
-                                        } else {
-                                            Text(stringResource(R.string.save))
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    OutlinedButton(
-                                        onClick = { viewModel.cancelEditingProfile() },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        border = BorderStroke(1.dp, TarnishedGold)
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.cancel),
-                                            color = TarnishedGold
-                                        )
-                                    }
                                 } else {
                                     ProfileLine(
                                         stringResource(R.string.username),
@@ -255,16 +296,6 @@ fun ProfileScreen(
                                     Spacer(modifier = Modifier.height(20.dp))
 
                                     Button(
-                                        onClick = { viewModel.startEditingProfile() },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                                    ) {
-                                        Text(stringResource(R.string.edit_profile))
-                                    }
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Button(
                                         onClick = onLogout,
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = KaiShelvesThemeDefaults.primaryButtonColors()
@@ -289,6 +320,39 @@ fun ProfileScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileAvatarSection(
+    displayName: String,
+    imageUrl: String,
+    isEditing: Boolean,
+    onChangePhoto: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        KaiUserAvatar(
+            displayName = displayName,
+            imageUrl = imageUrl,
+            modifier = Modifier.size(84.dp)
+        )
+
+        if (isEditing) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onChangePhoto,
+                border = BorderStroke(1.dp, TarnishedGold)
+            ) {
+                Text(
+                    text = stringResource(R.string.change_profile_photo),
+                    color = TarnishedGold
+                )
             }
         }
     }

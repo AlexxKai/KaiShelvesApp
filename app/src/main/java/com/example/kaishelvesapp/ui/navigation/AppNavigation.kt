@@ -123,6 +123,7 @@ fun AppNavigation(
 
             LibraryScreen(
                 userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 genres = genres,
                 onGenreClick = { genre ->
                     catalogViewModel.applyInitialGenre(genre)
@@ -151,6 +152,8 @@ fun AppNavigation(
         composable(Routes.CATALOG) {
             CatalogScreen(
                 viewModel = catalogViewModel,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
@@ -194,6 +197,8 @@ fun AppNavigation(
         composable(Routes.READING_LIST) {
             ReadingListScreen(
                 viewModel = readingListViewModel,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 onBack = { navController.popBackStack() },
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
@@ -218,6 +223,8 @@ fun AppNavigation(
         composable(Routes.LISTS) {
             UserListsScreen(
                 viewModel = userListsViewModel,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 onOpenList = { listId ->
                     navController.navigate(listDetailRoute(listId))
                 },
@@ -260,6 +267,8 @@ fun AppNavigation(
         composable(Routes.READING_STATS) {
             ReadingStatsScreen(
                 viewModel = readingListViewModel,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -283,6 +292,8 @@ fun AppNavigation(
         composable(Routes.PROFILE) {
             ProfileScreen(
                 viewModel = authViewModel,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 onBack = { navController.popBackStack() },
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
@@ -303,6 +314,8 @@ fun AppNavigation(
 
         composable(Routes.SETTINGS_PRIVACY) {
             SettingsPrivacyScreen(
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,

@@ -50,6 +50,8 @@ import kotlinx.coroutines.launch
 fun ReadingStatsScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: ReadingListViewModel,
+    userName: String? = null,
+    profileImageUrl: String? = null,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -76,6 +78,8 @@ fun ReadingStatsScreen(
                 currentSection = KaiSection.STATS,
                 headerTitle = stringResource(R.string.reading_statistics),
                 subtitle = stringResource(R.string.reading_statistics_subtitle),
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)

@@ -4,14 +4,18 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
@@ -44,6 +48,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
@@ -144,265 +151,46 @@ fun BookDetailScreen(
                 Column(
                     modifier = Modifier.padding(20.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.book_record),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = TarnishedGold
-                    )
+                    BookHeroSection(libro = libro)
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    Row(
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        BookCover(
-                            imageUrl = libro.imagen,
-                            title = libro.titulo,
-                            modifier = Modifier
-                                .width(110.dp)
-                                .height(160.dp)
-                        )
+                    BookDescriptionCard(libro = libro)
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                        Column(
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(
-                                text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = TarnishedGold
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            if (libro.autor.isNotBlank()) {
-                                DetailLine(
-                                    label = stringResource(R.string.author),
-                                    value = libro.autor
+                    BookActionsSection(
+                        uiState = uiState,
+                        libro = libro,
+                        onMarkAsRead = {
+                            onMarkAsRead(libro)
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.book_added_to_readings)
                                 )
                             }
-
-                            if (libro.editorial.isNotBlank()) {
-                                DetailLine(
-                                    label = stringResource(R.string.publisher),
-                                    value = libro.editorial
-                                )
-                            }
-
-                            if (libro.genero.isNotBlank()) {
-                                DetailLine(
-                                    label = stringResource(R.string.genre),
-                                    value = libro.genero
-                                )
-                            }
-
-                            if (libro.fechaPublicacion != 0) {
-                                DetailLine(
-                                    label = stringResource(R.string.publication),
-                                    value = libro.fechaPublicacion.toString()
-                                )
-                            }
-
-                            if (libro.paginas != 0) {
-                                DetailLine(
-                                    label = stringResource(R.string.pages),
-                                    value = libro.paginas.toString()
-                                )
-                            }
-
-                            if (libro.isbn.isNotBlank()) {
-                                DetailLine(
-                                    label = stringResource(R.string.isbn),
-                                    value = libro.isbn
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = BloodWine),
-                        border = BorderStroke(1.dp, TarnishedGold),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.archive_note),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = TarnishedGold
-                            )
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            if (uiState.isAlreadyRead && uiState.readBook != null) {
-                                Text(
-                                    text = stringResource(R.string.book_already_in_readings),
-                                    color = OldIvory,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                DetailLine(
-                                    label = stringResource(R.string.read_date),
-                                    value = uiState.readBook?.fechaLeido ?: "-"
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(
-                                    text = stringResource(R.string.rating),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = TarnishedGold
-                                )
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                RatingStars(
-                                    rating = uiState.readBook?.puntuacion ?: 0
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(
-                                    text = if ((uiState.readBook?.puntuacion ?: 0) == 0) {
-                                        stringResource(R.string.not_rated_yet)
-                                    } else {
-                                        stringResource(
-                                            R.string.registered_rating_value,
-                                            uiState.readBook?.puntuacion ?: 0
-                                        )
-                                    },
-                                    color = OldIvory,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            } else {
-                                Text(
-                                    text = stringResource(R.string.book_can_be_added_to_readings),
-                                    color = OldIvory,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    ListsSummaryCard(
-                        totalLists = uiState.availableLists.size,
-                        selectedListsCount = uiState.selectedListIds.size,
-                        isLoading = uiState.isListsLoading
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    when {
-                        uiState.isLoading -> {
-                            Button(
-                                onClick = {},
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = false,
-                                colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                            ) {
-                                CircularProgressIndicator(color = OldIvory)
-                            }
-                        }
-
-                        uiState.isAlreadyRead -> {
-                            Button(
-                                onClick = onGoToReadingList,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                            ) {
-                                Text(stringResource(R.string.go_to_my_readings))
-                            }
-                        }
-
-                        else -> {
-                            Button(
-                                onClick = {
-                                    onMarkAsRead(libro)
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            context.getString(R.string.book_added_to_readings)
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                            ) {
-                                Text(stringResource(R.string.mark_as_read))
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = { showListsDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !uiState.isListsLoading && !uiState.isSavingLists && uiState.availableLists.isNotEmpty(),
-                        border = BorderStroke(1.dp, TarnishedGold)
-                    ) {
-                        if (uiState.isSavingLists) {
-                            CircularProgressIndicator(
-                                color = TarnishedGold,
-                                modifier = Modifier.width(18.dp).height(18.dp)
-                            )
-                        } else {
-                            Text(
-                                text = if (uiState.selectedListIds.isEmpty()) {
-                                    stringResource(R.string.select_lists_for_book)
-                                } else {
-                                    stringResource(R.string.manage_book_lists)
-                                },
-                                color = TarnishedGold
-                            )
-                        }
-                    }
-
-                    if (uiState.availableLists.isEmpty() && !uiState.isListsLoading) {
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = stringResource(R.string.no_user_lists_available),
-                            color = OldIvory,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-
-                    if (libro.pdf.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(libro.pdf))
-                                    context.startActivity(intent)
-                                } catch (_: ActivityNotFoundException) {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            context.getString(R.string.could_not_open_pdf)
-                                        )
-                                    }
-                                } catch (_: Exception) {
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            context.getString(R.string.invalid_pdf_link)
-                                        )
-                                    }
+                        },
+                        onGoToReadingList = onGoToReadingList,
+                        onOpenLists = { showListsDialog = true },
+                        onOpenPdf = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(libro.pdf))
+                                context.startActivity(intent)
+                            } catch (_: ActivityNotFoundException) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.could_not_open_pdf)
+                                    )
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                        ) {
-                            Text(stringResource(R.string.open_pdf))
+                            } catch (_: Exception) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(R.string.invalid_pdf_link)
+                                    )
+                                }
+                            }
                         }
-                    }
+                    )
                 }
             }
         }
@@ -410,12 +198,59 @@ fun BookDetailScreen(
 }
 
 @Composable
-private fun ListsSummaryCard(
-    totalLists: Int,
-    selectedListsCount: Int,
-    isLoading: Boolean
-) {
+private fun BookHeroSection(libro: Libro) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = BloodWine,
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .padding(horizontal = 24.dp, vertical = 22.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            BookCover(
+                imageUrl = libro.imagen,
+                title = libro.titulo,
+                modifier = Modifier
+                    .width(210.dp)
+                    .height(305.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+            style = MaterialTheme.typography.displaySmall,
+            color = TarnishedGold,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.SemiBold,
+            lineHeight = MaterialTheme.typography.displaySmall.lineHeight
+        )
+
+        if (libro.autor.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.book_by_author, libro.autor),
+                style = MaterialTheme.typography.titleMedium,
+                color = OldIvory.copy(alpha = 0.92f),
+                textAlign = TextAlign.Center,
+                fontStyle = FontStyle.Italic
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookDescriptionCard(libro: Libro) {
     Card(
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold),
         shape = RoundedCornerShape(20.dp)
@@ -424,36 +259,154 @@ private fun ListsSummaryCard(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = stringResource(R.string.user_lists),
-                style = MaterialTheme.typography.titleMedium,
-                color = TarnishedGold
+                text = stringResource(R.string.book_description_section),
+                style = MaterialTheme.typography.headlineSmall,
+                color = TarnishedGold,
+                fontWeight = FontWeight.SemiBold
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            DetailRow(
+                label = stringResource(R.string.title),
+                value = libro.titulo.ifBlank { stringResource(R.string.unknown_title) }
+            )
+
+            if (libro.autor.isNotBlank()) {
+                DetailRow(
+                    label = stringResource(R.string.author),
+                    value = libro.autor
+                )
+            }
+
+            if (libro.editorial.isNotBlank()) {
+                DetailRow(
+                    label = stringResource(R.string.publisher),
+                    value = libro.editorial
+                )
+            }
+
+            if (libro.genero.isNotBlank()) {
+                DetailRow(
+                    label = stringResource(R.string.genre),
+                    value = libro.genero
+                )
+            }
+
+            if (libro.fechaPublicacion != 0) {
+                DetailRow(
+                    label = stringResource(R.string.publication),
+                    value = libro.fechaPublicacion.toString()
+                )
+            }
+
+            if (libro.paginas != 0) {
+                DetailRow(
+                    label = stringResource(R.string.pages),
+                    value = libro.paginas.toString()
+                )
+            }
+
+            if (libro.isbn.isNotBlank()) {
+                DetailRow(
+                    label = stringResource(R.string.isbn),
+                    value = libro.isbn
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookActionsSection(
+    uiState: com.example.kaishelvesapp.ui.viewmodel.BookDetailUiState,
+    libro: Libro,
+    onMarkAsRead: () -> Unit,
+    onGoToReadingList: () -> Unit,
+    onOpenLists: () -> Unit,
+    onOpenPdf: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Obsidian.copy(alpha = 0.92f)),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.55f)),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             when {
-                isLoading -> {
-                    CircularProgressIndicator(color = TarnishedGold)
+                uiState.isLoading -> {
+                    Button(
+                        onClick = {},
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                    ) {
+                        CircularProgressIndicator(color = OldIvory)
+                    }
                 }
 
-                totalLists == 0 -> {
-                    Text(
-                        text = stringResource(R.string.no_user_lists_available),
-                        color = OldIvory,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                uiState.isAlreadyRead -> {
+                    Button(
+                        onClick = onGoToReadingList,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                    ) {
+                        Text(stringResource(R.string.go_to_my_readings))
+                    }
                 }
 
                 else -> {
-                    Text(
-                        text = stringResource(
-                            R.string.book_in_lists_summary,
-                            selectedListsCount,
-                            totalLists
-                        ),
-                        color = OldIvory,
-                        style = MaterialTheme.typography.bodyMedium
+                    Button(
+                        onClick = onMarkAsRead,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        Text(stringResource(R.string.mark_as_read))
+                    }
+                }
+            }
+
+            OutlinedButton(
+                onClick = onOpenLists,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isListsLoading && !uiState.isSavingLists && uiState.availableLists.isNotEmpty(),
+                border = BorderStroke(1.dp, TarnishedGold)
+            ) {
+                if (uiState.isSavingLists) {
+                    CircularProgressIndicator(
+                        color = TarnishedGold,
+                        modifier = Modifier.width(18.dp).height(18.dp)
                     )
+                } else {
+                    Text(
+                        text = if (uiState.selectedListIds.isEmpty()) {
+                            stringResource(R.string.select_lists_for_book)
+                        } else {
+                            stringResource(R.string.manage_book_lists)
+                        },
+                        color = TarnishedGold
+                    )
+                }
+            }
+
+            if (uiState.availableLists.isEmpty() && !uiState.isListsLoading) {
+                Text(
+                    text = stringResource(R.string.no_user_lists_available),
+                    color = OldIvory,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            if (libro.pdf.isNotBlank()) {
+                Button(
+                    onClick = onOpenPdf,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+                ) {
+                    Text(stringResource(R.string.open_pdf))
                 }
             }
         }
@@ -570,6 +523,33 @@ private fun DetailLine(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = OldIvory
+        )
+    }
+}
+
+@Composable
+private fun DetailRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            color = TarnishedGold,
+            modifier = Modifier.width(112.dp)
+        )
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = OldIvory,
+            modifier = Modifier.weight(1f)
         )
     }
 }

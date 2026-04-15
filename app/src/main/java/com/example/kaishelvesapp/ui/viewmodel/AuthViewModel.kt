@@ -13,6 +13,7 @@ data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val username: String = "",
+    val profilePhotoUri: String = "",
     val isLoading: Boolean = false,
     val user: Usuario? = null,
     val errorMessage: String? = null,
@@ -50,6 +51,10 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(username = value)
     }
 
+    fun onProfilePhotoSelected(uri: String) {
+        _uiState.value = _uiState.value.copy(profilePhotoUri = uri)
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
@@ -73,6 +78,7 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(
             isEditingProfile = true,
             username = _uiState.value.user?.usuario ?: "",
+            profilePhotoUri = _uiState.value.user?.photoUrl ?: "",
             errorMessage = null,
             successMessage = null
         )
@@ -82,6 +88,7 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(
             isEditingProfile = false,
             username = _uiState.value.user?.usuario ?: "",
+            profilePhotoUri = _uiState.value.user?.photoUrl ?: "",
             errorMessage = null
         )
     }
@@ -101,6 +108,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -120,7 +128,7 @@ class AuthViewModel(
 
         if (email.isBlank() || password.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa email y contraseña"
+                errorMessage = "Completa email y contrasena"
             )
             return
         }
@@ -140,6 +148,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -147,7 +156,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al iniciar sesión"
+                        errorMessage = error.message ?: "Error al iniciar sesion"
                     )
                 }
         }
@@ -176,6 +185,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -183,7 +193,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al iniciar sesiÃ³n con Google"
+                        errorMessage = error.message ?: "Error al iniciar sesion con Google"
                     )
                 }
         }
@@ -196,14 +206,14 @@ class AuthViewModel(
 
         if (username.isBlank() || email.isBlank() || password.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa usuario, email y contraseña"
+                errorMessage = "Completa usuario, email y contrasena"
             )
             return
         }
 
         if (password.length < 6) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+                errorMessage = "La contrasena debe tener al menos 6 caracteres"
             )
             return
         }
@@ -223,6 +233,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
                     )
@@ -238,10 +249,11 @@ class AuthViewModel(
 
     fun saveProfileChanges() {
         val username = _uiState.value.username.trim()
+        val profilePhotoUri = _uiState.value.profilePhotoUri.trim()
 
         if (username.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "El nombre de usuario no puede estar vacío"
+                errorMessage = "El nombre de usuario no puede estar vacio"
             )
             return
         }
@@ -253,7 +265,7 @@ class AuthViewModel(
         )
 
         viewModelScope.launch {
-            val result = repository.updateUsername(username)
+            val result = repository.updateProfile(username, profilePhotoUri)
 
             result
                 .onSuccess { updatedUser ->
@@ -261,6 +273,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = updatedUser,
                         username = updatedUser.usuario,
+                        profilePhotoUri = updatedUser.photoUrl,
                         isEditingProfile = false,
                         successMessage = "Perfil actualizado correctamente"
                     )

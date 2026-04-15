@@ -17,7 +17,7 @@
     <string name="i_already_have_an_account">Ya tengo cuenta</string>
     <string name="email">Correo electronico</string>
     <string name="username">Usuario</string>
-    <string name="password">Contrasena</string>
+    <string name="password">Contraseña</string>
     <string name="continue_with_google">Continuar con Google</string>
     <string name="or">o</string>
 
@@ -48,7 +48,7 @@
     <string name="settings_section_account">Cuenta y preferencias</string>
     <string name="settings_section_account_body">Aqui agruparemos mas adelante idioma, notificaciones, preferencias de sesion y comportamiento de la cuenta.</string>
     <string name="settings_section_privacy">Privacidad y acceso</string>
-    <string name="settings_section_privacy_body">Mas adelante anadiremos proteccion de sesion, visibilidad, permisos y controles de datos personales.</string>
+    <string name="settings_section_privacy_body">Mas adelante añadiremos proteccion de sesion, visibilidad, permisos y controles de datos personales.</string>
 
     <string name="search_books">Buscar libros</string>
     <string name="catalog_title">Archivo de la biblioteca</string>
@@ -57,15 +57,18 @@
     <string name="search_by_title_author_isbn">Busca por titulo, autor o ISBN</string>
     <string name="no_books_found">No se han encontrado volumenes</string>
     <string name="unknown_title">Titulo desconocido</string>
-    <string name="year">Ano</string>
+    <string name="year">Año</string>
     <string name="scan_isbn">Escanear ISBN</string>
     <string name="scan_isbn_prompt">Alinea el codigo de barras del libro dentro del marco</string>
     <string name="camera_permission_required">Hace falta permiso de camara para escanear codigos</string>
     <string name="invalid_isbn_barcode">El codigo escaneado no parece un ISBN valido</string>
 
     <string name="book_record">Ficha del volumen</string>
+    <string name="book_description_section">Descripcion del libro</string>
+    <string name="book_by_author">de %1$s</string>
     <string name="archive_note">Nota del archivo</string>
     <string name="author">Autor</string>
+    <string name="title">Titulo</string>
     <string name="publisher">Editorial</string>
     <string name="genre">Genero</string>
     <string name="publication">Publicacion</string>
@@ -81,13 +84,13 @@
     <string name="rating_value">Puntuacion: %1$d/5</string>
     <string name="mark_as_read">Marcar como leido</string>
     <string name="go_to_my_readings">Ir a mis libros</string>
-    <string name="book_added_to_readings">Libro anadido a tus lecturas</string>
+    <string name="book_added_to_readings">Libro añadido a tus lecturas</string>
     <string name="book_status_error">No se pudo comprobar el estado del libro</string>
     <string name="open_pdf">Abrir PDF</string>
     <string name="could_not_open_pdf">No se pudo abrir el PDF</string>
     <string name="invalid_pdf_link">Enlace PDF no valido</string>
     <string name="user_lists">Listas del usuario</string>
-    <string name="select_lists_for_book">Anadir a listas</string>
+    <string name="select_lists_for_book">Añadir a listas</string>
     <string name="manage_book_lists">Gestionar listas</string>
     <string name="select_lists_dialog_title">Elegir listas</string>
     <string name="select_lists_dialog_body">Selecciona una o varias listas para este libro.</string>
@@ -130,32 +133,34 @@
     <string name="move_list_up">Mover lista arriba</string>
     <string name="move_list_down">Mover lista abajo</string>
     <string name="drag_to_reorder">Mantener pulsado y arrastrar para reordenar</string>
-    <string name="list_preview_empty_hint">Abre la lista o anade libros desde la ficha para empezar a llenarla.</string>
+    <string name="list_preview_empty_hint">Abre la lista o añade libros desde la ficha para empezar a llenarla.</string>
     <string name="list_detail_title">Detalle de la lista</string>
     <string name="list_detail_load_error">No se pudo cargar el detalle de la lista</string>
     <string name="empty_list_books_title">Esta lista todavia no tiene libros</string>
-    <string name="empty_list_books_body">Anade libros desde su pantalla de detalle para verlos aqui.</string>
+    <string name="empty_list_books_body">Añade libros desde su pantalla de detalle para verlos aqui.</string>
     <string name="remove_book_from_list">Quitar de la lista</string>
     <string name="remove_book_from_list_confirmation">Quieres quitar \"%1$s\" de esta lista?</string>
     <string name="remove_book_from_list_error">No se pudo quitar el libro de la lista</string>
     <string name="book_removed_from_list">Libro quitado de la lista</string>
 
     <string name="language">Idioma</string>
-    <string name="spanish">Espanol</string>
+    <string name="spanish">Español</string>
     <string name="english">Ingles</string>
     <string name="app_language">Idioma de la aplicacion</string>
 
     <string name="profile_subtitle">Consulta y edita tu identidad dentro del archivo.</string>
     <string name="edit_profile">Editar perfil</string>
+    <string name="change_profile_photo">Cambiar foto de perfil</string>
+    <string name="save_profile_changes">Guardar cambios</string>
 
     <string name="login_screen_title">Kai Shelves</string>
-    <string name="login_error_empty_fields">Completa correo y contrasena</string>
-    <string name="register_error_empty_fields">Completa usuario, correo y contrasena</string>
-    <string name="register_error_short_password">La contrasena debe tener al menos 6 caracteres</string>
+    <string name="login_error_empty_fields">Completa correo y contraseña</string>
+    <string name="register_error_empty_fields">Completa usuario, correo y contraseña</string>
+    <string name="register_error_short_password">La contraseña debe tener al menos 6 caracteres</string>
     <string name="profile_error_empty_username">El nombre de usuario no puede estar vacio</string>
     <string name="register_success">Cuenta creada correctamente</string>
     <string name="login_subtitle">Accede a tu biblioteca oscura</string>
     <string name="google_sign_in_cancelled">Se cancelo el inicio de sesion con Google</string>
-    <string name="google_sign_in_not_available">El acceso con Google todavia no esta configurado. Anade el Web client ID de Firebase.</string>
+    <string name="google_sign_in_not_available">El acceso con Google todavia no esta configurado. Añade el Web client ID de Firebase.</string>
     <string name="google_sign_in_failed">No se pudo completar el acceso con Google</string>
 </resources>

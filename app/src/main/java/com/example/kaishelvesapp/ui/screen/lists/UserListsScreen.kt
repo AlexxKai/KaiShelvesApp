@@ -92,6 +92,8 @@ import kotlinx.coroutines.launch
 fun UserListsScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: UserListsViewModel,
+    userName: String? = null,
+    profileImageUrl: String? = null,
     onOpenList: (String) -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
@@ -233,6 +235,8 @@ fun UserListsScreen(
                 currentSection = KaiSection.LISTS,
                 headerTitle = stringResource(R.string.my_books),
                 subtitle = stringResource(R.string.lists_subtitle),
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)

@@ -42,6 +42,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsPrivacyScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
+    userName: String? = null,
+    profileImageUrl: String? = null,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -60,6 +62,8 @@ fun SettingsPrivacyScreen(
                 currentSection = KaiSection.PROFILE,
                 headerTitle = stringResource(R.string.settings_privacy),
                 subtitle = stringResource(R.string.settings_privacy_subtitle),
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)

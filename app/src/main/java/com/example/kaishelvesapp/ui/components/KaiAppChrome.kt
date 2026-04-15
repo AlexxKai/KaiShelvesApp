@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -47,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -137,6 +138,7 @@ fun KaiPrimaryTopBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
@@ -145,10 +147,11 @@ fun KaiPrimaryTopBar(
                     )
                 )
             )
-            .padding(horizontal = 8.dp, vertical = 10.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onOpenMenu) {
@@ -211,7 +214,7 @@ fun KaiPrimaryTopBar(
             onValueChange = onSearchQueryChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
+                .padding(top = 4.dp),
             placeholder = {
                 Text(stringResource(R.string.search_by_title_author_isbn))
             },
@@ -249,9 +252,14 @@ fun KaiNavigationDrawerContent(
     currentSection: KaiSection,
     headerTitle: String,
     subtitle: String,
+    userName: String = "",
+    profileImageUrl: String = "",
     onSectionSelected: (KaiSection) -> Unit
 ) {
     ModalDrawerSheet(
+        modifier = Modifier
+            .fillMaxWidth(0.68f)
+            .widthIn(max = 420.dp),
         drawerContainerColor = DeepWalnut,
         drawerContentColor = OldIvory
     ) {
@@ -263,7 +271,9 @@ fun KaiNavigationDrawerContent(
         ) {
             KaiDrawerHeaderCard(
                 title = headerTitle,
-                subtitle = subtitle
+                subtitle = subtitle,
+                userName = userName,
+                profileImageUrl = profileImageUrl
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -306,14 +316,11 @@ fun KaiNavigationDrawerContent(
 @Composable
 private fun KaiDrawerHeaderCard(
     title: String,
-    subtitle: String
+    subtitle: String,
+    userName: String,
+    profileImageUrl: String
 ) {
-    val monogram = title
-        .split(" ")
-        .filter { it.isNotBlank() }
-        .take(2)
-        .joinToString("") { it.first().uppercase() }
-        .ifBlank { "KS" }
+    val displayName = userName.ifBlank { stringResource(R.string.app_name) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -338,41 +345,10 @@ private fun KaiDrawerHeaderCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(68.dp)
-                            .blur(16.dp)
-                            .background(
-                                color = TarnishedGold.copy(alpha = 0.16f),
-                                shape = RoundedCornerShape(24.dp)
-                            )
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(
-                                        TarnishedGold.copy(alpha = 0.32f),
-                                        BloodWine.copy(alpha = 0.52f),
-                                        DeepWalnut
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = monogram,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TarnishedGold
-                        )
-                    }
-                }
+                KaiUserAvatar(
+                    displayName = displayName,
+                    imageUrl = profileImageUrl
+                )
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -384,7 +360,7 @@ private fun KaiDrawerHeaderCard(
                     )
 
                     Text(
-                        text = title,
+                        text = displayName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = OldIvory
                     )

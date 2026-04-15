@@ -1,9 +1,12 @@
 package com.example.kaishelvesapp.data.repository
 
+import android.net.Uri
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
@@ -23,7 +26,7 @@ class AuthRepository(
     suspend fun getCurrentUserProfile(): Result<Usuario> {
         return try {
             val uid = auth.currentUser?.uid
-                ?: return Result.failure(Exception("No hay sesión iniciada"))
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
 
             val snapshot = firestore.collection("usuarios")
                 .document(uid)
@@ -34,7 +37,8 @@ class AuthRepository(
                 ?: Usuario(
                     uid = uid,
                     usuario = auth.currentUser?.displayName ?: "",
-                    email = auth.currentUser?.email ?: ""
+                    email = auth.currentUser?.email ?: "",
+                    photoUrl = auth.currentUser?.photoUrl?.toString().orEmpty()
                 )
 
             Result.success(usuario)
@@ -58,17 +62,18 @@ class AuthRepository(
     suspend fun register(usuario: String, email: String, password: String): Result<Usuario> {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
-            val uid = authResult.user?.uid
+            val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("No se pudo obtener el UID del usuario"))
 
             val nuevoUsuario = Usuario(
-                uid = uid,
+                uid = firebaseUser.uid,
                 usuario = usuario,
-                email = email
+                email = email,
+                photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
             )
 
             firestore.collection("usuarios")
-                .document(uid)
+                .document(firebaseUser.uid)
                 .set(nuevoUsuario)
                 .await()
 
@@ -92,17 +97,24 @@ class AuthRepository(
         }
     }
 
-    suspend fun updateUsername(newUsername: String): Result<Usuario> {
+    suspend fun updateProfile(newUsername: String, selectedPhotoUri: String): Result<Usuario> {
         return try {
-            val uid = auth.currentUser?.uid
-                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val uid = currentUser.uid
+            val currentProfile = getCurrentUserProfile().getOrNull()
 
-            val email = auth.currentUser?.email ?: ""
+            val resolvedPhotoUrl = when {
+                selectedPhotoUri.isBlank() -> currentProfile?.photoUrl.orEmpty()
+                selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(uid, Uri.parse(selectedPhotoUri))
+                else -> selectedPhotoUri
+            }
 
             val updatedUser = Usuario(
                 uid = uid,
                 usuario = newUsername,
-                email = email
+                email = currentUser.email ?: "",
+                photoUrl = resolvedPhotoUrl
             )
 
             firestore.collection("usuarios")
@@ -118,6 +130,13 @@ class AuthRepository(
 
     fun logout() {
         auth.signOut()
+    }
+
+    private suspend fun uploadProfilePhoto(uid: String, uri: Uri): String {
+        return ProfileImageCodec.encodeEncryptedImage(
+            context = FirebaseApp.getInstance().applicationContext,
+            uri = uri
+        )
     }
 
     private suspend fun getOrCreateUserProfile(firebaseUser: FirebaseUser): Usuario {
@@ -140,7 +159,8 @@ class AuthRepository(
         val newUser = Usuario(
             uid = uid,
             usuario = fallbackUsername,
-            email = firebaseUser.email.orEmpty()
+            email = firebaseUser.email.orEmpty(),
+            photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
         )
 
         firestore.collection("usuarios")
