@@ -63,6 +63,7 @@ fun ReadingStatsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -76,10 +77,22 @@ fun ReadingStatsScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.STATS,
-                headerTitle = stringResource(R.string.reading_statistics),
                 subtitle = stringResource(R.string.reading_statistics_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -95,10 +108,7 @@ fun ReadingStatsScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {

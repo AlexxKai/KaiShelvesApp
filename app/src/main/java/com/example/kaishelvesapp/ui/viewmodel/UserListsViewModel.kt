@@ -167,11 +167,20 @@ class UserListsViewModel(
 
     fun updateListOrder(orderedListIds: List<String>) {
         val currentLists = _uiState.value.lists
-        val reorderedLists = orderedListIds.mapNotNull { orderedId ->
-            currentLists.firstOrNull { it.id == orderedId }
+        val systemLists = currentLists.filter { it.isSystem }
+        val customListsById = currentLists
+            .filterNot { it.isSystem }
+            .associateBy { it.id }
+        val reorderedCustomLists = orderedListIds.mapNotNull { orderedId ->
+            customListsById[orderedId]
         }
+        val missingCustomLists = customListsById.values.filterNot { customList ->
+            orderedListIds.contains(customList.id)
+        }
+        val finalCustomLists = reorderedCustomLists + missingCustomLists
+        val reorderedLists = systemLists + finalCustomLists
 
-        if (reorderedLists.size != currentLists.size || reorderedLists == currentLists) {
+        if (finalCustomLists.size != customListsById.size || reorderedLists == currentLists) {
             _uiState.value = _uiState.value.copy(isLoading = false)
             return
         }

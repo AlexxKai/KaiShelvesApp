@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.ui.theme.BloodWine
@@ -27,6 +28,8 @@ fun BookCover(
     imageUrl: String,
     title: String,
     modifier: Modifier = Modifier,
+    containerColor: Color = BloodWine,
+    borderColor: Color = TarnishedGold,
     placeholderContent: @Composable BoxScope.() -> Unit = {
         Text(
             text = "Tomo",
@@ -38,9 +41,9 @@ fun BookCover(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(BloodWine)
+            .background(containerColor)
             .border(
-                BorderStroke(1.dp, TarnishedGold),
+                BorderStroke(1.dp, borderColor),
                 RoundedCornerShape(10.dp)
             ),
         contentAlignment = Alignment.Center
@@ -59,7 +62,7 @@ fun BookCover(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(BloodWine),
+                        .background(containerColor),
                     contentAlignment = Alignment.Center
                 ) {
                     placeholderContent()

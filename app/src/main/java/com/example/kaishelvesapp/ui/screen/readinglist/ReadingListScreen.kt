@@ -79,6 +79,7 @@ fun ReadingListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -102,10 +103,22 @@ fun ReadingListScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.READING,
-                headerTitle = stringResource(R.string.my_readings),
                 subtitle = stringResource(R.string.readings_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -124,10 +137,7 @@ fun ReadingListScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {

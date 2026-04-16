@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
@@ -104,26 +105,27 @@ fun UserListsScreen(
     onLogout: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
-    val listItemsStartIndex = 1
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var editingList by remember { mutableStateOf<UserBookList?>(null) }
     var deletingList by remember { mutableStateOf<UserBookList?>(null) }
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
-    val displayedLists = remember { mutableStateListOf<UserBookList>() }
+    val displayedCustomLists = remember { mutableStateListOf<UserBookList>() }
     var draggingItemId by remember { mutableStateOf<String?>(null) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
     var autoScrollDelta by remember { mutableFloatStateOf(0f) }
-    fun currentCustomOrder(lists: List<UserBookList>) = lists.filterNot { it.isSystem }.map { it.id }
     fun isProtectedSystemList(list: UserBookList) = list.isSystem || list.id in setOf(
         UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID,
         UserListsRepository.SYSTEM_LIST_READING_ID,
         UserListsRepository.SYSTEM_LIST_READ_ID
     )
+    val systemLists = uiState.lists.filter(::isProtectedSystemList)
+    fun currentCustomOrder(lists: List<UserBookList>) = lists.map { it.id }
 
     LaunchedEffect(Unit) {
         viewModel.loadLists()
@@ -131,8 +133,8 @@ fun UserListsScreen(
 
     LaunchedEffect(uiState.lists) {
         if (draggingItemId == null) {
-            displayedLists.clear()
-            displayedLists.addAll(uiState.lists)
+            displayedCustomLists.clear()
+            displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
         }
     }
 
@@ -233,10 +235,22 @@ fun UserListsScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.LISTS,
-                headerTitle = stringResource(R.string.my_books),
                 subtitle = stringResource(R.string.lists_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -253,10 +267,7 @@ fun UserListsScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {
@@ -303,12 +314,25 @@ fun UserListsScreen(
                         EmptyListsCard()
                     }
                 } else {
+                    items(
+                        items = systemLists,
+                        key = { list -> list.id }
+                    ) { list ->
+                        UserListCard(
+                            userList = list,
+                            onOpen = { onOpenList(list.id) },
+                            onEdit = {},
+                            isDragging = false,
+                            isEditable = false
+                        )
+                    }
+
                     itemsIndexed(
-                        items = displayedLists,
+                        items = displayedCustomLists,
                         key = { _, list -> list.id }
                     ) { index, list ->
                         val isDragging = draggingItemId == list.id
-                        val isEditable = !isProtectedSystemList(list)
+                        val isEditable = true
                         val dismissThreshold: (Float) -> Float = { it * 0.35f }
                         val dismissState = rememberSaveable(
                             list.id,
@@ -362,7 +386,7 @@ fun UserListsScreen(
                                 onEdit = { if (isEditable) editingList = list },
                                 isDragging = isDragging,
                                 isEditable = isEditable,
-                                dragHandleModifier = if (isEditable) Modifier.pointerInput(list.id, displayedLists.size) {
+                                dragHandleModifier = Modifier.pointerInput(list.id, displayedCustomLists.size) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             draggingItemId = list.id
@@ -370,38 +394,42 @@ fun UserListsScreen(
                                             autoScrollDelta = 0f
                                         },
                                         onDragCancel = {
-                                            val orderedIds = currentCustomOrder(displayedLists)
-                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists)
+                                            val orderedIds = currentCustomOrder(displayedCustomLists)
+                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists.filterNot(::isProtectedSystemList))
                                             draggingItemId = null
                                             draggingTranslationY = 0f
                                             autoScrollDelta = 0f
                                             if (orderChanged) {
                                                 viewModel.updateListOrder(orderedIds)
                                             } else {
-                                                displayedLists.clear()
-                                                displayedLists.addAll(uiState.lists)
+                                                displayedCustomLists.clear()
+                                                displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
                                             }
                                         },
                                         onDragEnd = {
-                                            val orderedIds = currentCustomOrder(displayedLists)
-                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists)
+                                            val orderedIds = currentCustomOrder(displayedCustomLists)
+                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists.filterNot(::isProtectedSystemList))
                                             draggingItemId = null
                                             draggingTranslationY = 0f
                                             autoScrollDelta = 0f
                                             if (orderChanged) {
                                                 viewModel.updateListOrder(orderedIds)
+                                            } else {
+                                                displayedCustomLists.clear()
+                                                displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
                                             }
                                         },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             val currentDraggingId = draggingItemId ?: return@detectDragGesturesAfterLongPress
-                                            val currentIndex = displayedLists.indexOfFirst { it.id == currentDraggingId }
+                                            val currentIndex = displayedCustomLists.indexOfFirst { it.id == currentDraggingId }
                                             if (currentIndex == -1) return@detectDragGesturesAfterLongPress
 
                                             draggingTranslationY += dragAmount.y
 
                                             val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                            val currentLayoutIndex = currentIndex + listItemsStartIndex
+                                            val customItemsStartIndex = systemLists.size
+                                            val currentLayoutIndex = currentIndex + customItemsStartIndex
                                             val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
                                                 ?: return@detectDragGesturesAfterLongPress
                                             val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
@@ -425,36 +453,37 @@ fun UserListsScreen(
                                             }
 
                                             val previousItem = visibleItems.firstOrNull {
-                                                it.index == currentLayoutIndex - 1 && it.index >= listItemsStartIndex
+                                                it.index == currentLayoutIndex - 1 && it.index >= customItemsStartIndex
                                             }
                                             val nextItem = visibleItems.firstOrNull {
-                                                it.index == currentLayoutIndex + 1
+                                                it.index == currentLayoutIndex + 1 &&
+                                                    it.index < customItemsStartIndex + displayedCustomLists.size
                                             }
 
                                             when {
-                                                nextItem != null && currentMidPoint > nextItem.offset + nextItem.size / 2 -> {
-                                                    val targetListIndex = (nextItem.index - listItemsStartIndex)
-                                                        .coerceAtMost(displayedLists.lastIndex)
-                                                    if (displayedLists.getOrNull(targetListIndex)?.isSystem == false) {
+                                                nextItem != null && currentMidPoint > nextItem.offset + nextItem.size * 0.68f -> {
+                                                    val targetListIndex = (nextItem.index - customItemsStartIndex)
+                                                        .coerceAtMost(displayedCustomLists.lastIndex)
+                                                    if (displayedCustomLists.getOrNull(targetListIndex) != null) {
                                                         val deltaToTarget = (nextItem.offset - currentItem.offset).toFloat()
-                                                        displayedLists.move(currentIndex, targetListIndex)
+                                                        displayedCustomLists.move(currentIndex, targetListIndex)
                                                         draggingTranslationY -= deltaToTarget
                                                     }
                                                 }
 
-                                                previousItem != null && currentMidPoint < previousItem.offset + previousItem.size / 2 -> {
-                                                    val targetListIndex = (previousItem.index - listItemsStartIndex)
+                                                previousItem != null && currentMidPoint < previousItem.offset + previousItem.size * 0.32f -> {
+                                                    val targetListIndex = (previousItem.index - customItemsStartIndex)
                                                         .coerceAtLeast(0)
-                                                    if (displayedLists.getOrNull(targetListIndex)?.isSystem == false) {
+                                                    if (displayedCustomLists.getOrNull(targetListIndex) != null) {
                                                         val deltaToTarget = (currentItem.offset - previousItem.offset).toFloat()
-                                                        displayedLists.move(currentIndex, targetListIndex)
+                                                        displayedCustomLists.move(currentIndex, targetListIndex)
                                                         draggingTranslationY += deltaToTarget
                                                     }
                                                 }
                                             }
                                         }
                                     )
-                                } else Modifier,
+                                },
                                 modifier = Modifier
                                     .zIndex(if (isDragging) 1f else 0f)
                                     .shadow(

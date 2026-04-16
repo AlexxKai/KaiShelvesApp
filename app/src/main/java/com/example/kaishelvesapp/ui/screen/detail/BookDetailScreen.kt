@@ -213,15 +213,20 @@ fun BookDetailScreen(
                 .statusBarsPadding()
                 .padding(paddingValues)
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(top = 0.dp, bottom = 0.dp, start = 0.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
@@ -230,57 +235,53 @@ fun BookDetailScreen(
                 }
             }
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                color = Obsidian
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp)
-                ) {
-                    BookHeroSection(libro = libro)
+                BookHeroSection(libro = libro)
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                    BookActionsSection(
-                        uiState = uiState,
-                        hasPdf = libro.pdf.isNotBlank(),
-                        onPrimaryShelfAction = {
-                            if (uiState.selectedListIds.isEmpty()) {
-                                viewModel.guardarOrganizacion(
-                                    libro = libro,
-                                    selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID),
-                                    selectedTagIds = uiState.selectedTagIds
+                BookActionsSection(
+                    uiState = uiState,
+                    hasPdf = libro.pdf.isNotBlank(),
+                    onPrimaryShelfAction = {
+                        if (uiState.selectedListIds.isEmpty()) {
+                            viewModel.guardarOrganizacion(
+                                libro = libro,
+                                selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID),
+                                selectedTagIds = uiState.selectedTagIds
+                            )
+                        } else {
+                            showOrganizerDialog = true
+                        }
+                    },
+                    onOpenOrganizer = { showOrganizerDialog = true },
+                    onOpenPdf = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(libro.pdf))
+                            context.startActivity(intent)
+                        } catch (_: ActivityNotFoundException) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.could_not_open_pdf)
                                 )
-                            } else {
-                                showOrganizerDialog = true
                             }
-                        },
-                        onOpenOrganizer = { showOrganizerDialog = true },
-                        onOpenPdf = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(libro.pdf))
-                                context.startActivity(intent)
-                            } catch (_: ActivityNotFoundException) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        context.getString(R.string.could_not_open_pdf)
-                                    )
-                                }
-                            } catch (_: Exception) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        context.getString(R.string.invalid_pdf_link)
-                                    )
-                                }
+                        } catch (_: Exception) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.invalid_pdf_link)
+                                )
                             }
                         }
-                    )
+                    }
+                )
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                    BookDescriptionCard(libro = libro)
-                }
+                BookDescriptionCard(libro = libro)
             }
         }
     }
@@ -294,24 +295,21 @@ private fun BookHeroSection(libro: Libro) {
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = BloodWine,
-                    shape = RoundedCornerShape(24.dp)
-                )
-                .padding(horizontal = 24.dp, vertical = 22.dp),
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             BookCover(
                 imageUrl = libro.imagen,
                 title = libro.titulo,
+                containerColor = Color.Transparent,
+                borderColor = Color.Transparent,
                 modifier = Modifier
-                    .width(210.dp)
-                    .height(305.dp)
+                    .width(190.dp)
+                    .height(276.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
@@ -338,70 +336,64 @@ private fun BookHeroSection(libro: Libro) {
 
 @Composable
 private fun BookDescriptionCard(libro: Libro) {
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Obsidian),
-        border = BorderStroke(1.dp, TarnishedGold),
-        shape = RoundedCornerShape(20.dp)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.book_description_section),
-                style = MaterialTheme.typography.headlineSmall,
-                color = TarnishedGold,
-                fontWeight = FontWeight.SemiBold
-            )
+        Text(
+            text = stringResource(R.string.book_description_section),
+            style = MaterialTheme.typography.headlineSmall,
+            color = TarnishedGold,
+            fontWeight = FontWeight.SemiBold
+        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        DetailRow(
+            label = stringResource(R.string.title),
+            value = libro.titulo.ifBlank { stringResource(R.string.unknown_title) }
+        )
+
+        if (libro.autor.isNotBlank()) {
             DetailRow(
-                label = stringResource(R.string.title),
-                value = libro.titulo.ifBlank { stringResource(R.string.unknown_title) }
+                label = stringResource(R.string.author),
+                value = libro.autor
             )
+        }
 
-            if (libro.autor.isNotBlank()) {
-                DetailRow(
-                    label = stringResource(R.string.author),
-                    value = libro.autor
-                )
-            }
+        if (libro.editorial.isNotBlank()) {
+            DetailRow(
+                label = stringResource(R.string.publisher),
+                value = libro.editorial
+            )
+        }
 
-            if (libro.editorial.isNotBlank()) {
-                DetailRow(
-                    label = stringResource(R.string.publisher),
-                    value = libro.editorial
-                )
-            }
+        if (libro.genero.isNotBlank()) {
+            DetailRow(
+                label = stringResource(R.string.genre),
+                value = libro.genero
+            )
+        }
 
-            if (libro.genero.isNotBlank()) {
-                DetailRow(
-                    label = stringResource(R.string.genre),
-                    value = libro.genero
-                )
-            }
+        if (libro.fechaPublicacion != 0) {
+            DetailRow(
+                label = stringResource(R.string.publication),
+                value = libro.fechaPublicacion.toString()
+            )
+        }
 
-            if (libro.fechaPublicacion != 0) {
-                DetailRow(
-                    label = stringResource(R.string.publication),
-                    value = libro.fechaPublicacion.toString()
-                )
-            }
+        if (libro.paginas != 0) {
+            DetailRow(
+                label = stringResource(R.string.pages),
+                value = libro.paginas.toString()
+            )
+        }
 
-            if (libro.paginas != 0) {
-                DetailRow(
-                    label = stringResource(R.string.pages),
-                    value = libro.paginas.toString()
-                )
-            }
-
-            if (libro.isbn.isNotBlank()) {
-                DetailRow(
-                    label = stringResource(R.string.isbn),
-                    value = libro.isbn
-                )
-            }
+        if (libro.isbn.isNotBlank()) {
+            DetailRow(
+                label = stringResource(R.string.isbn),
+                value = libro.isbn
+            )
         }
     }
 }
@@ -419,7 +411,11 @@ private fun BookActionsSection(
     }
     val buttonLabel = selectedList?.name ?: stringResource(R.string.want_to_read)
     val isAddedToShelf = selectedList != null
-    val buttonColor = if (isAddedToShelf) BloodWine else Obsidian
+    val buttonColor = if (isAddedToShelf) {
+        BloodWine.copy(alpha = 0.72f)
+    } else {
+        Obsidian.copy(alpha = 0.42f)
+    }
     val checkTint = when (selectedList?.id) {
         UserListsRepository.SYSTEM_LIST_READ_ID -> Color(0xFF5BBF72)
         UserListsRepository.SYSTEM_LIST_READING_ID -> Color(0xFFE2B84C)
@@ -427,108 +423,104 @@ private fun BookActionsSection(
         else -> Color(0xFFB7B4B0)
     }
 
-    Card(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Obsidian.copy(alpha = 0.92f)),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.55f)),
-        shape = RoundedCornerShape(24.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (uiState.isListsLoading || uiState.isSavingLists) {
-                Button(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = false,
-                    colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                ) {
-                    CircularProgressIndicator(color = OldIvory)
-                }
-            } else if (uiState.availableLists.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = buttonColor,
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.35f))
+        if (uiState.isListsLoading || uiState.isSavingLists) {
+            Button(
+                onClick = {},
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false,
+                colors = KaiShelvesThemeDefaults.secondaryButtonColors()
+            ) {
+                CircularProgressIndicator(color = OldIvory)
+            }
+        } else if (uiState.availableLists.isNotEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = buttonColor,
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(1f)
+                            .clickable(onClick = onPrimaryShelfAction)
+                            .padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(onClick = onPrimaryShelfAction)
-                                .padding(horizontal = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            if (isAddedToShelf) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = checkTint,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Text(
-                                text = buttonLabel,
-                                color = OldIvory,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(24.dp)
-                                .background(TarnishedGold.copy(alpha = 0.28f))
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .width(58.dp)
-                                .height(54.dp)
-                                .clickable(onClick = onOpenOrganizer),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        if (isAddedToShelf) {
                             Icon(
-                                imageVector = Icons.Filled.ArrowDropDown,
-                                contentDescription = stringResource(R.string.open_book_organizer),
-                                tint = OldIvory,
-                                modifier = Modifier.size(24.dp)
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = checkTint,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
+
+                        Text(
+                            text = buttonLabel,
+                            color = OldIvory,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(24.dp)
+                            .background(TarnishedGold.copy(alpha = 0.16f))
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .width(58.dp)
+                            .height(54.dp)
+                            .clickable(onClick = onOpenOrganizer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = stringResource(R.string.open_book_organizer),
+                            tint = OldIvory,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
-            } else {
-                OutlinedButton(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = false,
-                    border = BorderStroke(1.dp, TarnishedGold)
-                ) {
-                    Text(
-                        text = stringResource(R.string.no_user_lists_available),
-                        color = TarnishedGold
-                    )
-                }
             }
+        } else {
+            OutlinedButton(
+                onClick = {},
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false,
+                border = BorderStroke(1.dp, TarnishedGold)
+            ) {
+                Text(
+                    text = stringResource(R.string.no_user_lists_available),
+                    color = TarnishedGold
+                )
+            }
+        }
 
-            if (hasPdf) {
-                Button(
-                    onClick = onOpenPdf,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = KaiShelvesThemeDefaults.secondaryButtonColors()
-                ) {
-                    Text(stringResource(R.string.open_pdf))
-                }
+        if (hasPdf) {
+            OutlinedButton(
+                onClick = onOpenPdf,
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.24f))
+            ) {
+                Text(
+                    text = stringResource(R.string.open_pdf),
+                    color = OldIvory
+                )
             }
         }
     }
@@ -1124,24 +1116,25 @@ private fun DetailRow(
     label: String,
     value: String
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp),
-        verticalAlignment = Alignment.Top
+            .padding(bottom = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.titleSmall,
-            color = TarnishedGold,
-            modifier = Modifier.width(112.dp)
+            color = TarnishedGold
         )
+
+        Spacer(modifier = Modifier.height(2.dp))
 
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
             color = OldIvory,
-            modifier = Modifier.weight(1f)
+            textAlign = TextAlign.Center
         )
     }
 }

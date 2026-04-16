@@ -53,6 +53,7 @@ fun SettingsPrivacyScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
 
     ModalNavigationDrawer(
@@ -60,10 +61,21 @@ fun SettingsPrivacyScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.PROFILE,
-                headerTitle = stringResource(R.string.settings_privacy),
                 subtitle = stringResource(R.string.settings_privacy_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -79,10 +91,7 @@ fun SettingsPrivacyScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = {},
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {

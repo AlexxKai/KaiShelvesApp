@@ -5,8 +5,11 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,16 +28,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,13 +44,11 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -74,12 +73,8 @@ fun KaiPrimaryTopBar(
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
-    onOpenMenu: () -> Unit,
-    onGoToProfile: () -> Unit,
-    onGoToSettingsPrivacy: () -> Unit,
-    onLogout: () -> Unit
+    onOpenMenu: () -> Unit
 ) {
-    var showUserMenu by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scanOptions = remember {
         ScanOptions().apply {
@@ -169,44 +164,7 @@ fun KaiPrimaryTopBar(
                 style = MaterialTheme.typography.headlineMedium,
                 color = TarnishedGold
             )
-
-            Box {
-                IconButton(onClick = { showUserMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.AccountCircle,
-                        contentDescription = stringResource(R.string.profile_menu),
-                        tint = TarnishedGold
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = showUserMenu,
-                    onDismissRequest = { showUserMenu = false },
-                    containerColor = Obsidian
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.profile), color = OldIvory) },
-                        onClick = {
-                            showUserMenu = false
-                            onGoToProfile()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.settings_privacy), color = OldIvory) },
-                        onClick = {
-                            showUserMenu = false
-                            onGoToSettingsPrivacy()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.logout), color = TarnishedGold) },
-                        onClick = {
-                            showUserMenu = false
-                            onLogout()
-                        }
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.width(48.dp))
         }
 
         OutlinedTextField(
@@ -250,10 +208,13 @@ fun KaiPrimaryTopBar(
 @Composable
 fun KaiNavigationDrawerContent(
     currentSection: KaiSection,
-    headerTitle: String,
     subtitle: String,
     userName: String = "",
     profileImageUrl: String = "",
+    expanded: Boolean,
+    onGoToProfile: () -> Unit,
+    onGoToSettingsPrivacy: () -> Unit,
+    onLogout: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
     ModalDrawerSheet(
@@ -268,40 +229,33 @@ fun KaiNavigationDrawerContent(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             KaiDrawerHeaderCard(
-                title = headerTitle,
                 subtitle = subtitle,
                 userName = userName,
-                profileImageUrl = profileImageUrl
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            KaiDrawerItem(
-                label = stringResource(R.string.home),
-                selected = currentSection == KaiSection.HOME,
-                onClick = { onSectionSelected(KaiSection.HOME) }
+                profileImageUrl = profileImageUrl,
+                expanded = expanded,
+                onGoToProfile = onGoToProfile
             )
 
             KaiDrawerItem(
-                label = stringResource(R.string.catalog),
-                selected = currentSection == KaiSection.CATALOG,
-                onClick = { onSectionSelected(KaiSection.CATALOG) }
+                label = stringResource(R.string.profile),
+                selected = currentSection == KaiSection.PROFILE,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AccountCircle,
+                        contentDescription = null,
+                        tint = TarnishedGold
+                    )
+                },
+                onClick = onGoToProfile
             )
 
             KaiDrawerItem(
-                label = stringResource(R.string.lists),
-                selected = currentSection == KaiSection.LISTS,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.LISTS) }
-            )
-
-            KaiDrawerItem(
-                label = stringResource(R.string.my_readings),
-                selected = currentSection == KaiSection.READING,
-                onClick = { onSectionSelected(KaiSection.READING) }
+                label = stringResource(R.string.settings_privacy),
+                selected = false,
+                onClick = onGoToSettingsPrivacy
             )
 
             KaiDrawerItem(
@@ -310,23 +264,58 @@ fun KaiNavigationDrawerContent(
                 leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
                 onClick = { onSectionSelected(KaiSection.STATS) }
             )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            KaiDrawerItem(
+                label = stringResource(R.string.logout),
+                selected = false,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.PowerSettingsNew,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                labelColor = MaterialTheme.colorScheme.error,
+                onClick = onLogout
+            )
         }
     }
 }
 
 @Composable
 private fun KaiDrawerHeaderCard(
-    title: String,
     subtitle: String,
     userName: String,
-    profileImageUrl: String
+    profileImageUrl: String,
+    expanded: Boolean,
+    onGoToProfile: () -> Unit
 ) {
     val displayName = userName.ifBlank { stringResource(R.string.app_name) }
+    val headerAlpha = animateFloatAsState(
+        targetValue = if (expanded) 1f else 0.72f,
+        animationSpec = tween(durationMillis = 450),
+        label = "drawerHeaderAlpha"
+    )
+    val headerScale = animateFloatAsState(
+        targetValue = if (expanded) 1f else 0.94f,
+        animationSpec = tween(durationMillis = 500),
+        label = "drawerHeaderScale"
+    )
+    val headerOffset = animateFloatAsState(
+        targetValue = if (expanded) 0f else -12f,
+        animationSpec = tween(durationMillis = 520),
+        label = "drawerHeaderOffset"
+    )
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = headerOffset.value.dp)
+            .scale(headerScale.value),
         shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
     ) {
         Column(
@@ -335,7 +324,7 @@ private fun KaiDrawerHeaderCard(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            BloodWine.copy(alpha = 0.62f),
+                            BloodWine.copy(alpha = 0.62f * headerAlpha.value),
                             DeepWalnut,
                             Obsidian
                         )
@@ -348,7 +337,8 @@ private fun KaiDrawerHeaderCard(
             ) {
                 KaiUserAvatar(
                     displayName = displayName,
-                    imageUrl = profileImageUrl
+                    imageUrl = profileImageUrl,
+                    modifier = Modifier.clickable(onClick = onGoToProfile)
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -368,10 +358,9 @@ private fun KaiDrawerHeaderCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
             Text(
                 text = subtitle,
+                modifier = Modifier.padding(top = 14.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory.copy(alpha = 0.95f)
             )
@@ -403,13 +392,15 @@ private fun KaiDrawerItem(
     label: String,
     selected: Boolean,
     leadingIcon: @Composable (() -> Unit)? = null,
+    labelColor: Color = if (selected) TarnishedGold else OldIvory,
     onClick: () -> Unit
 ) {
     NavigationDrawerItem(
         label = {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                color = labelColor
             )
         },
         selected = selected,
@@ -417,9 +408,11 @@ private fun KaiDrawerItem(
         onClick = onClick,
         colors = NavigationDrawerItemDefaults.colors(
             selectedContainerColor = BloodWine.copy(alpha = 0.6f),
-            selectedTextColor = TarnishedGold,
+            selectedTextColor = labelColor,
+            selectedIconColor = labelColor,
             unselectedContainerColor = Color.Transparent,
-            unselectedTextColor = OldIvory
+            unselectedTextColor = labelColor,
+            unselectedIconColor = labelColor
         )
     )
 }

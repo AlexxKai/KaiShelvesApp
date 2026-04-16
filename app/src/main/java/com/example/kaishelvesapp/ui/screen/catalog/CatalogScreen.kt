@@ -38,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -89,6 +88,7 @@ fun CatalogScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(CatalogViewMode.DETAILED) }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
 
     ModalNavigationDrawer(
@@ -96,10 +96,22 @@ fun CatalogScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.CATALOG,
-                headerTitle = stringResource(R.string.catalog_title),
                 subtitle = stringResource(R.string.catalog_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -118,10 +130,7 @@ fun CatalogScreen(
                         viewModel.ejecutarBusqueda()
                     },
                     onScanResult = viewModel::buscarPorIsbn,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {
@@ -205,15 +214,6 @@ fun CatalogScreen(
                                             onBookClick = onBookClick
                                         )
                                     }
-                                }
-                            }
-
-                            item {
-                                TextButton(
-                                    onClick = onLogout,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(stringResource(R.string.logout), color = OldIvory)
                                 }
                             }
                         }

@@ -89,6 +89,7 @@ fun ProfileScreen(
     val activity = context.findActivity()
     var expandedLanguage by remember { mutableStateOf(false) }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -119,10 +120,21 @@ fun ProfileScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.PROFILE,
-                headerTitle = stringResource(R.string.profile),
                 subtitle = stringResource(R.string.profile_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
                 onSectionSelected = { section ->
                     scope.launch { drawerState.close() }
                     onSectionSelected(section)
@@ -141,10 +153,7 @@ fun ProfileScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = {},
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             floatingActionButton = {

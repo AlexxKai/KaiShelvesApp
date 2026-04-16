@@ -1,7 +1,5 @@
 package com.example.kaishelvesapp.ui.screen.library
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,27 +12,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
@@ -45,16 +36,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
+import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
-import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.NightBlack
@@ -88,88 +78,32 @@ fun LibraryScreen(
     }
     val genreRows = remember(genres) { genres.chunked(2) }
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet(
-                modifier = Modifier
-                    .fillMaxWidth(0.68f)
-                    .widthIn(max = 420.dp),
-                drawerContainerColor = DeepWalnut,
-                drawerContentColor = OldIvory
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 24.dp)
-                ) {
-                    DrawerHeader(
-                        userName = userName,
-                        profileImageUrl = profileImageUrl,
-                        welcomeText = welcomeText,
-                        expanded = drawerExpanded
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    DrawerSectionItem(
-                        label = stringResource(R.string.home),
-                        selected = true,
-                        onClick = { scope.launch { drawerState.close() } }
-                    )
-
-                    DrawerSectionItem(
-                        label = stringResource(R.string.catalog),
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onSectionSelected(KaiSection.CATALOG)
-                        }
-                    )
-
-                    DrawerSectionItem(
-                        label = stringResource(R.string.lists),
-                        selected = false,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
-                                contentDescription = null,
-                                tint = TarnishedGold
-                            )
-                        },
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onSectionSelected(KaiSection.LISTS)
-                        }
-                    )
-
-                    DrawerSectionItem(
-                        label = stringResource(R.string.my_readings),
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onSectionSelected(KaiSection.READING)
-                        }
-                    )
-
-                    DrawerSectionItem(
-                        label = stringResource(R.string.reading_statistics),
-                        selected = false,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.BarChart,
-                                contentDescription = null,
-                                tint = TarnishedGold
-                            )
-                        },
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onSectionSelected(KaiSection.STATS)
-                        }
-                    )
+            KaiNavigationDrawerContent(
+                currentSection = KaiSection.HOME,
+                subtitle = welcomeText,
+                userName = userName.orEmpty(),
+                profileImageUrl = profileImageUrl.orEmpty(),
+                expanded = drawerExpanded,
+                onGoToProfile = {
+                    scope.launch { drawerState.close() }
+                    onGoToProfile()
+                },
+                onGoToSettingsPrivacy = {
+                    scope.launch { drawerState.close() }
+                    onGoToSettingsPrivacy()
+                },
+                onLogout = {
+                    scope.launch { drawerState.close() }
+                    onLogout()
+                },
+                onSectionSelected = { section ->
+                    scope.launch { drawerState.close() }
+                    onSectionSelected(section)
                 }
-            }
+            )
         }
     ) {
         Scaffold(
@@ -180,10 +114,7 @@ fun LibraryScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    onGoToProfile = onGoToProfile,
-                    onGoToSettingsPrivacy = onGoToSettingsPrivacy,
-                    onLogout = onLogout
+                    onOpenMenu = { scope.launch { drawerState.open() } }
                 )
             },
             bottomBar = {
@@ -219,119 +150,6 @@ fun LibraryScreen(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun DrawerSectionItem(
-    label: String,
-    selected: Boolean,
-    icon: (@Composable () -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    NavigationDrawerItem(
-        label = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleMedium
-            )
-        },
-        selected = selected,
-        icon = icon,
-        onClick = onClick,
-        colors = NavigationDrawerItemDefaults.colors(
-            selectedContainerColor = BloodWine.copy(alpha = 0.6f),
-            selectedTextColor = TarnishedGold,
-            unselectedContainerColor = Color.Transparent,
-            unselectedTextColor = OldIvory
-        ),
-        shape = RoundedCornerShape(18.dp)
-    )
-}
-
-@Composable
-private fun DrawerHeader(
-    userName: String?,
-    profileImageUrl: String?,
-    welcomeText: String,
-    expanded: Boolean
-) {
-    val headerAlpha = animateFloatAsState(
-        targetValue = if (expanded) 1f else 0.72f,
-        animationSpec = tween(durationMillis = 450),
-        label = "drawerHeaderAlpha"
-    )
-    val headerScale = animateFloatAsState(
-        targetValue = if (expanded) 1f else 0.94f,
-        animationSpec = tween(durationMillis = 500),
-        label = "drawerHeaderScale"
-    )
-    val headerOffset = animateFloatAsState(
-        targetValue = if (expanded) 0f else -12f,
-        animationSpec = tween(durationMillis = 520),
-        label = "drawerHeaderOffset"
-    )
-    val displayName = if (!userName.isNullOrBlank()) userName else stringResource(R.string.app_name)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset(y = headerOffset.value.dp)
-            .scale(headerScale.value),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            BloodWine.copy(alpha = 0.62f * headerAlpha.value),
-                            DeepWalnut,
-                            Obsidian
-                        )
-                    )
-                )
-                .padding(18.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                KaiUserAvatar(
-                    displayName = displayName,
-                    imageUrl = profileImageUrl.orEmpty()
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = TarnishedGold
-                    )
-
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OldIvory
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = welcomeText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory.copy(alpha = 0.95f)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            DecorativeShelfLine()
         }
     }
 }
