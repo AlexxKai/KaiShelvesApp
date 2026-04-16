@@ -192,6 +192,7 @@ class BookRepository(
                 .format(Date())
 
             val libroLeido = LibroLeido(
+                id = docId,
                 isbn = docId,
                 titulo = libro.titulo,
                 autor = libro.autor,
@@ -235,7 +236,7 @@ class BookRepository(
                 .await()
 
             val libros = snapshot.documents.mapNotNull { document ->
-                document.toObject(LibroLeido::class.java)
+                document.toObject(LibroLeido::class.java)?.copy(id = document.id)
             }
 
             Result.success(libros)
@@ -321,7 +322,7 @@ class BookRepository(
                 .get()
                 .await()
 
-            val libroLeido = snapshot.toObject(LibroLeido::class.java)
+            val libroLeido = snapshot.toObject(LibroLeido::class.java)?.copy(id = snapshot.id)
             Result.success(libroLeido)
         } catch (e: Exception) {
             Result.failure(e)

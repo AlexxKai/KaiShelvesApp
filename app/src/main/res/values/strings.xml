@@ -127,6 +127,14 @@
     <string name="rate_it">Rate it</string>
     <string name="write_review_optional">Write a review (optional)</string>
     <string name="contains_spoilers">Contains spoilers?</string>
+    <string name="my_review_title">My review</string>
+    <string name="review_contains_spoilers_warning">This review contains important plot details.</string>
+    <string name="read_review_action">Read review →</string>
+    <string name="edit_review_action">Edit review →</string>
+    <string name="edit_review_button">Edit</string>
+    <string name="user_has_written_review">%1$s has written a review</string>
+    <string name="review_written_now">Just now</string>
+    <string name="read_shelf_label">Read</string>
 
     <string name="readings_subtitle">Here are the volumes you have read.</string>
     <string name="no_books_marked_as_read">You have not marked any book as read yet</string>

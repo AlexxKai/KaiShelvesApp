@@ -185,6 +185,41 @@ class BookDetailViewModel(
         }
     }
 
+    fun actualizarLecturaResena(
+        bookId: String,
+        puntuacion: Int,
+        resena: String,
+        contieneSpoilers: Boolean
+    ) {
+        _uiState.value = _uiState.value.copy(
+            isSavingLists = true,
+            errorMessageRes = null,
+            successMessageRes = null
+        )
+
+        viewModelScope.launch {
+            repository.actualizarResenaLectura(
+                bookId = bookId,
+                puntuacion = puntuacion,
+                resena = resena,
+                contieneSpoilers = contieneSpoilers
+            )
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isSavingLists = false,
+                        successMessageRes = R.string.book_lists_updated
+                    )
+                    cargarEstadoLectura(bookId)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isSavingLists = false,
+                        errorMessageRes = R.string.book_lists_update_error
+                    )
+                }
+        }
+    }
+
     fun clearBookOrganization(bookId: String) {
         _uiState.value = _uiState.value.copy(
             isSavingLists = true,

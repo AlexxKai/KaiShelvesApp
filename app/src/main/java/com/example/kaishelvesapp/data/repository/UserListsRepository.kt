@@ -6,6 +6,7 @@ import com.example.kaishelvesapp.data.model.UserBookTag
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,6 +91,32 @@ class UserListsRepository(
 
         val selectedCustom = customLists.firstOrNull { it.id in candidateIds }
         return selectedCustom?.let { setOf(it.id) } ?: candidateIds.firstOrNull()?.let(::setOf).orEmpty()
+    }
+
+    private suspend fun pruneBookAssignmentsToSingleList(
+        uid: String,
+        safeBookId: String,
+        keepListIds: Set<String>
+    ) {
+        val allListsSnapshot = userListsCollection(uid).get().await()
+        val batch = firestore.batch()
+        var changed = false
+
+        allListsSnapshot.documents.forEach { document ->
+            val listId = document.id
+            if (keepListIds.contains(listId)) return@forEach
+
+            val bookRef = document.reference.collection("libros").document(safeBookId)
+            if (bookRef.get().await().exists()) {
+                batch.delete(bookRef)
+                batch.update(document.reference, "bookCount", FieldValue.increment(-1))
+                changed = true
+            }
+        }
+
+        if (changed) {
+            batch.commit().await()
+        }
     }
 
     private fun buildBookPayload(libro: Libro, safeBookId: String): Map<String, Any> {
@@ -177,55 +204,10 @@ class UserListsRepository(
         }
     }
 
-    private suspend fun syncReadListWithLegacyCollection(uid: String) {
-        val readListRef = userListsCollection(uid).document(SYSTEM_LIST_READ_ID)
-        val legacyBooks = userReadCollection(uid).get().await().documents.associateBy { it.id }
-        val listBooks = readListRef.collection("libros").get().await().documents.associateBy { it.id }
-        val batch = firestore.batch()
-        var changed = false
-
-        legacyBooks.forEach { (bookId, document) ->
-            val payload = mapOf(
-                "id" to bookId,
-                "isbn" to document.getString("isbn").orEmpty().ifBlank { bookId },
-                "titulo" to document.getString("titulo").orEmpty(),
-                "autor" to document.getString("autor").orEmpty(),
-                "editorial" to document.getString("editorial").orEmpty(),
-                "genero" to document.getString("genero").orEmpty(),
-                "fechaPublicacion" to (document.getLong("fechaPublicacion")?.toInt() ?: 0),
-                "paginas" to (document.getLong("paginas")?.toInt() ?: 0),
-                "imagen" to document.getString("imagen").orEmpty(),
-                "pdf" to document.getString("pdf").orEmpty()
-            )
-            if (listBooks[bookId]?.data != payload) {
-                batch.set(readListRef.collection("libros").document(bookId), payload)
-                changed = true
-            }
-        }
-
-        listBooks.keys
-            .filterNot { legacyBooks.containsKey(it) }
-            .forEach { bookId ->
-                batch.delete(readListRef.collection("libros").document(bookId))
-                changed = true
-            }
-
-        val currentCount = readListRef.get().await().getLong("bookCount")?.toInt() ?: -1
-        if (currentCount != legacyBooks.size) {
-            batch.update(readListRef, "bookCount", legacyBooks.size)
-            changed = true
-        }
-
-        if (changed) {
-            batch.commit().await()
-        }
-    }
-
     suspend fun getUserLists(): Result<List<UserBookList>> {
         return try {
             val uid = requireUid()
             ensureDefaultLists(uid)
-            syncReadListWithLegacyCollection(uid)
 
             val snapshot = userListsCollection(uid)
                 .get()
@@ -281,9 +263,6 @@ class UserListsRepository(
         return try {
             val uid = requireUid()
             ensureDefaultLists(uid)
-            if (listId == SYSTEM_LIST_READ_ID) {
-                syncReadListWithLegacyCollection(uid)
-            }
 
             val snapshot = userListsCollection(uid)
                 .document(listId)
@@ -307,7 +286,6 @@ class UserListsRepository(
         return try {
             val uid = requireUid()
             ensureDefaultLists(uid)
-            syncReadListWithLegacyCollection(uid)
 
             val safeBookId = safeBookDocId(bookId)
             if (safeBookId == "unknown_book") {
@@ -329,7 +307,12 @@ class UserListsRepository(
                 document.id.takeIf { exists }
             }.toSet()
 
-            Result.success(normalizeSelectedListIds(uid, selectedIds))
+            val normalizedIds = normalizeSelectedListIds(uid, selectedIds)
+            if (selectedIds.size > 1 || selectedIds != normalizedIds) {
+                pruneBookAssignmentsToSingleList(uid, safeBookId, normalizedIds)
+            }
+
+            Result.success(normalizedIds)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -410,7 +393,6 @@ class UserListsRepository(
         return try {
             val uid = requireUid()
             ensureDefaultLists(uid)
-            syncReadListWithLegacyCollection(uid)
 
             val safeBookId = safeBookDocId(libro.id.ifBlank { libro.isbn })
             if (safeBookId == "unknown_book") {
@@ -454,10 +436,13 @@ class UserListsRepository(
                 }
 
                 if (listId == SYSTEM_LIST_READ_ID) {
-                    batch.set(
-                        userReadCollection(uid).document(safeBookId),
-                        buildReadBookPayload(libro, safeBookId)
-                    )
+                    val readDocRef = userReadCollection(uid).document(safeBookId)
+                    val readDocExists = readDocRef.get().await().exists()
+                    if (readDocExists) {
+                        batch.set(readDocRef, buildBookPayload(libro, safeBookId), SetOptions.merge())
+                    } else {
+                        batch.set(readDocRef, buildReadBookPayload(libro, safeBookId))
+                    }
                 }
             }
 
@@ -470,9 +455,6 @@ class UserListsRepository(
                     batch.update(listRef, "bookCount", FieldValue.increment(-1))
                 }
 
-                if (listId == SYSTEM_LIST_READ_ID) {
-                    batch.delete(userReadCollection(uid).document(safeBookId))
-                }
             }
 
             batch.commit().await()
@@ -637,6 +619,13 @@ class UserListsRepository(
             batch.set(bookRef, buildBookPayload(libro, safeBookId))
             if (!alreadyExists) {
                 batch.update(readListRef, "bookCount", FieldValue.increment(1))
+            }
+            val readDocRef = userReadCollection(uid).document(safeBookId)
+            val readDocExists = readDocRef.get().await().exists()
+            if (readDocExists) {
+                batch.set(readDocRef, buildBookPayload(libro, safeBookId), SetOptions.merge())
+            } else {
+                batch.set(readDocRef, buildReadBookPayload(libro, safeBookId))
             }
             batch.commit().await()
 

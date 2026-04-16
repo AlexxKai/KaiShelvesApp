@@ -180,6 +180,8 @@ fun AppNavigation(
                 BookDetailScreen(
                     libro = libro,
                     viewModel = bookDetailViewModel,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
                     onBack = { navController.popBackStack() },
                     onMarkAsRead = { selected ->
                         readingListViewModel.marcarComoLeido(selected) {

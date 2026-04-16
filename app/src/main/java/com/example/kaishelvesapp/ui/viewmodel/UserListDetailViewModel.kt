@@ -46,22 +46,45 @@ class UserListDetailViewModel(
 
         viewModelScope.launch {
             val listResult = repository.getListById(listId)
-            val booksResult = repository.getBooksInList(listId)
             val readBooksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
                 bookRepository.obtenerListaLecturas()
             } else {
                 Result.success(emptyList())
             }
+            val booksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
+                Result.success(emptyList())
+            } else {
+                repository.getBooksInList(listId)
+            }
 
             if (listResult.isSuccess && booksResult.isSuccess && readBooksResult.isSuccess) {
-                val readBooksById = readBooksResult.getOrDefault(emptyList()).associateBy { it.isbn }
-                val items = booksResult.getOrDefault(emptyList()).map { book ->
-                    val readBook = readBooksById[book.id.ifBlank { book.isbn }]
-                    UserListDetailBookItem(
-                        book = book,
-                        rating = readBook?.puntuacion,
-                        readDate = readBook?.fechaLeido
-                    )
+                val items = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
+                    readBooksResult.getOrDefault(emptyList()).map { readBook ->
+                        UserListDetailBookItem(
+                            book = Libro(
+                                id = readBook.id.ifBlank { readBook.isbn },
+                                isbn = readBook.isbn,
+                                titulo = readBook.titulo,
+                                autor = readBook.autor,
+                                editorial = readBook.editorial,
+                                genero = readBook.genero,
+                                fechaPublicacion = readBook.fechaPublicacion,
+                                paginas = readBook.paginas,
+                                imagen = readBook.imagen,
+                                pdf = readBook.pdf
+                            ),
+                            rating = readBook.puntuacion,
+                            readDate = readBook.fechaLeido
+                        )
+                    }
+                } else {
+                    booksResult.getOrDefault(emptyList()).map { book ->
+                        UserListDetailBookItem(
+                            book = book,
+                            rating = null,
+                            readDate = null
+                        )
+                    }
                 }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

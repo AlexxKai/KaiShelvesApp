@@ -127,6 +127,14 @@
     <string name="rate_it">Califícalo</string>
     <string name="write_review_optional">Escribe una reseña (opcional)</string>
     <string name="contains_spoilers">¿Contiene spoilers?</string>
+    <string name="my_review_title">Mi reseña</string>
+    <string name="review_contains_spoilers_warning">Esta reseña contiene detalles importantes sobre la trama.</string>
+    <string name="read_review_action">Leer reseña →</string>
+    <string name="edit_review_action">Editar la reseña →</string>
+    <string name="edit_review_button">Editar</string>
+    <string name="user_has_written_review">%1$s ha escrito una reseña</string>
+    <string name="review_written_now">Ahora mismo</string>
+    <string name="read_shelf_label">Leído</string>
 
     <string name="readings_subtitle">Aqui se conservan los volumenes que has leido.</string>
     <string name="no_books_marked_as_read">Aun no has marcado ningun libro como leido</string>

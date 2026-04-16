@@ -20,11 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,10 +75,13 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.KaiUserAvatar
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -89,6 +95,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 fun BookDetailScreen(
     libro: Libro,
     viewModel: BookDetailViewModel,
+    userName: String? = null,
+    profileImageUrl: String? = null,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onBack: () -> Unit,
     onMarkAsRead: (Libro) -> Unit,
@@ -102,7 +110,11 @@ fun BookDetailScreen(
     var showOrganizerDialog by rememberSaveable { mutableStateOf(false) }
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
     var showReadReviewDialog by rememberSaveable { mutableStateOf(false) }
+    var showReviewContentDialog by rememberSaveable { mutableStateOf(false) }
+    var showRemoveFromMyBooksDialog by rememberSaveable { mutableStateOf(false) }
     var pendingReadTagIds by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var readReviewTriggeredFromOrganizer by rememberSaveable { mutableStateOf(false) }
+    val readBook = uiState.readBook
 
     LaunchedEffect(libro.id, libro.isbn) {
         viewModel.cargarEstadoLectura(safeBookId)
@@ -141,6 +153,7 @@ fun BookDetailScreen(
                     currentSelectedListId != UserListsRepository.SYSTEM_LIST_READ_ID
                 ) {
                     pendingReadTagIds = selectedTagIds
+                    readReviewTriggeredFromOrganizer = true
                     showReadReviewDialog = true
                 } else {
                     viewModel.guardarOrganizacion(
@@ -153,9 +166,57 @@ fun BookDetailScreen(
             },
             onCreateNew = { showCreateDialog = true },
             onRemoveFromMyBooks = {
-                viewModel.clearBookOrganization(safeBookId)
-                showOrganizerDialog = false
+                showRemoveFromMyBooksDialog = true
             }
+        )
+    }
+
+    if (showRemoveFromMyBooksDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!uiState.isSavingLists) {
+                    showRemoveFromMyBooksDialog = false
+                }
+            },
+            title = {
+                Text(
+                    text = "¿Eliminar el libro y toda la actividad relacionada?",
+                    color = TarnishedGold
+                )
+            },
+            text = {
+                Text(
+                    text = "Al eliminar un libro de tus estanterías, también se borrarán las calificaciones, reseñas y actualizaciones que hayas realizado que estén asociadas con ese libro. Este paso es irreversible.",
+                    color = OldIvory
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearBookOrganization(safeBookId)
+                        showRemoveFromMyBooksDialog = false
+                        showOrganizerDialog = false
+                    },
+                    enabled = !uiState.isSavingLists
+                ) {
+                    Text(
+                        text = "ELIMINAR",
+                        color = Color(0xFFE57A6D)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showRemoveFromMyBooksDialog = false },
+                    enabled = !uiState.isSavingLists
+                ) {
+                    Text(
+                        text = "CANCELAR",
+                        color = OldIvory
+                    )
+                }
+            },
+            containerColor = Obsidian
         )
     }
 
@@ -182,20 +243,48 @@ fun BookDetailScreen(
         ReadReviewDialog(
             libro = libro,
             isSaving = uiState.isSavingLists,
+            initialRating = readBook?.puntuacion ?: 0,
+            initialReview = readBook?.resena.orEmpty(),
+            initialContainsSpoilers = readBook?.contieneSpoilers ?: false,
             onDismiss = {
                 if (!uiState.isSavingLists) {
                     showReadReviewDialog = false
                 }
             },
             onSave = { rating, review, containsSpoilers ->
-                viewModel.guardarLecturaConResena(
-                    libro = libro,
-                    selectedTagIds = pendingReadTagIds,
-                    puntuacion = rating,
-                    resena = review,
-                    contieneSpoilers = containsSpoilers
-                )
+                if (readReviewTriggeredFromOrganizer) {
+                    viewModel.guardarLecturaConResena(
+                        libro = libro,
+                        selectedTagIds = pendingReadTagIds,
+                        puntuacion = rating,
+                        resena = review,
+                        contieneSpoilers = containsSpoilers
+                    )
+                } else {
+                    viewModel.actualizarLecturaResena(
+                        bookId = safeBookId,
+                        puntuacion = rating,
+                        resena = review,
+                        contieneSpoilers = containsSpoilers
+                    )
+                }
+                readReviewTriggeredFromOrganizer = false
                 showReadReviewDialog = false
+            }
+        )
+    }
+
+    if (showReviewContentDialog && readBook != null) {
+        ReviewContentDialog(
+            libro = libro,
+            readBook = readBook,
+            userName = userName,
+            profileImageUrl = profileImageUrl,
+            isSaving = uiState.isSavingLists,
+            onDismiss = { showReviewContentDialog = false },
+            onEdit = {
+                showReviewContentDialog = false
+                showReadReviewDialog = true
             }
         )
     }
@@ -240,7 +329,20 @@ fun BookDetailScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp)
             ) {
-                BookHeroSection(libro = libro)
+                BookHeroSection(
+                    libro = libro,
+                    readRating = readBook?.puntuacion ?: 0,
+                    isRead = uiState.isAlreadyRead,
+                    isSaving = uiState.isSavingLists,
+                    onRatingSelected = { rating ->
+                        viewModel.actualizarLecturaResena(
+                            bookId = safeBookId,
+                            puntuacion = rating,
+                            resena = readBook?.resena.orEmpty(),
+                            contieneSpoilers = readBook?.contieneSpoilers ?: false
+                        )
+                    }
+                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -281,6 +383,19 @@ fun BookDetailScreen(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
+                if (!readBook?.resena.isNullOrBlank()) {
+                    ReviewSummarySection(
+                        libro = libro,
+                        readBook = readBook,
+                        userName = userName,
+                        profileImageUrl = profileImageUrl,
+                        onReadReview = { showReviewContentDialog = true },
+                        onEditReview = { showReadReviewDialog = true }
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
                 BookDescriptionCard(libro = libro)
             }
         }
@@ -288,7 +403,13 @@ fun BookDetailScreen(
 }
 
 @Composable
-private fun BookHeroSection(libro: Libro) {
+private fun BookHeroSection(
+    libro: Libro,
+    readRating: Int,
+    isRead: Boolean,
+    isSaving: Boolean,
+    onRatingSelected: (Int) -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -329,6 +450,31 @@ private fun BookHeroSection(libro: Libro) {
                 color = OldIvory.copy(alpha = 0.92f),
                 textAlign = TextAlign.Center,
                 fontStyle = FontStyle.Italic
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (isRead) {
+            RatingStars(
+                rating = readRating,
+                onRatingSelected = { selectedRating ->
+                    if (!isSaving) {
+                        onRatingSelected(selectedRating)
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = if (readRating > 0) {
+                    stringResource(R.string.rating_value, readRating)
+                } else {
+                    stringResource(R.string.not_rated_yet)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
             )
         }
     }
@@ -395,6 +541,324 @@ private fun BookDescriptionCard(libro: Libro) {
                 value = libro.isbn
             )
         }
+    }
+}
+
+@Composable
+private fun ReviewSummarySection(
+    libro: Libro,
+    readBook: LibroLeido,
+    userName: String?,
+    profileImageUrl: String?,
+    onReadReview: () -> Unit,
+    onEditReview: () -> Unit
+) {
+    val reviewText = readBook.resena.trim()
+    val displayName = userName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.app_name)
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.my_review_title),
+            style = MaterialTheme.typography.headlineSmall,
+            color = TarnishedGold,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        HorizontalDivider(
+            modifier = Modifier.width(174.dp),
+            color = TarnishedGold.copy(alpha = 0.22f)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Obsidian.copy(alpha = 0.78f)),
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.16f)),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        KaiUserAvatar(
+                            displayName = displayName,
+                            imageUrl = profileImageUrl.orEmpty(),
+                            modifier = Modifier.size(72.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = reviewDateLabel(readBook),
+                            color = OldIvory,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                HorizontalDivider(color = TarnishedGold.copy(alpha = 0.16f))
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                if (readBook.contieneSpoilers) {
+                    Text(
+                        text = stringResource(R.string.review_contains_spoilers_warning),
+                        color = OldIvory,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    TextButton(
+                        onClick = onReadReview,
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.read_review_action),
+                            color = TarnishedGold,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = reviewText,
+                        color = OldIvory,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                HorizontalDivider(color = TarnishedGold.copy(alpha = 0.16f))
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(
+                    onClick = onEditReview,
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.edit_review_action),
+                        color = TarnishedGold,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewContentDialog(
+    libro: Libro,
+    readBook: LibroLeido,
+    userName: String?,
+    profileImageUrl: String?,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit
+) {
+    val displayName = userName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.app_name)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding(),
+            color = Obsidian.copy(alpha = 0.98f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                            tint = OldIvory
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Text(
+                        text = stringResource(R.string.read_review_action),
+                        color = TarnishedGold,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    KaiUserAvatar(
+                        displayName = displayName,
+                        imageUrl = profileImageUrl.orEmpty()
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.user_has_written_review, displayName),
+                            color = TarnishedGold,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = reviewDateLabel(readBook),
+                            color = OldIvory,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Obsidian.copy(alpha = 0.78f)),
+                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.16f)),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            BookCover(
+                                imageUrl = libro.imagen,
+                                title = libro.titulo,
+                                modifier = Modifier
+                                    .width(88.dp)
+                                    .height(126.dp)
+                            )
+
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                                    color = TarnishedGold,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                if (libro.autor.isNotBlank()) {
+                                    Text(
+                                        text = stringResource(R.string.book_by_author, libro.autor),
+                                        color = OldIvory,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+
+                                Surface(
+                                    color = BloodWine.copy(alpha = 0.32f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.18f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Check,
+                                            contentDescription = null,
+                                            tint = Color(0xFF5BBF72),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.read_shelf_label),
+                                            color = OldIvory,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (readBook.puntuacion > 0) {
+                            RatingStars(
+                                rating = readBook.puntuacion,
+                                onRatingSelected = {}
+                            )
+                        }
+
+                        Text(
+                            text = readBook.resena.trim(),
+                            color = OldIvory,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Button(
+                                onClick = onEdit,
+                                enabled = !isSaving,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TarnishedGold.copy(alpha = 0.18f),
+                                    contentColor = OldIvory
+                                ),
+                                border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.22f))
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.edit_review_button),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun reviewDateLabel(readBook: LibroLeido): String {
+    return if (readBook.fechaLeido.isNotBlank()) {
+        stringResource(R.string.read_date_value, readBook.fechaLeido)
+    } else {
+        stringResource(R.string.review_written_now)
     }
 }
 
@@ -932,12 +1396,15 @@ private enum class CreateType {
 private fun ReadReviewDialog(
     libro: Libro,
     isSaving: Boolean,
+    initialRating: Int,
+    initialReview: String,
+    initialContainsSpoilers: Boolean,
     onDismiss: () -> Unit,
     onSave: (Int, String, Boolean) -> Unit
 ) {
-    var rating by rememberSaveable { mutableStateOf(0) }
-    var review by rememberSaveable { mutableStateOf("") }
-    var containsSpoilers by rememberSaveable { mutableStateOf(false) }
+    var rating by rememberSaveable(initialRating) { mutableStateOf(initialRating) }
+    var review by rememberSaveable(initialReview) { mutableStateOf(initialReview) }
+    var containsSpoilers by rememberSaveable(initialContainsSpoilers) { mutableStateOf(initialContainsSpoilers) }
 
     Dialog(
         onDismissRequest = onDismiss,

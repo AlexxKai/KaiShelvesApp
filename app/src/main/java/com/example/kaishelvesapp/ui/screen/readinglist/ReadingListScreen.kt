@@ -211,10 +211,10 @@ fun ReadingListScreen(
                                 ReadingItem(
                                     libro = libro,
                                     onUpdateRating = { rating ->
-                                        viewModel.actualizarPuntuacion(libro.isbn, rating)
+                                        viewModel.actualizarPuntuacion(libro.id.ifBlank { libro.isbn }, rating)
                                     },
                                     onDelete = {
-                                        viewModel.eliminarLibro(libro.isbn)
+                                        viewModel.eliminarLibro(libro.id.ifBlank { libro.isbn })
                                     }
                                 )
                             }
