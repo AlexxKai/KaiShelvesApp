@@ -82,7 +82,7 @@ fun LibraryScreen(
         drawerState = drawerState,
         drawerContent = {
             KaiNavigationDrawerContent(
-                currentSection = KaiSection.HOME,
+                currentSection = KaiSection.SEARCH,
                 subtitle = welcomeText,
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
@@ -119,7 +119,7 @@ fun LibraryScreen(
             },
             bottomBar = {
                 KaiBottomBar(
-                    current = KaiSection.HOME,
+                    current = KaiSection.SEARCH,
                     onSelect = onSectionSelected
                 )
             }

@@ -95,7 +95,7 @@ fun CatalogScreen(
         drawerState = drawerState,
         drawerContent = {
             KaiNavigationDrawerContent(
-                currentSection = KaiSection.CATALOG,
+                currentSection = KaiSection.DISCOVER,
                 subtitle = stringResource(R.string.catalog_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
@@ -135,7 +135,7 @@ fun CatalogScreen(
             },
             bottomBar = {
                 KaiBottomBar(
-                    current = KaiSection.CATALOG,
+                    current = KaiSection.DISCOVER,
                     onSelect = onSectionSelected
                 )
             },

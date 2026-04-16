@@ -16,6 +16,7 @@ import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
+import com.example.kaishelvesapp.ui.screen.placeholder.PlaceholderScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
@@ -31,8 +32,9 @@ import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
-    const val LIBRARY = "library"
-    const val CATALOG = "catalog"
+    const val HOME = "home"
+    const val SEARCH = "search"
+    const val DISCOVER = "discover"
     const val LISTS = "lists"
     const val LIST_DETAIL = "list_detail/{listId}"
     const val DETAIL = "detail"
@@ -40,6 +42,12 @@ object Routes {
     const val PROFILE = "profile"
     const val SETTINGS_PRIVACY = "settings_privacy"
     const val READING_STATS = "reading_stats"
+    const val LIBRARY = "library"
+    const val FRIENDS = "friends"
+    const val GROUPS = "groups"
+    const val CHALLENGES = "challenges"
+    const val FOR_YOU = "for_you"
+    const val HELP = "help"
 }
 
 fun listDetailRoute(listId: String): String = "list_detail/$listId"
@@ -57,23 +65,29 @@ fun AppNavigation(
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
 
-    val startDestination = if (authState.isLoggedIn) Routes.LIBRARY else Routes.LOGIN
+    val startDestination = if (authState.isLoggedIn) Routes.HOME else Routes.LOGIN
 
     fun navigateSection(section: KaiSection) {
         when (section) {
-            KaiSection.HOME -> navController.navigate(Routes.LIBRARY)
-            KaiSection.CATALOG -> navController.navigate(Routes.CATALOG)
-            KaiSection.LISTS -> navController.navigate(Routes.LISTS)
-            KaiSection.READING -> navController.navigate(Routes.LISTS)
+            KaiSection.HOME -> navController.navigate(Routes.HOME)
+            KaiSection.MY_BOOKS -> navController.navigate(Routes.LISTS)
+            KaiSection.DISCOVER -> navController.navigate(Routes.DISCOVER)
+            KaiSection.SEARCH -> navController.navigate(Routes.SEARCH)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
+            KaiSection.LIBRARY -> navController.navigate(Routes.LIBRARY)
+            KaiSection.FRIENDS -> navController.navigate(Routes.FRIENDS)
+            KaiSection.GROUPS -> navController.navigate(Routes.GROUPS)
+            KaiSection.CHALLENGES -> navController.navigate(Routes.CHALLENGES)
+            KaiSection.FOR_YOU -> navController.navigate(Routes.FOR_YOU)
+            KaiSection.HELP -> navController.navigate(Routes.HELP)
         }
     }
 
     fun openCatalogAndSearch() {
         catalogViewModel.resetGenreFilterForSearch()
         catalogViewModel.ejecutarBusqueda()
-        navController.navigate(Routes.CATALOG)
+        navController.navigate(Routes.DISCOVER)
     }
 
     fun searchFromSharedTopBar(query: String) {
@@ -82,7 +96,14 @@ fun AppNavigation(
 
     fun scanFromSharedTopBar(isbn: String) {
         catalogViewModel.buscarPorIsbn(isbn)
-        navController.navigate(Routes.CATALOG)
+        navController.navigate(Routes.DISCOVER)
+    }
+
+    fun logoutToLogin() {
+        authViewModel.logout()
+        navController.navigate(Routes.LOGIN) {
+            popUpTo(0) { inclusive = true }
+        }
     }
 
     NavHost(
@@ -93,7 +114,7 @@ fun AppNavigation(
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    navController.navigate(Routes.LIBRARY) {
+                    navController.navigate(Routes.HOME) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -107,7 +128,7 @@ fun AppNavigation(
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate(Routes.LIBRARY) {
+                    navController.navigate(Routes.HOME) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -118,7 +139,29 @@ fun AppNavigation(
             )
         }
 
-        composable(Routes.LIBRARY) {
+        composable(Routes.HOME) {
+            PlaceholderScreen(
+                title = "Inicio",
+                subtitle = "Aquí mostraremos la actividad de tus amigos muy pronto.",
+                currentSection = KaiSection.HOME,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.SEARCH) {
             val genres = catalogState.generos.filter { it != "Todos" }
 
             LibraryScreen(
@@ -127,7 +170,7 @@ fun AppNavigation(
                 genres = genres,
                 onGenreClick = { genre ->
                     catalogViewModel.applyInitialGenre(genre)
-                    navController.navigate(Routes.CATALOG)
+                    navController.navigate(Routes.DISCOVER)
                 },
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
@@ -139,17 +182,12 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }
 
-        composable(Routes.CATALOG) {
+        composable(Routes.DISCOVER) {
             CatalogScreen(
                 viewModel = catalogViewModel,
                 userName = authState.user?.usuario,
@@ -160,12 +198,7 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onLogout = ::logoutToLogin,
                 onBookClick = { libro ->
                     catalogViewModel.selectBook(libro)
                     navController.navigate(Routes.DETAIL)
@@ -212,12 +245,7 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -240,12 +268,7 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -281,12 +304,29 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.LIBRARY) {
+            PlaceholderScreen(
+                title = "Biblioteca",
+                subtitle = "Aquí prepararemos una vista específica para tu biblioteca.",
+                currentSection = KaiSection.LIBRARY,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
                 },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -304,12 +344,7 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -325,12 +360,117 @@ fun AppNavigation(
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
                 },
-                onLogout = {
-                    authViewModel.logout()
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(0) { inclusive = true }
-                    }
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.FRIENDS) {
+            PlaceholderScreen(
+                title = "Amigos",
+                subtitle = "Aquí mostraremos tu red, su actividad y nuevas conexiones.",
+                currentSection = KaiSection.FRIENDS,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
                 },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.GROUPS) {
+            PlaceholderScreen(
+                title = "Grupos",
+                subtitle = "Aquí reuniremos tus grupos de lectura y sus conversaciones.",
+                currentSection = KaiSection.GROUPS,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.CHALLENGES) {
+            PlaceholderScreen(
+                title = "Desafíos de lectura",
+                subtitle = "Aquí aparecerán tus retos, objetivos y progreso lector.",
+                currentSection = KaiSection.CHALLENGES,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.FOR_YOU) {
+            PlaceholderScreen(
+                title = "Seleccionados para ti",
+                subtitle = "Aquí prepararemos recomendaciones y selecciones personalizadas.",
+                currentSection = KaiSection.FOR_YOU,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.HELP) {
+            PlaceholderScreen(
+                title = "Ayuda",
+                subtitle = "Aquí reuniremos asistencia, preguntas frecuentes y soporte.",
+                currentSection = KaiSection.HELP,
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                onScanResult = ::scanFromSharedTopBar,
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
                 onSectionSelected = { navigateSection(it) }
             )
         }

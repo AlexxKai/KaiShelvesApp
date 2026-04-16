@@ -102,7 +102,7 @@ fun ReadingListScreen(
         drawerState = drawerState,
         drawerContent = {
             KaiNavigationDrawerContent(
-                currentSection = KaiSection.READING,
+                currentSection = KaiSection.MY_BOOKS,
                 subtitle = stringResource(R.string.readings_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
@@ -142,7 +142,7 @@ fun ReadingListScreen(
             },
             bottomBar = {
                 KaiBottomBar(
-                    current = KaiSection.READING,
+                    current = KaiSection.MY_BOOKS,
                     onSelect = onSectionSelected
                 )
             }

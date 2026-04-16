@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,11 +32,17 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 enum class KaiSection {
     HOME,
-    CATALOG,
-    LISTS,
-    READING,
+    MY_BOOKS,
+    DISCOVER,
+    SEARCH,
+    LIBRARY,
     PROFILE,
-    STATS
+    STATS,
+    FRIENDS,
+    GROUPS,
+    CHALLENGES,
+    FOR_YOU,
+    HELP
 }
 
 @Composable
@@ -52,8 +59,9 @@ fun KaiBottomBar(
     ) {
         val items = listOf(
             Triple(KaiSection.HOME, stringResource(R.string.home), Icons.Filled.Home),
-            Triple(KaiSection.CATALOG, stringResource(R.string.catalog), Icons.AutoMirrored.Filled.MenuBook),
-            Triple(KaiSection.LISTS, stringResource(R.string.my_books), Icons.AutoMirrored.Filled.LibraryBooks)
+            Triple(KaiSection.MY_BOOKS, stringResource(R.string.my_books), Icons.AutoMirrored.Filled.LibraryBooks),
+            Triple(KaiSection.DISCOVER, stringResource(R.string.discover), Icons.AutoMirrored.Filled.MenuBook),
+            Triple(KaiSection.SEARCH, stringResource(R.string.search_tab), Icons.Filled.Search)
         )
 
         Row(
@@ -67,6 +75,7 @@ fun KaiBottomBar(
                 val selected = current == section
                 Box(
                     modifier = Modifier
+                        .weight(1f)
                         .padding(horizontal = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -77,7 +86,7 @@ fun KaiBottomBar(
                                 shape = RoundedCornerShape(20.dp)
                             )
                             .clickable { onSelect(section) }
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {

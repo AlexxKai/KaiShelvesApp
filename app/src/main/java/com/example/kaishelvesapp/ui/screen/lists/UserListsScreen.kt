@@ -234,7 +234,7 @@ fun UserListsScreen(
         drawerState = drawerState,
         drawerContent = {
             KaiNavigationDrawerContent(
-                currentSection = KaiSection.LISTS,
+                currentSection = KaiSection.MY_BOOKS,
                 subtitle = stringResource(R.string.lists_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
@@ -272,7 +272,7 @@ fun UserListsScreen(
             },
             bottomBar = {
                 KaiBottomBar(
-                    current = KaiSection.LISTS,
+                    current = KaiSection.MY_BOOKS,
                     onSelect = onSectionSelected
                 )
             },

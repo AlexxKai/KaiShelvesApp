@@ -10,6 +10,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,12 +30,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -228,8 +237,9 @@ fun KaiNavigationDrawerContent(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             KaiDrawerHeaderCard(
                 subtitle = subtitle,
@@ -255,6 +265,13 @@ fun KaiNavigationDrawerContent(
             KaiDrawerItem(
                 label = stringResource(R.string.settings_privacy),
                 selected = false,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = null,
+                        tint = TarnishedGold
+                    )
+                },
                 onClick = onGoToSettingsPrivacy
             )
 
@@ -265,7 +282,49 @@ fun KaiNavigationDrawerContent(
                 onClick = { onSectionSelected(KaiSection.STATS) }
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            KaiDrawerItem(
+                label = stringResource(R.string.library),
+                selected = currentSection == KaiSection.LIBRARY,
+                leadingIcon = { Icon(Icons.Filled.LocalLibrary, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.LIBRARY) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.friends),
+                selected = currentSection == KaiSection.FRIENDS,
+                leadingIcon = { Icon(Icons.Filled.Groups, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.FRIENDS) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.groups),
+                selected = currentSection == KaiSection.GROUPS,
+                leadingIcon = { Icon(Icons.Filled.Handshake, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.GROUPS) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.reading_challenges),
+                selected = currentSection == KaiSection.CHALLENGES,
+                leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.CHALLENGES) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.selected_for_you),
+                selected = currentSection == KaiSection.FOR_YOU,
+                leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.FOR_YOU) }
+            )
+
+            KaiDrawerItem(
+                label = stringResource(R.string.help),
+                selected = currentSection == KaiSection.HELP,
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.HELP) }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             KaiDrawerItem(
                 label = stringResource(R.string.logout),
@@ -399,7 +458,7 @@ private fun KaiDrawerItem(
         label = {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = labelColor
             )
         },
