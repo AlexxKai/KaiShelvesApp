@@ -7,22 +7,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
@@ -50,10 +55,24 @@ fun KaiBottomBar(
     current: KaiSection,
     onSelect: (KaiSection) -> Unit
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val compactLayout = screenWidthDp < 380
+    val veryCompactLayout = screenWidthDp < 340
+    val horizontalPadding = if (veryCompactLayout) 6.dp else if (compactLayout) 10.dp else 14.dp
+    val itemHorizontalPadding = if (veryCompactLayout) 6.dp else if (compactLayout) 8.dp else 12.dp
+    val itemVerticalPadding = if (compactLayout) 6.dp else 8.dp
+    val iconSize = if (compactLayout) 18.dp else 20.dp
+    val labelStyle = if (veryCompactLayout) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        MaterialTheme.typography.labelMedium
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
+            .padding(top = 4.dp)
+            .navigationBarsPadding(),
         color = Obsidian,
         shape = RoundedCornerShape(0.dp)
     ) {
@@ -67,7 +86,7 @@ fun KaiBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp),
+                .padding(start = horizontalPadding, end = horizontalPadding, top = 8.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -81,28 +100,30 @@ fun KaiBottomBar(
                 ) {
                     Column(
                         modifier = Modifier
+                            .widthIn(min = 0.dp)
                             .background(
                                 color = if (selected) BloodWine else Obsidian,
                                 shape = RoundedCornerShape(20.dp)
                             )
                             .clickable { onSelect(section) }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = itemHorizontalPadding, vertical = itemVerticalPadding),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = icon,
                             contentDescription = label,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(iconSize),
                             tint = if (selected) TarnishedGold else OldIvory
                         )
                         Text(
                             text = label,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
                             color = if (selected) TarnishedGold else OldIvory,
                             modifier = Modifier.padding(top = 4.dp),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium
+                            style = labelStyle
                         )
                     }
                 }
