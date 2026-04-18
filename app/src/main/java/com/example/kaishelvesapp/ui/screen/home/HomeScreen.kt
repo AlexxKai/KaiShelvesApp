@@ -22,8 +22,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +68,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -102,7 +105,7 @@ fun HomeScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = currentSection,
-                subtitle = subtitle.ifBlank { stringResource(R.string.home_recent_activity_subtitle) },
+                subtitle = subtitle,
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
                 expanded = drawerExpanded,
@@ -145,7 +148,7 @@ fun HomeScreen(
                 )
             }
         ) { innerPadding ->
-            Box(
+            PullToRefreshBox(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
@@ -157,10 +160,12 @@ fun HomeScreen(
                         )
                     )
                     .padding(paddingValues)
-                    .padding(innerPadding)
+                    .padding(innerPadding),
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = viewModel::refreshFeed
             ) {
                 when {
-                    uiState.isLoading -> {
+                    uiState.isLoading && uiState.activities.isEmpty() -> {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -198,12 +203,6 @@ fun HomeScreen(
                                     text = stringResource(R.string.home_recent_activity_title),
                                     style = MaterialTheme.typography.headlineMedium,
                                     color = TarnishedGold
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = stringResource(R.string.home_recent_activity_subtitle),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = OldIvory.copy(alpha = 0.86f)
                                 )
                             }
 

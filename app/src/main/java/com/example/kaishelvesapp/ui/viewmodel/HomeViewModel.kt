@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val activities: List<FriendActivityItem> = emptyList(),
     val errorMessage: String? = null
 )
@@ -23,24 +24,37 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     fun loadFeed() {
-        _uiState.value = _uiState.value.copy(
-            isLoading = true,
+        fetchFeed(isRefresh = false)
+    }
+
+    fun refreshFeed() {
+        fetchFeed(isRefresh = true)
+    }
+
+    private fun fetchFeed(isRefresh: Boolean) {
+        val currentState = _uiState.value
+        if (currentState.isLoading || currentState.isRefreshing) return
+
+        _uiState.value = currentState.copy(
+            isLoading = !isRefresh && currentState.activities.isEmpty(),
+            isRefreshing = isRefresh,
             errorMessage = null
         )
 
         viewModelScope.launch {
             repository.loadHomeFeed()
                 .onSuccess { activities ->
-                    _uiState.value = HomeUiState(
+                    _uiState.value = currentState.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         activities = activities,
                         errorMessage = null
                     )
                 }
                 .onFailure { error ->
-                    _uiState.value = HomeUiState(
+                    _uiState.value = currentState.copy(
                         isLoading = false,
-                        activities = emptyList(),
+                        isRefreshing = false,
                         errorMessage = error.message ?: "No se pudo cargar la actividad reciente"
                     )
                 }
