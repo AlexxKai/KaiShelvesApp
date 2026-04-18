@@ -18,6 +18,7 @@ import com.example.kaishelvesapp.ui.screen.friends.FriendProfileScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
 import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
+import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
@@ -36,6 +37,7 @@ import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
@@ -82,6 +84,7 @@ fun AppNavigation(
     val friendListsViewModel: FriendListsViewModel = viewModel()
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
+    val homeViewModel: HomeViewModel = viewModel()
     val userListsViewModel: UserListsViewModel = viewModel()
     val userListDetailViewModel: UserListDetailViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
@@ -164,10 +167,9 @@ fun AppNavigation(
         }
 
         composable(Routes.HOME) {
-            PlaceholderScreen(
-                title = "Inicio",
+            HomeScreen(
+                viewModel = homeViewModel,
                 subtitle = "Aquí mostraremos la actividad de tus amigos muy pronto.",
-                currentSection = KaiSection.HOME,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -184,6 +186,13 @@ fun AppNavigation(
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onOpenFriendProfile = { friendUid ->
+                    navController.navigate(friendProfileRoute(friendUid))
+                },
+                onOpenBook = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
                 },
                 onSectionSelected = { navigateSection(it) }
             )

@@ -430,7 +430,10 @@ class UserListsRepository(
                 val listRef = userListsCollection(uid).document(listId)
                 val bookRef = listRef.collection("libros").document(safeBookId)
                 val alreadyExists = bookRef.get().await().exists()
-                batch.set(bookRef, bookPayload)
+                batch.set(
+                    bookRef,
+                    bookPayload + mapOf("activityAt" to FieldValue.serverTimestamp())
+                )
                 if (!alreadyExists) {
                     batch.update(listRef, "bookCount", FieldValue.increment(1))
                 }
@@ -439,9 +442,16 @@ class UserListsRepository(
                     val readDocRef = userReadCollection(uid).document(safeBookId)
                     val readDocExists = readDocRef.get().await().exists()
                     if (readDocExists) {
-                        batch.set(readDocRef, buildBookPayload(libro, safeBookId), SetOptions.merge())
+                        batch.set(
+                            readDocRef,
+                            buildBookPayload(libro, safeBookId) + mapOf("activityAt" to FieldValue.serverTimestamp()),
+                            SetOptions.merge()
+                        )
                     } else {
-                        batch.set(readDocRef, buildReadBookPayload(libro, safeBookId))
+                        batch.set(
+                            readDocRef,
+                            buildReadBookPayload(libro, safeBookId) + mapOf("activityAt" to FieldValue.serverTimestamp())
+                        )
                     }
                 }
             }

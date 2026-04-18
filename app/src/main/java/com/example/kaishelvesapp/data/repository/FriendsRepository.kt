@@ -7,6 +7,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Locale
 import kotlinx.coroutines.tasks.await
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_READ_ID
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_READING_ID
@@ -51,6 +53,7 @@ enum class FriendActivityType {
 data class FriendActivityItem(
     val type: FriendActivityType,
     val user: Usuario,
+    val timestampMillis: Long? = null,
     val relatedUserName: String? = null,
     val book: Libro? = null,
     val readBook: LibroLeido? = null
@@ -189,6 +192,26 @@ class FriendsRepository(
             SYSTEM_LIST_READ_ID -> "Leído"
             else -> "Lista"
         }
+    }
+
+    private fun DocumentSnapshot.timestampMillis(vararg keys: String): Long? {
+        return keys.firstNotNullOfOrNull { key ->
+            getTimestamp(key)?.toDate()?.time
+        }
+    }
+
+    private fun parseReadDateToMillis(date: String): Long? {
+        if (date.isBlank()) return null
+        return runCatching {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)?.time
+        }.getOrNull()
+    }
+
+    private fun sortActivitiesByRecency(items: List<FriendActivityItem>): List<FriendActivityItem> {
+        return items.sortedWith(
+            compareByDescending<FriendActivityItem> { it.timestampMillis ?: Long.MIN_VALUE }
+                .thenBy { it.user.usuario.ifBlank { it.user.email }.lowercase() }
+        )
     }
 
     suspend fun loadSuggestions(): Result<FriendSuggestionsData> {
@@ -345,6 +368,107 @@ class FriendsRepository(
         }
     }
 
+    suspend fun loadHomeFeed(): Result<List<FriendActivityItem>> {
+        return try {
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+
+            val currentUserName = usersCollection()
+                .document(uid)
+                .get()
+                .await()
+                .let { snapshotToUser(it, uid) }
+                ?.usuario
+                .orEmpty()
+
+            val friendDocuments = friendsCollection(uid)
+                .get()
+                .await()
+                .documents
+
+            val activities = buildList {
+                friendDocuments.forEach { document ->
+                    val friendUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    val cachedFriend = snapshotToUser(document, friendUid)
+                    val friend = mergeUserProfile(
+                        primary = getUserProfile(friendUid),
+                        fallback = cachedFriend,
+                        uid = friendUid
+                    ) ?: return@forEach
+
+                    add(
+                        FriendActivityItem(
+                            type = FriendActivityType.FRIENDSHIP,
+                            user = friend,
+                            timestampMillis = document.timestampMillis("createdAt"),
+                            relatedUserName = currentUserName
+                        )
+                    )
+
+                    val wantToReadDoc = systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
+                        .get()
+                        .await()
+                        .documents
+                        .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
+
+                    wantToReadDoc?.toObject(Libro::class.java)?.let { book ->
+                        add(
+                            FriendActivityItem(
+                                type = FriendActivityType.WANT_TO_READ,
+                                user = friend,
+                                timestampMillis = wantToReadDoc.timestampMillis("activityAt"),
+                                book = book
+                            )
+                        )
+                    }
+
+                    val readingDoc = systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
+                        .get()
+                        .await()
+                        .documents
+                        .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
+
+                    readingDoc?.toObject(Libro::class.java)?.let { book ->
+                        add(
+                            FriendActivityItem(
+                                type = FriendActivityType.READING,
+                                user = friend,
+                                timestampMillis = readingDoc.timestampMillis("activityAt"),
+                                book = book
+                            )
+                        )
+                    }
+
+                    val readDoc = readsCollection(friendUid)
+                        .get()
+                        .await()
+                        .documents
+                        .maxByOrNull { readDocument ->
+                            readDocument.timestampMillis("activityAt")
+                                ?: parseReadDateToMillis(readDocument.getString("fechaLeido").orEmpty())
+                                ?: Long.MIN_VALUE
+                        }
+
+                    readDoc?.toObject(LibroLeido::class.java)?.let { readBook ->
+                        add(
+                            FriendActivityItem(
+                                type = FriendActivityType.READ,
+                                user = friend,
+                                timestampMillis = readDoc.timestampMillis("activityAt")
+                                    ?: parseReadDateToMillis(readBook.fechaLeido),
+                                readBook = readBook
+                            )
+                        )
+                    }
+                }
+            }
+
+            Result.success(sortActivitiesByRecency(activities))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun loadFriendProfile(friendUid: String): Result<FriendProfileData> {
         return try {
             val uid = currentUid()
@@ -425,6 +549,9 @@ class FriendsRepository(
                         FriendActivityItem(
                             type = FriendActivityType.FRIENDSHIP,
                             user = resolvedFriend,
+                            timestampMillis = friendDocuments
+                                .firstOrNull { it.id == uid }
+                                ?.timestampMillis("createdAt"),
                             relatedUserName = currentUserName
                         )
                     )
@@ -435,6 +562,7 @@ class FriendsRepository(
                         FriendActivityItem(
                             type = FriendActivityType.WANT_TO_READ,
                             user = resolvedFriend,
+                            timestampMillis = null,
                             book = book
                         )
                     )
@@ -445,6 +573,7 @@ class FriendsRepository(
                         FriendActivityItem(
                             type = FriendActivityType.READING,
                             user = resolvedFriend,
+                            timestampMillis = null,
                             book = book
                         )
                     )
@@ -455,6 +584,7 @@ class FriendsRepository(
                         FriendActivityItem(
                             type = FriendActivityType.READ,
                             user = resolvedFriend,
+                            timestampMillis = parseReadDateToMillis(book.fechaLeido),
                             readBook = book
                         )
                     )

@@ -37,6 +37,12 @@
     <string name="my_readings">Mis lecturas</string>
     <string name="profile">Perfil</string>
     <string name="home">Inicio</string>
+    <string name="home_recent_activity_title">Actividad reciente</string>
+    <string name="home_recent_activity_subtitle">Lo ultimo que ha pasado en tu circulo lector.</string>
+    <string name="home_empty_activity_title">Aun no hay movimiento</string>
+    <string name="home_empty_activity_body">Cuando tus amigos anadan libros o acepten amistades, su actividad aparecera aqui.</string>
+    <string name="home_feed_like">Me gusta</string>
+    <string name="home_feed_comment">Comentar</string>
     <string name="friends">Amigos</string>
     <string name="friends_screen_subtitle">Conecta con tu círculo lector y descubre sus bibliotecas.</string>
     <string name="search_friends">Buscar amigos</string>

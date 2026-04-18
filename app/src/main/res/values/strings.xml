@@ -37,6 +37,12 @@
     <string name="my_readings">My readings</string>
     <string name="profile">Profile</string>
     <string name="home">Home</string>
+    <string name="home_recent_activity_title">Recent activity</string>
+    <string name="home_recent_activity_subtitle">The latest from your reading circle.</string>
+    <string name="home_empty_activity_title">No movement yet</string>
+    <string name="home_empty_activity_body">When your friends add books or accept friendships, their activity will show up here.</string>
+    <string name="home_feed_like">Like</string>
+    <string name="home_feed_comment">Comment</string>
     <string name="friends">Friends</string>
     <string name="friends_screen_subtitle">Connect with your reading circle and discover their libraries.</string>
     <string name="search_friends">Search friends</string>
