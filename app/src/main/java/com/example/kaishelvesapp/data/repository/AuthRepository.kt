@@ -25,7 +25,8 @@ class AuthRepository(
 
     suspend fun getCurrentUserProfile(): Result<Usuario> {
         return try {
-            val uid = auth.currentUser?.uid
+            val firebaseUser = auth.currentUser
+            val uid = firebaseUser?.uid
                 ?: return Result.failure(Exception("No hay sesion iniciada"))
 
             val snapshot = firestore.collection("usuarios")
@@ -33,13 +34,16 @@ class AuthRepository(
                 .get()
                 .await()
 
-            val usuario = snapshot.toObject(Usuario::class.java)
-                ?: Usuario(
-                    uid = uid,
-                    usuario = auth.currentUser?.displayName ?: "",
-                    email = auth.currentUser?.email ?: "",
-                    photoUrl = auth.currentUser?.photoUrl?.toString().orEmpty()
-                )
+            val storedUser = snapshot.toObject(Usuario::class.java)
+            val usuario = Usuario(
+                uid = uid,
+                usuario = storedUser?.usuario?.takeIf { it.isNotBlank() }
+                    ?: firebaseUser?.displayName.orEmpty(),
+                email = storedUser?.email?.takeIf { it.isNotBlank() }
+                    ?: firebaseUser?.email.orEmpty(),
+                photoUrl = storedUser?.photoUrl?.takeIf { it.isNotBlank() }
+                    ?: firebaseUser?.photoUrl?.toString().orEmpty()
+            )
 
             Result.success(usuario)
         } catch (e: Exception) {
@@ -133,7 +137,7 @@ class AuthRepository(
     }
 
     private suspend fun uploadProfilePhoto(uid: String, uri: Uri): String {
-        return ProfileImageCodec.encodeEncryptedImage(
+        return ProfileImageCodec.encodeImageAsDataUri(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
         )
@@ -148,7 +152,15 @@ class AuthRepository(
 
         val existingUser = snapshot.toObject(Usuario::class.java)
         if (existingUser != null) {
-            return existingUser
+            return Usuario(
+                uid = uid,
+                usuario = existingUser.usuario.takeIf { it.isNotBlank() }
+                    ?: firebaseUser.displayName.orEmpty(),
+                email = existingUser.email.takeIf { it.isNotBlank() }
+                    ?: firebaseUser.email.orEmpty(),
+                photoUrl = existingUser.photoUrl.takeIf { it.isNotBlank() }
+                    ?: firebaseUser.photoUrl?.toString().orEmpty()
+            )
         }
 
         val fallbackUsername = firebaseUser.displayName

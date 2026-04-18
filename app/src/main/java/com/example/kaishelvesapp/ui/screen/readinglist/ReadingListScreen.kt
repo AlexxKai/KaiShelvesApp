@@ -74,6 +74,8 @@ fun ReadingListScreen(
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
+    pendingRequestCount: Int = 0,
+    onOpenNotifications: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -137,7 +139,9 @@ fun ReadingListScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } }
+                    onOpenMenu = { scope.launch { drawerState.open() } },
+                    notificationCount = pendingRequestCount,
+                    onOpenNotifications = onOpenNotifications
                 )
             },
             bottomBar = {

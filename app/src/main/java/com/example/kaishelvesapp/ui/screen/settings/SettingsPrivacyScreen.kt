@@ -50,6 +50,8 @@ fun SettingsPrivacyScreen(
     onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onLogout: () -> Unit,
+    pendingRequestCount: Int = 0,
+    onOpenNotifications: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -91,7 +93,9 @@ fun SettingsPrivacyScreen(
                     onSearchQueryChange = onSearchQueryChange,
                     onSearch = onSearch,
                     onScanResult = onScanResult,
-                    onOpenMenu = { scope.launch { drawerState.open() } }
+                    onOpenMenu = { scope.launch { drawerState.open() } },
+                    notificationCount = pendingRequestCount,
+                    onOpenNotifications = onOpenNotifications
                 )
             },
             bottomBar = {

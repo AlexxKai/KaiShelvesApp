@@ -23,6 +23,7 @@ object ProfileImageCodec {
     private const val GCM_TAG_LENGTH_BITS = 128
     private const val MAX_IMAGE_SIZE = 256
     private const val JPEG_QUALITY = 72
+    private const val DATA_URI_PREFIX = "data:image/jpeg;base64,"
 
     fun encodeEncryptedImage(context: Context, uri: Uri): String {
         val rawBytes = context.contentResolver.openInputStream(uri)?.use { input ->
@@ -32,6 +33,16 @@ object ProfileImageCodec {
         val compressedBytes = compressForProfile(rawBytes)
         val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
         return encryptText(base64Image)
+    }
+
+    fun encodeImageAsDataUri(context: Context, uri: Uri): String {
+        val rawBytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            input.readBytes()
+        } ?: error("No se pudo leer la imagen seleccionada")
+
+        val compressedBytes = compressForProfile(rawBytes)
+        val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
+        return DATA_URI_PREFIX + base64Image
     }
 
     fun decryptImageBytes(encryptedPayload: String): ByteArray? {

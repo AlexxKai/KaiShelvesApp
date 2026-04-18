@@ -83,6 +83,8 @@ fun CatalogScreen(
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
     onBookClick: (Libro) -> Unit = {},
+    pendingRequestCount: Int = 0,
+    onOpenNotifications: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,7 +132,9 @@ fun CatalogScreen(
                         viewModel.ejecutarBusqueda()
                     },
                     onScanResult = viewModel::buscarPorIsbn,
-                    onOpenMenu = { scope.launch { drawerState.open() } }
+                    onOpenMenu = { scope.launch { drawerState.open() } },
+                    notificationCount = pendingRequestCount,
+                    onOpenNotifications = onOpenNotifications
                 )
             },
             bottomBar = {

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -82,7 +83,9 @@ fun KaiPrimaryTopBar(
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
-    onOpenMenu: () -> Unit
+    onOpenMenu: () -> Unit,
+    notificationCount: Int = 0,
+    onOpenNotifications: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scanOptions = remember {
@@ -173,7 +176,39 @@ fun KaiPrimaryTopBar(
                 style = MaterialTheme.typography.headlineMedium,
                 color = TarnishedGold
             )
-            Spacer(modifier = Modifier.width(48.dp))
+
+            if (onOpenNotifications != null) {
+                Box(
+                    contentAlignment = Alignment.TopEnd
+                ) {
+                    IconButton(onClick = onOpenNotifications) {
+                        Icon(
+                            imageVector = Icons.Filled.NotificationsNone,
+                            contentDescription = stringResource(R.string.open_notifications_center),
+                            tint = TarnishedGold
+                        )
+                    }
+
+                    if (notificationCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .offset(x = (-6).dp, y = 6.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(BloodWine)
+                                .padding(horizontal = 5.dp, vertical = 1.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = notificationCount.coerceAtMost(99).toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = OldIvory
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(modifier = Modifier.width(48.dp))
+            }
         }
 
         OutlinedTextField(

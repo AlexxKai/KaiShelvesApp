@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.ui.navigation
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -12,6 +13,11 @@ import androidx.navigation.navArgument
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
+import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
+import com.example.kaishelvesapp.ui.screen.friends.FriendProfileScreen
+import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
+import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
+import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
@@ -25,6 +31,11 @@ import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendSuggestionsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
@@ -44,6 +55,10 @@ object Routes {
     const val READING_STATS = "reading_stats"
     const val LIBRARY = "library"
     const val FRIENDS = "friends"
+    const val FRIEND_SUGGESTIONS = "friend_suggestions"
+    const val FRIEND_PROFILE = "friend_profile/{friendUid}"
+    const val FRIEND_LISTS = "friend_lists/{friendUid}/{friendName}"
+    const val NOTIFICATION_CENTER = "notification_center"
     const val GROUPS = "groups"
     const val CHALLENGES = "challenges"
     const val FOR_YOU = "for_you"
@@ -51,6 +66,9 @@ object Routes {
 }
 
 fun listDetailRoute(listId: String): String = "list_detail/$listId"
+fun friendProfileRoute(friendUid: String): String = "friend_profile/$friendUid"
+fun friendListsRoute(friendUid: String, friendName: String): String =
+    "friend_lists/$friendUid/${Uri.encode(friendName)}"
 
 @Composable
 fun AppNavigation(
@@ -59,11 +77,17 @@ fun AppNavigation(
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
     val readingListViewModel: ReadingListViewModel = viewModel()
+    val friendSuggestionsViewModel: FriendSuggestionsViewModel = viewModel()
+    val friendProfileViewModel: FriendProfileViewModel = viewModel()
+    val friendListsViewModel: FriendListsViewModel = viewModel()
+    val friendsViewModel: FriendsViewModel = viewModel()
+    val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val userListsViewModel: UserListsViewModel = viewModel()
     val userListDetailViewModel: UserListDetailViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
+    val friendRequestsState by friendRequestsViewModel.uiState.collectAsStateWithLifecycle()
 
     val startDestination = if (authState.isLoggedIn) Routes.HOME else Routes.LOGIN
 
@@ -157,6 +181,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -183,6 +211,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -202,6 +234,10 @@ fun AppNavigation(
                 onBookClick = { libro ->
                     catalogViewModel.selectBook(libro)
                     navController.navigate(Routes.DETAIL)
+                },
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
                 },
                 onSectionSelected = { navigateSection(it) }
             )
@@ -246,6 +282,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -269,6 +309,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -305,6 +349,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -327,6 +375,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -345,6 +397,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -361,15 +417,17 @@ fun AppNavigation(
                     navController.navigate(Routes.PROFILE)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
 
         composable(Routes.FRIENDS) {
-            PlaceholderScreen(
-                title = "Amigos",
+            FriendsScreen(
                 subtitle = "Aquí mostraremos tu red, su actividad y nuevas conexiones.",
-                currentSection = KaiSection.FRIENDS,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -383,6 +441,81 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onOpenSuggestions = {
+                    navController.navigate(Routes.FRIEND_SUGGESTIONS)
+                },
+                onOpenFriendProfile = { friendUid ->
+                    navController.navigate(friendProfileRoute(friendUid))
+                },
+                viewModel = friendsViewModel,
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(
+            route = Routes.FRIEND_PROFILE,
+            arguments = listOf(navArgument("friendUid") { defaultValue = "" })
+        ) { backStackEntry ->
+            FriendProfileScreen(
+                friendUid = backStackEntry.arguments?.getString("friendUid").orEmpty(),
+                viewModel = friendProfileViewModel,
+                onBack = { navController.popBackStack() },
+                onOpenFriendProfile = { nextFriendUid ->
+                    navController.navigate(friendProfileRoute(nextFriendUid))
+                },
+                searchQuery = catalogState.searchQuery,
+                onSearchQueryChange = ::searchFromSharedTopBar,
+                onSearch = ::openCatalogAndSearch,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onFriendshipChanged = {
+                    friendsViewModel.loadFriends()
+                    friendRequestsViewModel.loadReceivedRequests()
+                },
+                onOpenFriendLists = { uid, name ->
+                    navController.navigate(friendListsRoute(uid, name))
+                },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(
+            route = Routes.FRIEND_LISTS,
+            arguments = listOf(
+                navArgument("friendUid") { defaultValue = "" },
+                navArgument("friendName") { defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            FriendListsScreen(
+                friendUid = backStackEntry.arguments?.getString("friendUid").orEmpty(),
+                friendName = backStackEntry.arguments?.getString("friendName").orEmpty(),
+                viewModel = friendListsViewModel,
+                onBack = { navController.popBackStack() },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.FRIEND_SUGGESTIONS) {
+            FriendSuggestionsScreen(
+                viewModel = friendSuggestionsViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.NOTIFICATION_CENTER) {
+            NotificationCenterScreen(
+                viewModel = friendRequestsViewModel,
+                onBack = { navController.popBackStack() },
+                onRequestsChanged = {
+                    friendRequestsViewModel.loadReceivedRequests()
+                    friendsViewModel.loadFriends()
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -405,6 +538,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -427,6 +564,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -449,6 +590,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -471,6 +616,10 @@ fun AppNavigation(
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
                 onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }

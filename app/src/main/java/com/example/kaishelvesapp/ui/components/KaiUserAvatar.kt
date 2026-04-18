@@ -1,6 +1,7 @@
 package com.example.kaishelvesapp.ui.components
 
 import android.graphics.BitmapFactory
+import android.util.Base64
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
@@ -43,12 +45,47 @@ fun KaiUserAvatar(
         )
     }
 ) {
-    val decryptedBitmap = remember(imageUrl) {
-        if (imageUrl.isBlank() || imageUrl.startsWith("content://") || imageUrl.startsWith("http")) {
+    val normalizedImageUrl = remember(imageUrl) { imageUrl.trim() }
+    val dataUriBitmap = remember(normalizedImageUrl) {
+        if (!normalizedImageUrl.startsWith("data:image", ignoreCase = true)) {
             null
         } else {
-            ProfileImageCodec.decryptImageBytes(imageUrl)
-                ?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            runCatching {
+                val base64Payload = normalizedImageUrl.substringAfter("base64,", "")
+                if (base64Payload.isBlank()) {
+                    null
+                } else {
+                    val bytes = Base64.decode(base64Payload, Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
+            }.getOrNull()
+        }
+    }
+    val isUriBackedImage = remember(normalizedImageUrl) {
+        normalizedImageUrl.startsWith("http", ignoreCase = true) ||
+            normalizedImageUrl.startsWith("content://", ignoreCase = true) ||
+            normalizedImageUrl.startsWith("file://", ignoreCase = true) ||
+            normalizedImageUrl.startsWith("android.resource://", ignoreCase = true) ||
+            normalizedImageUrl.startsWith("data:image", ignoreCase = true)
+    }
+
+    val localBitmap = remember(normalizedImageUrl, isUriBackedImage, dataUriBitmap) {
+        if (dataUriBitmap != null) {
+            dataUriBitmap
+        } else if (normalizedImageUrl.isBlank() || isUriBackedImage) {
+            null
+        } else {
+            val decryptedBytes = ProfileImageCodec.decryptImageBytes(normalizedImageUrl)
+            val rawBase64Bytes = if (decryptedBytes == null) {
+                runCatching {
+                    Base64.decode(normalizedImageUrl, Base64.DEFAULT)
+                }.getOrNull()
+            } else {
+                null
+            }
+
+            (decryptedBytes ?: rawBase64Bytes)
+                ?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
         }
     }
 
@@ -87,20 +124,22 @@ fun KaiUserAvatar(
             contentAlignment = Alignment.Center
         ) {
             when {
-                decryptedBitmap != null -> {
+                localBitmap != null -> {
                     Image(
-                        bitmap = decryptedBitmap.asImageBitmap(),
+                        bitmap = localBitmap.asImageBitmap(),
                         contentDescription = "Avatar de $displayName",
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
                 }
 
-                imageUrl.isNotBlank() -> {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = "Avatar de $displayName",
-                    modifier = Modifier.fillMaxSize()
-                )
+                normalizedImageUrl.isNotBlank() -> {
+                    AsyncImage(
+                        model = normalizedImageUrl,
+                        contentDescription = "Avatar de $displayName",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 }
 
                 else -> {
