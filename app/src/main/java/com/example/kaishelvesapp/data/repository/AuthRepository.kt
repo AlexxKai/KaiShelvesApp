@@ -8,6 +8,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 class AuthRepository(
@@ -21,6 +22,50 @@ class AuthRepository(
 
     fun getCurrentUid(): String? {
         return auth.currentUser?.uid
+    }
+
+    suspend fun migrateLegacyUsernames() {
+        val usersSnapshot = firestore.collection("usuarios")
+            .get()
+            .await()
+
+        val reservedUsernames = firestore.collection("usernames")
+            .get()
+            .await()
+            .documents
+            .associateBy { it.id }
+            .toMutableMap()
+
+        val pendingReservations = usersSnapshot.documents.mapNotNull { document ->
+            val username = document.getString("usuario").orEmpty()
+            val normalizedUsername = normalizeUsername(username)
+            if (normalizedUsername.isBlank()) {
+                return@mapNotNull null
+            }
+
+            val existingReservation = reservedUsernames[normalizedUsername]
+            val reservedUid = existingReservation?.getString("uid").orEmpty()
+            if (existingReservation != null && reservedUid.isNotBlank()) {
+                return@mapNotNull null
+            }
+
+            reservedUsernames[normalizedUsername] = existingReservation ?: document
+            normalizedUsername to mapOf(
+                "uid" to document.id,
+                "usuario" to username
+            )
+        }
+
+        pendingReservations
+            .chunked(400)
+            .forEach { chunk ->
+                val batch = firestore.batch()
+                chunk.forEach { (normalizedUsername, payload) ->
+                    val usernameRef = firestore.collection("usernames").document(normalizedUsername)
+                    batch.set(usernameRef, payload, SetOptions.merge())
+                }
+                batch.commit().await()
+            }
     }
 
     suspend fun getCurrentUserProfile(): Result<Usuario> {
@@ -68,6 +113,8 @@ class AuthRepository(
 
     suspend fun register(usuario: String, email: String, password: String): Result<Usuario> {
         return try {
+            ensureUsernameIsUnique(usuario)
+
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("No se pudo obtener el UID del usuario"))
@@ -79,10 +126,12 @@ class AuthRepository(
                 photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
             )
 
-            firestore.collection("usuarios")
-                .document(firebaseUser.uid)
-                .set(nuevoUsuario)
-                .await()
+            try {
+                saveUserProfile(nuevoUsuario)
+            } catch (e: Exception) {
+                firebaseUser.delete().await()
+                throw e
+            }
 
             Result.success(nuevoUsuario)
         } catch (e: Exception) {
@@ -110,6 +159,7 @@ class AuthRepository(
                 ?: return Result.failure(Exception("No hay sesion iniciada"))
             val uid = currentUser.uid
             val currentProfile = getCurrentUserProfile().getOrNull()
+            ensureUsernameIsUnique(newUsername, currentUid = uid)
 
             val resolvedPhotoUrl = when {
                 selectedPhotoUri.isBlank() -> currentProfile?.photoUrl.orEmpty()
@@ -124,10 +174,10 @@ class AuthRepository(
                 photoUrl = resolvedPhotoUrl
             )
 
-            firestore.collection("usuarios")
-                .document(uid)
-                .set(updatedUser)
-                .await()
+            saveUserProfile(
+                user = updatedUser,
+                previousUsername = currentProfile?.usuario.orEmpty()
+            )
 
             Result.success(updatedUser)
         } catch (e: Exception) {
@@ -195,6 +245,80 @@ class AuthRepository(
         )
     }
 
+    private suspend fun saveUserProfile(
+        user: Usuario,
+        previousUsername: String = user.usuario
+    ) {
+        val normalizedUsername = normalizeUsername(user.usuario)
+        if (normalizedUsername.isBlank()) {
+            throw Exception("El nombre de usuario no puede estar vacio")
+        }
+
+        val previousNormalizedUsername = normalizeUsername(previousUsername)
+        val userRef = firestore.collection("usuarios").document(user.uid)
+        val usernameRef = firestore.collection("usernames").document(normalizedUsername)
+
+        firestore.runTransaction { transaction ->
+            val usernameSnapshot = transaction.get(usernameRef)
+            val reservedUid = usernameSnapshot.getString("uid").orEmpty()
+
+            if (usernameSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != user.uid) {
+                throw IllegalStateException("El nombre de usuario ya esta en uso")
+            }
+
+            transaction.set(userRef, user)
+            transaction.set(
+                usernameRef,
+                mapOf(
+                    "uid" to user.uid,
+                    "usuario" to user.usuario
+                ),
+                SetOptions.merge()
+            )
+
+            if (previousNormalizedUsername.isNotBlank() && previousNormalizedUsername != normalizedUsername) {
+                transaction.delete(firestore.collection("usernames").document(previousNormalizedUsername))
+            }
+        }.await()
+    }
+
+    private suspend fun ensureUsernameIsUnique(
+        username: String,
+        currentUid: String? = null
+    ) {
+        val normalizedUsername = normalizeUsername(username)
+        if (normalizedUsername.isBlank()) {
+            throw Exception("El nombre de usuario no puede estar vacio")
+        }
+
+        val reservedSnapshot = firestore.collection("usernames")
+            .document(normalizedUsername)
+            .get()
+            .await()
+
+        val reservedUid = reservedSnapshot.getString("uid").orEmpty()
+        if (reservedSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != currentUid) {
+            throw Exception("El nombre de usuario ya esta en uso")
+        }
+
+        val legacyConflict = firestore.collection("usuarios")
+            .get()
+            .await()
+            .documents
+            .firstOrNull { document ->
+                document.id != currentUid &&
+                    normalizeUsername(document.getString("usuario").orEmpty()) == normalizedUsername
+            }
+
+        if (legacyConflict != null) {
+            throw Exception("El nombre de usuario ya esta en uso")
+        }
+    }
+
+    private fun normalizeUsername(username: String): String {
+        return username.trim().lowercase()
+    }
+
     private suspend fun getOrCreateUserProfile(firebaseUser: FirebaseUser): Usuario {
         val uid = firebaseUser.uid
         val snapshot = firestore.collection("usuarios")
@@ -220,18 +344,44 @@ class AuthRepository(
             ?: firebaseUser.email?.substringBefore("@")
             ?: "Lector"
 
+        val uniqueUsername = generateUniqueUsername(fallbackUsername)
+
         val newUser = Usuario(
             uid = uid,
-            usuario = fallbackUsername,
+            usuario = uniqueUsername,
             email = firebaseUser.email.orEmpty(),
             photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
         )
 
-        firestore.collection("usuarios")
-            .document(uid)
-            .set(newUser)
-            .await()
+        saveUserProfile(newUser)
 
         return newUser
+    }
+
+    private suspend fun generateUniqueUsername(baseUsername: String): String {
+        val trimmedBaseUsername = baseUsername.trim().ifBlank { "Lector" }
+        if (isUsernameAvailable(trimmedBaseUsername)) {
+            return trimmedBaseUsername
+        }
+
+        var suffix = 1
+        while (suffix <= 1000) {
+            val candidate = "$trimmedBaseUsername$suffix"
+            if (isUsernameAvailable(candidate)) {
+                return candidate
+            }
+            suffix++
+        }
+
+        throw Exception("No se pudo generar un nombre de usuario disponible")
+    }
+
+    private suspend fun isUsernameAvailable(username: String, currentUid: String? = null): Boolean {
+        return try {
+            ensureUsernameIsUnique(username, currentUid)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 }

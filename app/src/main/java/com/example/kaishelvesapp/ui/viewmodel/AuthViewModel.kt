@@ -35,6 +35,12 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            runCatching {
+                repository.migrateLegacyUsernames()
+            }
+        }
+
         if (repository.isAuthenticated()) {
             loadCurrentUserProfile()
         }
