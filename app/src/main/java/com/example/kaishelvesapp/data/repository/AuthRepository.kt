@@ -51,9 +51,12 @@ class AuthRepository(
         }
     }
 
-    suspend fun login(email: String, password: String): Result<Usuario> {
+    suspend fun login(identifier: String, password: String): Result<Usuario> {
         return try {
-            val authResult = auth.signInWithEmailAndPassword(email, password).await()
+            val resolvedEmail = resolveEmailForLogin(identifier)
+                .getOrElse { error -> return Result.failure(error) }
+
+            val authResult = auth.signInWithEmailAndPassword(resolvedEmail, password).await()
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("No se pudo obtener el usuario autenticado"))
             val usuario = getOrCreateUserProfile(firebaseUser)
@@ -134,6 +137,55 @@ class AuthRepository(
 
     fun logout() {
         auth.signOut()
+    }
+
+    private suspend fun resolveEmailForLogin(identifier: String): Result<String> {
+        val normalizedIdentifier = identifier.trim()
+        if (normalizedIdentifier.isBlank()) {
+            return Result.failure(Exception("Completa correo o usuario"))
+        }
+
+        if ("@" in normalizedIdentifier) {
+            return Result.success(normalizedIdentifier)
+        }
+
+        val usernameMatches = firestore.collection("usuarios")
+            .whereEqualTo("usuario", normalizedIdentifier)
+            .limit(2)
+            .get()
+            .await()
+            .documents
+
+        if (usernameMatches.size > 1) {
+            return Result.failure(Exception("Hay varios usuarios con ese nombre. Inicia sesion con tu correo"))
+        }
+
+        val matchedEmail = usernameMatches
+            .firstOrNull()
+            ?.getString("email")
+            ?.trim()
+            .orEmpty()
+
+        if (matchedEmail.isNotBlank()) {
+            return Result.success(matchedEmail)
+        }
+
+        val emailMatch = firestore.collection("usuarios")
+            .whereEqualTo("email", normalizedIdentifier)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .firstOrNull()
+            ?.getString("email")
+            ?.trim()
+            .orEmpty()
+
+        return if (emailMatch.isNotBlank()) {
+            Result.success(emailMatch)
+        } else {
+            Result.failure(Exception("No encontramos un usuario con ese correo o nombre"))
+        }
     }
 
     private suspend fun uploadProfilePhoto(uid: String, uri: Uri): String {

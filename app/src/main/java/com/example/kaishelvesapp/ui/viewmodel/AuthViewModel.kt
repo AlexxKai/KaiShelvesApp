@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class AuthUiState(
+    val loginIdentifier: String = "",
     val email: String = "",
     val password: String = "",
     val username: String = "",
@@ -37,6 +38,10 @@ class AuthViewModel(
         if (repository.isAuthenticated()) {
             loadCurrentUserProfile()
         }
+    }
+
+    fun onLoginIdentifierChange(value: String) {
+        _uiState.value = _uiState.value.copy(loginIdentifier = value)
     }
 
     fun onEmailChange(value: String) {
@@ -123,12 +128,12 @@ class AuthViewModel(
     }
 
     fun login() {
-        val email = _uiState.value.email.trim()
+        val identifier = _uiState.value.loginIdentifier.trim()
         val password = _uiState.value.password.trim()
 
-        if (email.isBlank() || password.isBlank()) {
+        if (identifier.isBlank() || password.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa email y contrasena"
+                errorMessage = "Completa correo o usuario y contrasena"
             )
             return
         }
@@ -140,7 +145,7 @@ class AuthViewModel(
         )
 
         viewModelScope.launch {
-            val result = repository.login(email, password)
+            val result = repository.login(identifier, password)
 
             result
                 .onSuccess { usuario ->

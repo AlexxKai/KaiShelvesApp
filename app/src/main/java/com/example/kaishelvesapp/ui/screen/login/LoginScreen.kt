@@ -86,14 +86,14 @@ fun LoginScreen(
                 modifier = Modifier.padding(16.dp)
             ) {
                 OutlinedTextField(
-                    value = uiState.email,
-                    onValueChange = viewModel::onEmailChange,
-                    label = { Text(stringResource(R.string.email)) },
+                    value = uiState.loginIdentifier,
+                    onValueChange = viewModel::onLoginIdentifierChange,
+                    label = { Text(stringResource(R.string.email_or_username)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email
+                        keyboardType = KeyboardType.Text
                     )
                 )
 

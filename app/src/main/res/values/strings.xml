@@ -16,6 +16,7 @@
     <string name="create_account">Create account</string>
     <string name="i_already_have_an_account">I already have an account</string>
     <string name="email">Email</string>
+    <string name="email_or_username">Email or username</string>
     <string name="username">Username</string>
     <string name="password">Password</string>
     <string name="continue_with_google">Continue with Google</string>
@@ -260,7 +261,7 @@
     <string name="save_profile_changes">Save changes</string>
 
     <string name="login_screen_title">Kai Shelves</string>
-    <string name="login_error_empty_fields">Please enter email and password</string>
+    <string name="login_error_empty_fields">Please enter email or username and password</string>
     <string name="register_error_empty_fields">Please enter username, email and password</string>
     <string name="register_error_short_password">Password must be at least 6 characters long</string>
     <string name="profile_error_empty_username">Username cannot be empty</string>

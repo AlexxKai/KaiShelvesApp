@@ -16,6 +16,7 @@
     <string name="create_account">Crear cuenta</string>
     <string name="i_already_have_an_account">Ya tengo cuenta</string>
     <string name="email">Correo electronico</string>
+    <string name="email_or_username">Correo o usuario</string>
     <string name="username">Usuario</string>
     <string name="password">Contraseña</string>
     <string name="continue_with_google">Continuar con Google</string>
@@ -260,7 +261,7 @@
     <string name="save_profile_changes">Guardar cambios</string>
 
     <string name="login_screen_title">Kai Shelves</string>
-    <string name="login_error_empty_fields">Completa correo y contraseña</string>
+    <string name="login_error_empty_fields">Completa correo o usuario y contraseña</string>
     <string name="register_error_empty_fields">Completa usuario, correo y contraseña</string>
     <string name="register_error_short_password">La contraseña debe tener al menos 6 caracteres</string>
     <string name="profile_error_empty_username">El nombre de usuario no puede estar vacio</string>
