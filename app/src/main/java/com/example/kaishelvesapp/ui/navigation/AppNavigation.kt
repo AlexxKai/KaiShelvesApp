@@ -28,6 +28,9 @@ import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.screen.settings.SettingsPrivacyScreen
+import com.example.kaishelvesapp.ui.screen.settings.AdminUsernamesScreen
+import com.example.kaishelvesapp.ui.screen.placeholder.PlaceholderScreen
+import com.example.kaishelvesapp.ui.viewmodel.AdminUsernamesViewModel
 import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
@@ -54,6 +57,7 @@ object Routes {
     const val READING_LIST = "reading_list"
     const val PROFILE = "profile"
     const val SETTINGS_PRIVACY = "settings_privacy"
+    const val ADMIN_USERNAMES = "admin_usernames"
     const val READING_STATS = "reading_stats"
     const val LIBRARY = "library"
     const val FRIENDS = "friends"
@@ -84,6 +88,7 @@ fun AppNavigation(
     val friendListsViewModel: FriendListsViewModel = viewModel()
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
+    val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val userListsViewModel: UserListsViewModel = viewModel()
     val userListDetailViewModel: UserListDetailViewModel = viewModel()
@@ -418,12 +423,18 @@ fun AppNavigation(
             SettingsPrivacyScreen(
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
+                isAdmin = authState.user?.isAdmin == true,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
                 onScanResult = ::scanFromSharedTopBar,
                 onGoToProfile = {
                     navController.navigate(Routes.PROFILE)
+                },
+                onOpenAdminUsernames = {
+                    if (authState.user?.isAdmin == true) {
+                        navController.navigate(Routes.ADMIN_USERNAMES)
+                    }
                 },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
@@ -432,6 +443,39 @@ fun AppNavigation(
                 },
                 onSectionSelected = { navigateSection(it) }
             )
+        }
+
+        composable(Routes.ADMIN_USERNAMES) {
+            if (authState.user?.isAdmin == true) {
+                AdminUsernamesScreen(
+                    viewModel = adminUsernamesViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            } else {
+                PlaceholderScreen(
+                    title = "Acceso restringido",
+                    subtitle = "Necesitas permisos de administrador para entrar en este panel.",
+                    currentSection = KaiSection.PROFILE,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            }
         }
 
         composable(Routes.FRIENDS) {

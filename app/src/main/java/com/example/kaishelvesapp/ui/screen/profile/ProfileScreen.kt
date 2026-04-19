@@ -235,6 +235,7 @@ fun ProfileScreen(
                                     imageUrl = uiState.profilePhotoUri.ifBlank {
                                         profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
                                     },
+                                    isAdmin = uiState.user?.isAdmin == true,
                                     isEditing = uiState.isEditingProfile,
                                     onChangePhoto = { photoPickerLauncher.launch("image/*") }
                                 )
@@ -342,6 +343,7 @@ fun ProfileScreen(
 private fun ProfileAvatarSection(
     displayName: String,
     imageUrl: String,
+    isAdmin: Boolean,
     isEditing: Boolean,
     onChangePhoto: () -> Unit
 ) {
@@ -354,6 +356,23 @@ private fun ProfileAvatarSection(
             imageUrl = imageUrl,
             modifier = Modifier.size(84.dp)
         )
+
+        if (isAdmin) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                shape = RoundedCornerShape(999.dp),
+                colors = CardDefaults.cardColors(containerColor = TarnishedGold.copy(alpha = 0.18f)),
+                border = BorderStroke(1.dp, TarnishedGold)
+            ) {
+                Text(
+                    text = stringResource(R.string.admin_badge),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TarnishedGold
+                )
+            }
+        }
 
         if (isEditing) {
             Spacer(modifier = Modifier.height(12.dp))

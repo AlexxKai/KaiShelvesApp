@@ -11,10 +11,34 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
+data class UsernameConflictUser(
+    val uid: String,
+    val username: String,
+    val email: String,
+    val photoUrl: String
+)
+
+data class UsernameConflictGroup(
+    val normalizedUsername: String,
+    val users: List<UsernameConflictUser>
+)
+
+private data class BootstrapAdminAccount(
+    val uid: String,
+    val email: String
+)
+
 class AuthRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
+
+    private val bootstrapAdminAccounts = listOf(
+        BootstrapAdminAccount(
+            uid = "npVZkecTBzLHU9r9Tof4FRLdn0k2",
+            email = "admin@admin.com"
+        )
+    )
 
     fun isAuthenticated(): Boolean {
         return auth.currentUser != null
@@ -68,6 +92,81 @@ class AuthRepository(
             }
     }
 
+    suspend fun getDuplicateUsernameGroups(): Result<List<UsernameConflictGroup>> {
+        return try {
+            requireAdminAccess()
+
+            val usersSnapshot = firestore.collection("usuarios")
+                .get()
+                .await()
+
+            val duplicateGroups = usersSnapshot.documents
+                .mapNotNull { document ->
+                    val username = document.getString("usuario").orEmpty()
+                    val normalizedUsername = normalizeUsername(username)
+                    if (normalizedUsername.isBlank()) {
+                        null
+                    } else {
+                        normalizedUsername to UsernameConflictUser(
+                            uid = document.id,
+                            username = username,
+                            email = document.getString("email").orEmpty(),
+                            photoUrl = document.getString("photoUrl").orEmpty()
+                        )
+                    }
+                }
+                .groupBy(
+                    keySelector = { it.first },
+                    valueTransform = { it.second }
+                )
+                .filterValues { it.size > 1 }
+                .map { (normalizedUsername, users) ->
+                    UsernameConflictGroup(
+                        normalizedUsername = normalizedUsername,
+                        users = users.sortedBy { it.email.ifBlank { it.uid } }
+                    )
+                }
+                .sortedBy { it.normalizedUsername }
+
+            Result.success(duplicateGroups)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun adminRenameUser(uid: String, newUsername: String): Result<Usuario> {
+        return try {
+            requireAdminAccess()
+
+            val snapshot = firestore.collection("usuarios")
+                .document(uid)
+                .get()
+                .await()
+
+            if (!snapshot.exists()) {
+                return Result.failure(Exception("No se encontro el usuario"))
+            }
+
+            val existingUser = snapshot.toObject(Usuario::class.java)
+                ?: return Result.failure(Exception("No se pudo leer el usuario"))
+
+            val updatedUser = existingUser.copy(
+                uid = uid,
+                usuario = newUsername.trim()
+            )
+
+            ensureUsernameIsUnique(updatedUser.usuario, currentUid = uid)
+            saveUserProfile(
+                user = updatedUser,
+                previousUsername = existingUser.usuario
+            )
+
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getCurrentUserProfile(): Result<Usuario> {
         return try {
             val firebaseUser = auth.currentUser
@@ -87,10 +186,11 @@ class AuthRepository(
                 email = storedUser?.email?.takeIf { it.isNotBlank() }
                     ?: firebaseUser?.email.orEmpty(),
                 photoUrl = storedUser?.photoUrl?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.photoUrl?.toString().orEmpty()
+                    ?: firebaseUser?.photoUrl?.toString().orEmpty(),
+                isAdmin = storedUser?.isAdmin ?: false
             )
 
-            Result.success(usuario)
+            Result.success(syncBootstrapAdminAccess(usuario))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -123,7 +223,8 @@ class AuthRepository(
                 uid = firebaseUser.uid,
                 usuario = usuario,
                 email = email,
-                photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
+                photoUrl = firebaseUser.photoUrl?.toString().orEmpty(),
+                isAdmin = false
             )
 
             try {
@@ -171,7 +272,8 @@ class AuthRepository(
                 uid = uid,
                 usuario = newUsername,
                 email = currentUser.email ?: "",
-                photoUrl = resolvedPhotoUrl
+                photoUrl = resolvedPhotoUrl,
+                isAdmin = currentProfile?.isAdmin ?: false
             )
 
             saveUserProfile(
@@ -243,6 +345,35 @@ class AuthRepository(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
         )
+    }
+
+    private suspend fun requireAdminAccess() {
+        val firebaseUser = auth.currentUser
+        val currentUid = firebaseUser?.uid
+            ?: throw Exception("No hay sesion iniciada")
+        val currentUserSnapshot = firestore.collection("usuarios")
+            .document(currentUid)
+            .get()
+            .await()
+
+        val currentUserEmail = currentUserSnapshot.getString("email")
+            ?.takeIf { it.isNotBlank() }
+            ?: firebaseUser?.email.orEmpty()
+        val isBootstrapAdmin = bootstrapAdminAccounts.any { admin ->
+            admin.uid == currentUid || admin.email.equals(currentUserEmail, ignoreCase = true)
+        }
+        val hasFirestoreAdminFlag = currentUserSnapshot.getBoolean("isAdmin") == true
+
+        if (isBootstrapAdmin && !hasFirestoreAdminFlag) {
+            currentUserSnapshot.reference
+                .set(mapOf("isAdmin" to true), SetOptions.merge())
+                .await()
+            return
+        }
+
+        if (!hasFirestoreAdminFlag) {
+            throw Exception("No tienes permisos para acceder al panel de administracion")
+        }
     }
 
     private suspend fun saveUserProfile(
@@ -328,14 +459,17 @@ class AuthRepository(
 
         val existingUser = snapshot.toObject(Usuario::class.java)
         if (existingUser != null) {
-            return Usuario(
+            return syncBootstrapAdminAccess(
+                Usuario(
                 uid = uid,
                 usuario = existingUser.usuario.takeIf { it.isNotBlank() }
                     ?: firebaseUser.displayName.orEmpty(),
                 email = existingUser.email.takeIf { it.isNotBlank() }
                     ?: firebaseUser.email.orEmpty(),
                 photoUrl = existingUser.photoUrl.takeIf { it.isNotBlank() }
-                    ?: firebaseUser.photoUrl?.toString().orEmpty()
+                    ?: firebaseUser.photoUrl?.toString().orEmpty(),
+                isAdmin = existingUser.isAdmin
+            )
             )
         }
 
@@ -350,12 +484,13 @@ class AuthRepository(
             uid = uid,
             usuario = uniqueUsername,
             email = firebaseUser.email.orEmpty(),
-            photoUrl = firebaseUser.photoUrl?.toString().orEmpty()
+            photoUrl = firebaseUser.photoUrl?.toString().orEmpty(),
+            isAdmin = false
         )
 
         saveUserProfile(newUser)
 
-        return newUser
+        return syncBootstrapAdminAccess(newUser)
     }
 
     private suspend fun generateUniqueUsername(baseUsername: String): String {
@@ -383,5 +518,22 @@ class AuthRepository(
         } catch (_: Exception) {
             false
         }
+    }
+
+    private suspend fun syncBootstrapAdminAccess(user: Usuario): Usuario {
+        val shouldBeAdmin = bootstrapAdminAccounts.any { admin ->
+            admin.uid == user.uid || admin.email.equals(user.email, ignoreCase = true)
+        }
+
+        if (!shouldBeAdmin || user.isAdmin) {
+            return user
+        }
+
+        val updatedUser = user.copy(isAdmin = true)
+        saveUserProfile(
+            user = updatedUser,
+            previousUsername = user.usuario
+        )
+        return updatedUser
     }
 }

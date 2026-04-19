@@ -18,6 +18,7 @@
     <string name="email">Correo electronico</string>
     <string name="email_or_username">Correo o usuario</string>
     <string name="username">Usuario</string>
+    <string name="admin_badge">Administrador</string>
     <string name="password">Contraseña</string>
     <string name="continue_with_google">Continuar con Google</string>
     <string name="or">o</string>
@@ -120,6 +121,18 @@
     <string name="settings_section_account_body">Aqui agruparemos mas adelante idioma, notificaciones, preferencias de sesion y comportamiento de la cuenta.</string>
     <string name="settings_section_privacy">Privacidad y acceso</string>
     <string name="settings_section_privacy_body">Mas adelante añadiremos proteccion de sesion, visibilidad, permisos y controles de datos personales.</string>
+    <string name="admin_usernames_entry_title">Administracion de usuarios</string>
+    <string name="admin_usernames_entry_body">Revisa nombres de usuario duplicados historicos y resuelvelos manualmente sin salir de la app.</string>
+    <string name="admin_usernames_entry_action">Revisar duplicados</string>
+    <string name="admin_usernames_title">Admin de usuarios</string>
+    <string name="admin_usernames_subtitle">Resuelve conflictos heredados antes de que afecten al acceso y a la edicion del perfil.</string>
+    <string name="admin_usernames_summary_title">Conflictos abiertos</string>
+    <string name="admin_usernames_summary_body">Hay %1$d grupos de nombres duplicados pendientes de revision manual.</string>
+    <string name="admin_conflict_group_title">Conflicto: %1$s</string>
+    <string name="admin_conflict_group_body">Deja una cuenta con este nombre y renombra las demas con alternativas unicas.</string>
+    <string name="admin_resolve_conflict">Guardar nuevo usuario</string>
+    <string name="admin_no_conflicts_title">No hay usuarios duplicados</string>
+    <string name="admin_no_conflicts_body">Todas las cuentas tienen ahora nombres unicos o ya cuentan con su reserva correcta.</string>
 
     <string name="search_books">Buscar libros</string>
     <string name="catalog_title">Archivo de la biblioteca</string>

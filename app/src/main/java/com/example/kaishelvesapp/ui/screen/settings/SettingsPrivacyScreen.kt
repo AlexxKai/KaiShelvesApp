@@ -2,6 +2,8 @@ package com.example.kaishelvesapp.ui.screen.settings
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -44,11 +46,13 @@ fun SettingsPrivacyScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     userName: String? = null,
     profileImageUrl: String? = null,
+    isAdmin: Boolean = false,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
+    onOpenAdminUsernames: () -> Unit,
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
@@ -113,8 +117,13 @@ fun SettingsPrivacyScreen(
                     .padding(16.dp)
             ) {
                 val stacked = maxWidth < 700.dp
+                val scrollState = rememberScrollState()
 
                 Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     SettingsHero()
@@ -128,6 +137,14 @@ fun SettingsPrivacyScreen(
                             title = stringResource(R.string.settings_section_privacy),
                             body = stringResource(R.string.settings_section_privacy_body)
                         )
+                        if (isAdmin) {
+                            SettingsCard(
+                                title = stringResource(R.string.admin_usernames_entry_title),
+                                body = stringResource(R.string.admin_usernames_entry_body),
+                                actionLabel = stringResource(R.string.admin_usernames_entry_action),
+                                onActionClick = onOpenAdminUsernames
+                            )
+                        }
                     } else {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -141,6 +158,15 @@ fun SettingsPrivacyScreen(
                                 title = stringResource(R.string.settings_section_privacy),
                                 body = stringResource(R.string.settings_section_privacy_body),
                                 modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        if (isAdmin) {
+                            SettingsCard(
+                                title = stringResource(R.string.admin_usernames_entry_title),
+                                body = stringResource(R.string.admin_usernames_entry_body),
+                                actionLabel = stringResource(R.string.admin_usernames_entry_action),
+                                onActionClick = onOpenAdminUsernames
                             )
                         }
                     }
@@ -193,7 +219,9 @@ private fun SettingsHero() {
 private fun SettingsCard(
     title: String,
     body: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onActionClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -217,6 +245,17 @@ private fun SettingsCard(
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 color = OldIvory
             )
+
+            if (!actionLabel.isNullOrBlank() && onActionClick != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+
+                androidx.compose.material3.TextButton(onClick = onActionClick) {
+                    Text(
+                        text = actionLabel,
+                        color = TarnishedGold
+                    )
+                }
+            }
         }
     }
 }

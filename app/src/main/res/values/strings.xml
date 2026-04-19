@@ -18,6 +18,7 @@
     <string name="email">Email</string>
     <string name="email_or_username">Email or username</string>
     <string name="username">Username</string>
+    <string name="admin_badge">Administrator</string>
     <string name="password">Password</string>
     <string name="continue_with_google">Continue with Google</string>
     <string name="or">or</string>
@@ -120,6 +121,18 @@
     <string name="settings_section_account_body">This space will group language, notifications, session preferences and account behavior in future iterations.</string>
     <string name="settings_section_privacy">Privacy and access</string>
     <string name="settings_section_privacy_body">Here we will later add session protection, visibility, permissions and personal data controls.</string>
+    <string name="admin_usernames_entry_title">Username administration</string>
+    <string name="admin_usernames_entry_body">Review historical duplicate usernames and resolve them manually without leaving the app.</string>
+    <string name="admin_usernames_entry_action">Review duplicates</string>
+    <string name="admin_usernames_title">Admin usernames</string>
+    <string name="admin_usernames_subtitle">Resolve legacy conflicts before they affect access and profile edits.</string>
+    <string name="admin_usernames_summary_title">Open conflicts</string>
+    <string name="admin_usernames_summary_body">There are %1$d duplicate username groups pending manual review.</string>
+    <string name="admin_conflict_group_title">Conflict: %1$s</string>
+    <string name="admin_conflict_group_body">Keep one account with this username and rename the others to unique alternatives.</string>
+    <string name="admin_resolve_conflict">Save new username</string>
+    <string name="admin_no_conflicts_title">No duplicate usernames</string>
+    <string name="admin_no_conflicts_body">All accounts currently have unique usernames or are already reserved correctly.</string>
 
     <string name="search_books">Search books</string>
     <string name="catalog_title">Library archive</string>
