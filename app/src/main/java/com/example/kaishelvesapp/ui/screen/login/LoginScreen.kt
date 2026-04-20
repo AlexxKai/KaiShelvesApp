@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -51,6 +52,15 @@ fun LoginScreen(
         if (uiState.isLoggedIn) {
             onLoginSuccess()
         }
+    }
+
+    uiState.pendingGuestMergeDecision?.let { decision ->
+        GuestMergeDecisionDialog(
+            decision = decision,
+            isLoading = uiState.isLoading,
+            onDismiss = viewModel::dismissPendingGuestMergeDecision,
+            onChoose = viewModel::resolvePendingGuestMerge
+        )
     }
 
     Column(
@@ -145,6 +155,40 @@ fun LoginScreen(
                     onIdTokenReceived = viewModel::loginWithGoogle,
                     onError = viewModel::showError
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HorizontalDivider(color = TarnishedGold.copy(alpha = 0.35f))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = uiState.guestUsername,
+                    onValueChange = viewModel::onGuestUsernameChange,
+                    label = { Text(stringResource(R.string.username)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = stringResource(R.string.guest_mode_warning),
+                    color = OldIvory.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { viewModel.continueAsGuest() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isLoading,
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                ) {
+                    Text(stringResource(R.string.continue_without_account))
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

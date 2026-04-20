@@ -1,5 +1,7 @@
 package com.example.kaishelvesapp.data.repository
 
+import com.example.kaishelvesapp.data.local.GuestLibraryState
+import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
@@ -11,6 +13,7 @@ import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 class UserListsRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -41,7 +44,112 @@ class UserListsRepository(
 
     private fun requireUid(): String {
         return auth.currentUser?.uid
+            ?: GuestLocalStore.getActiveProfile()?.uid
             ?: throw IllegalStateException("Usuario no autenticado")
+    }
+
+    private fun isGuestSessionActive(): Boolean {
+        return auth.currentUser == null && GuestLocalStore.isSessionActive()
+    }
+
+    private fun localBookId(book: Libro): String {
+        return safeBookDocId(book.id.ifBlank { book.isbn })
+    }
+
+    private fun localStoredBook(libro: Libro, safeBookId: String): Libro {
+        return libro.copy(id = safeBookId)
+    }
+
+    private fun localReadDate(): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+
+    private fun localGuestLists(state: GuestLibraryState): List<UserBookList> {
+        return state.lists
+            .map { list ->
+                val books = state.listBooks[list.id].orEmpty()
+                list.copy(
+                    bookCount = books.size,
+                    previewImageUrls = books.take(3).mapNotNull { it.imagen.takeIf(String::isNotBlank) }
+                )
+            }
+            .sortedWith(
+                compareBy<UserBookList> { !it.isSystem }
+                    .thenBy { it.position }
+                    .thenBy { it.name.lowercase() }
+            )
+    }
+
+    private fun localNormalizeSelectedListIds(
+        state: GuestLibraryState,
+        selectedListIds: Set<String>
+    ): Set<String> {
+        val candidateIds = selectedListIds.toList()
+        if (candidateIds.isEmpty()) return emptySet()
+
+        val selectedSystemId = systemListPriority.firstOrNull { candidateIds.contains(it) }
+        if (selectedSystemId != null) {
+            return setOf(selectedSystemId)
+        }
+
+        val customLists = localGuestLists(state)
+            .filterNot { it.isSystem }
+        val selectedCustom = customLists.firstOrNull { it.id in candidateIds }
+        return selectedCustom?.let { setOf(it.id) } ?: candidateIds.firstOrNull()?.let(::setOf).orEmpty()
+    }
+
+    private fun localSelectedListIds(state: GuestLibraryState, safeBookId: String): Set<String> {
+        return state.listBooks.mapNotNull { (listId, books) ->
+            listId.takeIf { books.any { localBookId(it) == safeBookId } }
+        }.toSet()
+    }
+
+    private fun localReadBookPayload(libro: Libro, safeBookId: String) = mapOf(
+        "id" to safeBookId,
+        "isbn" to libro.isbn,
+        "titulo" to libro.titulo,
+        "autor" to libro.autor,
+        "editorial" to libro.editorial,
+        "genero" to libro.genero,
+        "fechaPublicacion" to libro.fechaPublicacion,
+        "paginas" to libro.paginas,
+        "imagen" to libro.imagen,
+        "pdf" to libro.pdf,
+        "fechaLeido" to localReadDate(),
+        "puntuacion" to 0,
+        "resena" to "",
+        "contieneSpoilers" to false,
+        "siNo" to "si"
+    )
+
+    private fun ensureLocalReadBook(
+        state: GuestLibraryState,
+        libro: Libro,
+        safeBookId: String
+    ): GuestLibraryState {
+        if (state.readBooks.any { it.id == safeBookId }) {
+            return state
+        }
+
+        val readBook = com.example.kaishelvesapp.data.model.LibroLeido(
+            id = safeBookId,
+            isbn = libro.isbn,
+            titulo = libro.titulo,
+            autor = libro.autor,
+            editorial = libro.editorial,
+            genero = libro.genero,
+            fechaPublicacion = libro.fechaPublicacion,
+            paginas = libro.paginas,
+            imagen = libro.imagen,
+            pdf = libro.pdf,
+            fechaLeido = localReadDate(),
+            puntuacion = 0,
+            resena = "",
+            contieneSpoilers = false,
+            siNo = "si"
+        )
+
+        return state.copy(readBooks = state.readBooks + readBook)
     }
 
     private fun userListsCollection(uid: String) = firestore.collection("usuarios")
@@ -206,6 +314,10 @@ class UserListsRepository(
 
     suspend fun getUserLists(): Result<List<UserBookList>> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(localGuestLists(GuestLocalStore.readState()))
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -243,6 +355,11 @@ class UserListsRepository(
 
     suspend fun getListById(listId: String): Result<UserBookList?> {
         return try {
+            if (isGuestSessionActive()) {
+                val state = GuestLocalStore.readState()
+                return Result.success(localGuestLists(state).firstOrNull { it.id == listId })
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -261,6 +378,14 @@ class UserListsRepository(
 
     suspend fun getBooksInList(listId: String): Result<List<Libro>> {
         return try {
+            if (isGuestSessionActive()) {
+                val books = GuestLocalStore.readState()
+                    .listBooks[listId]
+                    .orEmpty()
+                    .sortedBy { it.titulo.lowercase() }
+                return Result.success(books)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -284,6 +409,34 @@ class UserListsRepository(
 
     suspend fun getSelectedListIdsForBook(bookId: String): Result<Set<String>> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                if (safeBookId == "unknown_book") {
+                    return Result.success(emptySet())
+                }
+
+                val state = GuestLocalStore.readState()
+                val selectedIds = localSelectedListIds(state, safeBookId)
+                val normalizedIds = localNormalizeSelectedListIds(state, selectedIds)
+
+                if (selectedIds != normalizedIds) {
+                    GuestLocalStore.updateState { currentState ->
+                        val mutableListBooks = currentState.listBooks.toMutableMap()
+                        mutableListBooks.keys.forEach { listId ->
+                            val books = mutableListBooks[listId].orEmpty()
+                            mutableListBooks[listId] = if (listId in normalizedIds) {
+                                books
+                            } else {
+                                books.filterNot { localBookId(it) == safeBookId }
+                            }
+                        }
+                        currentState.copy(listBooks = mutableListBooks)
+                    }
+                }
+
+                return Result.success(normalizedIds)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -320,6 +473,13 @@ class UserListsRepository(
 
     suspend fun getUserTags(): Result<List<UserBookTag>> {
         return try {
+            if (isGuestSessionActive()) {
+                val tags = GuestLocalStore.readState()
+                    .tags
+                    .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
+                return Result.success(tags)
+            }
+
             val uid = requireUid()
             val tags = userTagsCollection(uid)
                 .get()
@@ -338,6 +498,19 @@ class UserListsRepository(
 
     suspend fun getSelectedTagIdsForBook(bookId: String): Result<Set<String>> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                if (safeBookId == "unknown_book") {
+                    return Result.success(emptySet())
+                }
+
+                val selected = GuestLocalStore.readState()
+                    .bookTagIds[safeBookId]
+                    .orEmpty()
+                    .toSet()
+                return Result.success(selected)
+            }
+
             val uid = requireUid()
             val safeBookId = safeBookDocId(bookId)
             if (safeBookId == "unknown_book") {
@@ -358,6 +531,25 @@ class UserListsRepository(
 
     suspend fun createList(name: String, description: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val currentPositions = currentState.lists
+                        .filterNot { it.isSystem }
+                        .map { it.position }
+                    val nextPosition = (currentPositions.maxOrNull() ?: 2) + 1
+                    currentState.copy(
+                        lists = currentState.lists + UserBookList(
+                            id = UUID.randomUUID().toString(),
+                            name = name.trim(),
+                            description = description.trim(),
+                            bookCount = 0,
+                            position = nextPosition
+                        )
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -391,6 +583,40 @@ class UserListsRepository(
         selectedListIds: Set<String>
     ): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(libro.id.ifBlank { libro.isbn })
+                if (safeBookId == "unknown_book") {
+                    return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+                }
+
+                GuestLocalStore.updateState { currentState ->
+                    val normalizedSelectedIds = localNormalizeSelectedListIds(currentState, selectedListIds)
+                    val currentSelectedIds = localSelectedListIds(currentState, safeBookId)
+                    val mutableListBooks = currentState.listBooks.toMutableMap()
+                    val storedBook = localStoredBook(libro, safeBookId)
+
+                    (currentSelectedIds - normalizedSelectedIds).forEach { listId ->
+                        mutableListBooks[listId] = mutableListBooks[listId]
+                            .orEmpty()
+                            .filterNot { localBookId(it) == safeBookId }
+                    }
+
+                    (normalizedSelectedIds - currentSelectedIds).forEach { listId ->
+                        val books = mutableListBooks[listId].orEmpty()
+                            .filterNot { localBookId(it) == safeBookId } + storedBook
+                        mutableListBooks[listId] = books
+                    }
+
+                    val updatedState = currentState.copy(listBooks = mutableListBooks)
+                    if (normalizedSelectedIds.contains(SYSTEM_LIST_READ_ID)) {
+                        ensureLocalReadBook(updatedState, libro, safeBookId)
+                    } else {
+                        updatedState
+                    }
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -476,6 +702,25 @@ class UserListsRepository(
 
     suspend fun updateList(listId: String, name: String, description: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val updatedLists = currentState.lists.map { list ->
+                        if (list.id != listId) {
+                            list
+                        } else if (list.isSystem) {
+                            throw IllegalArgumentException("No se pueden editar las listas del sistema")
+                        } else {
+                            list.copy(
+                                name = name.trim(),
+                                description = description.trim()
+                            )
+                        }
+                    }
+                    currentState.copy(lists = updatedLists)
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -507,6 +752,23 @@ class UserListsRepository(
 
     suspend fun updateListOrder(orderedListIds: List<String>): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val systemLists = currentState.lists.filter { it.isSystem }
+                    val customListsById = currentState.lists
+                        .filterNot { it.isSystem }
+                        .associateBy { it.id }
+                    val orderedCustomIds = orderedListIds.filter { customListsById.containsKey(it) }
+                    val missingCustomIds = customListsById.keys.filterNot { orderedCustomIds.contains(it) }
+                    val finalCustomIds = orderedCustomIds + missingCustomIds
+                    val reorderedCustomLists = finalCustomIds.mapIndexedNotNull { index, listId ->
+                        customListsById[listId]?.copy(position = index + systemLists.size)
+                    }
+                    currentState.copy(lists = systemLists + reorderedCustomLists)
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -542,6 +804,21 @@ class UserListsRepository(
 
     suspend fun deleteList(listId: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val targetList = currentState.lists.firstOrNull { it.id == listId }
+                    if (targetList?.isSystem == true) {
+                        throw IllegalArgumentException("No se pueden eliminar las listas del sistema")
+                    }
+
+                    currentState.copy(
+                        lists = currentState.lists.filterNot { it.id == listId },
+                        listBooks = currentState.listBooks - listId
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             val listRef = userListsCollection(uid).document(listId)
             val existingList = listRef.get().await().toObject(UserBookList::class.java)
@@ -567,6 +844,33 @@ class UserListsRepository(
 
     suspend fun removeBookFromList(listId: String, bookId: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                if (safeBookId == "unknown_book") {
+                    return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+                }
+
+                GuestLocalStore.updateState { currentState ->
+                    val targetList = currentState.lists.firstOrNull { it.id == listId }
+                    val updatedBooks = currentState.listBooks.toMutableMap()
+                    updatedBooks[listId] = updatedBooks[listId]
+                        .orEmpty()
+                        .filterNot { localBookId(it) == safeBookId }
+
+                    val updatedReads = if (targetList?.systemKey == SYSTEM_LIST_READ_KEY) {
+                        currentState.readBooks.filterNot { it.id == safeBookId }
+                    } else {
+                        currentState.readBooks
+                    }
+
+                    currentState.copy(
+                        listBooks = updatedBooks,
+                        readBooks = updatedReads
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -600,6 +904,34 @@ class UserListsRepository(
 
     suspend fun syncBookIntoSystemReadList(libro: Libro): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(libro.id.ifBlank { libro.isbn })
+                if (safeBookId == "unknown_book") {
+                    return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+                }
+
+                GuestLocalStore.updateState { currentState ->
+                    val storedBook = localStoredBook(libro, safeBookId)
+                    val updatedListBooks = currentState.listBooks.toMutableMap().apply {
+                        keys.forEach { listId ->
+                            this[listId] = this[listId]
+                                .orEmpty()
+                                .filterNot { localBookId(it) == safeBookId }
+                        }
+                        this[SYSTEM_LIST_READ_ID] = this[SYSTEM_LIST_READ_ID]
+                            .orEmpty()
+                            .filterNot { localBookId(it) == safeBookId } + storedBook
+                    }
+
+                    ensureLocalReadBook(
+                        currentState.copy(listBooks = updatedListBooks),
+                        libro,
+                        safeBookId
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             ensureDefaultLists(uid)
 
@@ -647,6 +979,25 @@ class UserListsRepository(
 
     suspend fun updateBookTags(bookId: String, tagIds: Set<String>): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                if (safeBookId == "unknown_book") {
+                    return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+                }
+
+                GuestLocalStore.updateState { currentState ->
+                    val updatedBookTagIds = currentState.bookTagIds.toMutableMap()
+                    val currentSelectedListIds = localSelectedListIds(currentState, safeBookId)
+                    if (tagIds.isEmpty() && currentSelectedListIds.isEmpty()) {
+                        updatedBookTagIds.remove(safeBookId)
+                    } else {
+                        updatedBookTagIds[safeBookId] = tagIds.toList()
+                    }
+                    currentState.copy(bookTagIds = updatedBookTagIds)
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             val safeBookId = safeBookDocId(bookId)
             if (safeBookId == "unknown_book") {
@@ -673,6 +1024,26 @@ class UserListsRepository(
 
     suspend fun clearBookOrganization(bookId: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                if (safeBookId == "unknown_book") {
+                    return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
+                }
+
+                GuestLocalStore.updateState { currentState ->
+                    val updatedListBooks = currentState.listBooks.mapValues { (_, books) ->
+                        books.filterNot { localBookId(it) == safeBookId }
+                    }
+
+                    currentState.copy(
+                        listBooks = updatedListBooks,
+                        bookTagIds = currentState.bookTagIds - safeBookId,
+                        readBooks = currentState.readBooks.filterNot { it.id == safeBookId }
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             val safeBookId = safeBookDocId(bookId)
             if (safeBookId == "unknown_book") {
@@ -702,6 +1073,20 @@ class UserListsRepository(
 
     suspend fun createTag(name: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val nextPosition = (currentState.tags.maxOfOrNull { it.position } ?: -1) + 1
+                    currentState.copy(
+                        tags = currentState.tags + UserBookTag(
+                            id = UUID.randomUUID().toString(),
+                            name = name.trim(),
+                            position = nextPosition
+                        )
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = requireUid()
             val newDocument = userTagsCollection(uid).document()
             val nextPosition = (userTagsCollection(uid)

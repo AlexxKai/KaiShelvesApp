@@ -76,6 +76,7 @@ fun ProfileScreen(
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
+    onGoToRegister: () -> Unit,
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
@@ -308,6 +309,18 @@ fun ProfileScreen(
                                     )
 
                                     Spacer(modifier = Modifier.height(20.dp))
+
+                                    if (uiState.user?.isGuest == true) {
+                                        Button(
+                                            onClick = onGoToRegister,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                                        ) {
+                                            Text(stringResource(R.string.create_account_and_sync))
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
 
                                     Button(
                                         onClick = onLogout,

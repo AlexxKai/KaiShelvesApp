@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -47,10 +48,19 @@ fun RegisterScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(uiState.isLoggedIn) {
-        if (uiState.isLoggedIn) {
+    LaunchedEffect(uiState.isLoggedIn, uiState.user?.isGuest) {
+        if (uiState.isLoggedIn && uiState.user?.isGuest != true) {
             onRegisterSuccess()
         }
+    }
+
+    uiState.pendingGuestMergeDecision?.let { decision ->
+        GuestMergeDecisionDialog(
+            decision = decision,
+            isLoading = uiState.isLoading,
+            onDismiss = viewModel::dismissPendingGuestMergeDecision,
+            onChoose = viewModel::resolvePendingGuestMerge
+        )
     }
 
     Column(

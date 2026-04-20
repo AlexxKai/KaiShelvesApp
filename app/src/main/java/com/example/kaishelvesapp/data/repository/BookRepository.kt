@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.data.repository
 
+import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.localization.BookMetadataLocalizer
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
@@ -29,6 +30,10 @@ class BookRepository(
             .trim()
             .ifBlank { "unknown_book" }
             .replace("/", "_")
+    }
+
+    private fun isGuestSessionActive(): Boolean {
+        return auth.currentUser == null && GuestLocalStore.isSessionActive()
     }
 
     private fun normalizeIsbnQuery(rawValue: String): String {
@@ -180,6 +185,11 @@ class BookRepository(
 
     suspend fun marcarLibroComoLeido(libro: Libro): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                userListsRepository.syncBookIntoSystemReadList(libro).getOrThrow()
+                return Result.success(Unit)
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -226,6 +236,12 @@ class BookRepository(
 
     suspend fun obtenerListaLecturas(): Result<List<LibroLeido>> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(
+                    GuestLocalStore.readState().readBooks
+                )
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -247,6 +263,22 @@ class BookRepository(
 
     suspend fun actualizarPuntuacion(bookId: String, puntuacion: Int): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                GuestLocalStore.updateState { currentState ->
+                    currentState.copy(
+                        readBooks = currentState.readBooks.map { readBook ->
+                            if (readBook.id == safeBookId) {
+                                readBook.copy(puntuacion = puntuacion)
+                            } else {
+                                readBook
+                            }
+                        }
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -270,6 +302,26 @@ class BookRepository(
         contieneSpoilers: Boolean
     ): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                GuestLocalStore.updateState { currentState ->
+                    currentState.copy(
+                        readBooks = currentState.readBooks.map { readBook ->
+                            if (readBook.id == safeBookId) {
+                                readBook.copy(
+                                    puntuacion = puntuacion,
+                                    resena = resena.trim(),
+                                    contieneSpoilers = contieneSpoilers
+                                )
+                            } else {
+                                readBook
+                            }
+                        }
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -294,6 +346,16 @@ class BookRepository(
 
     suspend fun eliminarLibroLeido(bookId: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                GuestLocalStore.updateState { currentState ->
+                    currentState.copy(
+                        readBooks = currentState.readBooks.filterNot { it.id == safeBookId }
+                    )
+                }
+                return Result.success(Unit)
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -312,6 +374,13 @@ class BookRepository(
 
     suspend fun obtenerLibroLeido(bookId: String): Result<LibroLeido?> {
         return try {
+            if (isGuestSessionActive()) {
+                val safeBookId = safeBookDocId(bookId)
+                return Result.success(
+                    GuestLocalStore.readState().readBooks.firstOrNull { it.id == safeBookId }
+                )
+            }
+
             val uid = auth.currentUser?.uid
                 ?: return Result.failure(Exception("Usuario no autenticado"))
 

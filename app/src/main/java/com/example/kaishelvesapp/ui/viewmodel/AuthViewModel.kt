@@ -2,8 +2,11 @@ package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.repository.AuthRepository
+import com.example.kaishelvesapp.data.repository.GuestMergeDecision
+import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,13 +17,15 @@ data class AuthUiState(
     val email: String = "",
     val password: String = "",
     val username: String = "",
+    val guestUsername: String = "",
     val profilePhotoUri: String = "",
     val isLoading: Boolean = false,
     val user: Usuario? = null,
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val isLoggedIn: Boolean = false,
-    val isEditingProfile: Boolean = false
+    val isEditingProfile: Boolean = false,
+    val pendingGuestMergeDecision: GuestMergeDecision? = null
 )
 
 class AuthViewModel(
@@ -60,6 +65,10 @@ class AuthViewModel(
 
     fun onUsernameChange(value: String) {
         _uiState.value = _uiState.value.copy(username = value)
+    }
+
+    fun onGuestUsernameChange(value: String) {
+        _uiState.value = _uiState.value.copy(guestUsername = value)
     }
 
     fun onProfilePhotoSelected(uri: String) {
@@ -120,6 +129,7 @@ class AuthViewModel(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        guestUsername = if (usuario.isGuest) usuario.usuario else _uiState.value.guestUsername,
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
@@ -155,16 +165,8 @@ class AuthViewModel(
             val result = repository.login(identifier, password)
 
             result
-                .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        user = usuario,
-                        username = usuario.usuario,
-                        profilePhotoUri = usuario.photoUrl,
-                        isLoggedIn = true,
-                        errorMessage = null
-                    )
+                .onSuccess { authResult ->
+                    handleAuthOperationResult(authResult)
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -193,16 +195,8 @@ class AuthViewModel(
             val result = repository.signInWithGoogle(idToken)
 
             result
-                .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        user = usuario,
-                        username = usuario.usuario,
-                        profilePhotoUri = usuario.photoUrl,
-                        isLoggedIn = true,
-                        errorMessage = null
-                    )
+                .onSuccess { authResult ->
+                    handleAuthOperationResult(authResult)
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -242,12 +236,42 @@ class AuthViewModel(
             val result = repository.register(username, email, password)
 
             result
+                .onSuccess { authResult ->
+                    handleAuthOperationResult(authResult)
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Error al registrar usuario"
+                    )
+                }
+        }
+    }
+
+    fun continueAsGuest() {
+        val guestUsername = _uiState.value.guestUsername.trim()
+
+        if (guestUsername.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Introduce un nombre de usuario para continuar sin cuenta"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.continueAsGuest(guestUsername)
                 .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
                         username = usuario.usuario,
+                        guestUsername = usuario.usuario,
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         errorMessage = null
@@ -256,7 +280,50 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al registrar usuario"
+                        errorMessage = error.message ?: "No se pudo iniciar el modo invitado"
+                    )
+                }
+        }
+    }
+
+    fun dismissPendingGuestMergeDecision() {
+        repository.cancelPendingGuestMerge()
+        _uiState.value = _uiState.value.copy(
+            pendingGuestMergeDecision = null,
+            isLoading = false,
+            user = null,
+            isLoggedIn = repository.isAuthenticated()
+        )
+        if (repository.isAuthenticated()) {
+            loadCurrentUserProfile()
+        }
+    }
+
+    fun resolvePendingGuestMerge(strategy: GuestMergeStrategy) {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.resolvePendingGuestMerge(strategy)
+                .onSuccess { usuario ->
+                    repository.syncPendingAccountNotifications()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = usuario,
+                        username = usuario.usuario,
+                        profilePhotoUri = usuario.photoUrl,
+                        isLoggedIn = true,
+                        pendingGuestMergeDecision = null,
+                        successMessage = "Datos locales sincronizados con tu cuenta"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo completar la fusion de datos"
                     )
                 }
         }
@@ -306,5 +373,34 @@ class AuthViewModel(
     fun logout() {
         repository.logout()
         _uiState.value = AuthUiState(isLoggedIn = false)
+    }
+
+    private suspend fun handleAuthOperationResult(result: AuthOperationResult) {
+        when (result) {
+            is AuthOperationResult.Success -> {
+                repository.syncPendingAccountNotifications()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    user = result.user,
+                    username = result.user.usuario,
+                    profilePhotoUri = result.user.photoUrl,
+                    isLoggedIn = true,
+                    pendingGuestMergeDecision = null,
+                    errorMessage = null
+                )
+            }
+
+            is AuthOperationResult.PendingGuestMerge -> {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    user = result.decision.user,
+                    username = result.decision.user.usuario,
+                    profilePhotoUri = result.decision.user.photoUrl,
+                    isLoggedIn = false,
+                    pendingGuestMergeDecision = result.decision,
+                    errorMessage = null
+                )
+            }
+        }
     }
 }

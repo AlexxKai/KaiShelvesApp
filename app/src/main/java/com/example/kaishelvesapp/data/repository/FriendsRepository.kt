@@ -1,5 +1,6 @@
 package com.example.kaishelvesapp.data.repository
 
+import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
@@ -100,6 +101,10 @@ class FriendsRepository(
 ) {
 
     private fun currentUid(): String? = auth.currentUser?.uid
+
+    private fun isGuestSessionActive(): Boolean {
+        return auth.currentUser == null && GuestLocalStore.isSessionActive()
+    }
 
     private fun usersCollection() = firestore.collection("usuarios")
 
@@ -216,6 +221,15 @@ class FriendsRepository(
 
     suspend fun loadSuggestions(): Result<FriendSuggestionsData> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(
+                    FriendSuggestionsData(
+                        suggestions = emptyList(),
+                        sentRequestIds = emptySet()
+                    )
+                )
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesion iniciada"))
 
@@ -287,6 +301,10 @@ class FriendsRepository(
 
     suspend fun sendFriendRequest(targetUser: Usuario): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesion iniciada"))
             val currentUser = usersCollection()
@@ -334,6 +352,10 @@ class FriendsRepository(
 
     suspend fun loadFriends(): Result<FriendsData> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(FriendsData(friends = emptyList()))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
 
@@ -370,6 +392,10 @@ class FriendsRepository(
 
     suspend fun loadHomeFeed(): Result<List<FriendActivityItem>> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(emptyList())
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
 
@@ -471,6 +497,10 @@ class FriendsRepository(
 
     suspend fun loadFriendProfile(friendUid: String): Result<FriendProfileData> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Los perfiles sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
 
@@ -664,6 +694,10 @@ class FriendsRepository(
 
     suspend fun removeFriend(friendUid: String): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
 
@@ -688,6 +722,10 @@ class FriendsRepository(
 
     suspend fun loadFriendLists(friendUid: String): Result<List<FriendBookListSummary>> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las listas sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             if (friendUid.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar al usuario"))
             }
@@ -738,6 +776,14 @@ class FriendsRepository(
 
     suspend fun loadReceivedFriendRequests(): Result<FriendRequestsData> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.success(
+                    FriendRequestsData(
+                        receivedRequests = emptyList()
+                    )
+                )
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
 
@@ -764,6 +810,10 @@ class FriendsRepository(
 
     suspend fun acceptFriendRequest(requestUser: Usuario): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
             val currentUser = usersCollection()
@@ -813,6 +863,10 @@ class FriendsRepository(
 
     suspend fun rejectFriendRequest(requestUser: Usuario): Result<Unit> {
         return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
 

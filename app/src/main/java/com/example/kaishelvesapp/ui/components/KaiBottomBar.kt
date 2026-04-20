@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -53,8 +54,17 @@ enum class KaiSection {
 @Composable
 fun KaiBottomBar(
     current: KaiSection,
-    onSelect: (KaiSection) -> Unit
+    onSelect: (KaiSection) -> Unit,
+    disabledSections: Set<KaiSection> = emptySet(),
+    onDisabledSectionClick: ((KaiSection) -> Unit)? = null
 ) {
+    val guestUiRestrictions = LocalGuestUiRestrictions.current
+    val effectiveDisabledSections = if (disabledSections.isEmpty()) {
+        guestUiRestrictions.disabledSections
+    } else {
+        disabledSections
+    }
+    val effectiveDisabledClick = onDisabledSectionClick ?: guestUiRestrictions.onBlockedSectionClick
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val compactLayout = screenWidthDp < 380
     val veryCompactLayout = screenWidthDp < 340
@@ -92,6 +102,7 @@ fun KaiBottomBar(
         ) {
             items.forEach { (section, label, icon) ->
                 val selected = current == section
+                val disabled = effectiveDisabledSections.contains(section)
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -102,10 +113,20 @@ fun KaiBottomBar(
                         modifier = Modifier
                             .widthIn(min = 0.dp)
                             .background(
-                                color = if (selected) BloodWine else Obsidian,
+                                color = when {
+                                    disabled -> BloodWine.copy(alpha = 0.28f)
+                                    selected -> BloodWine
+                                    else -> Obsidian
+                                },
                                 shape = RoundedCornerShape(20.dp)
                             )
-                            .clickable { onSelect(section) }
+                            .clickable {
+                                if (disabled) {
+                                    effectiveDisabledClick?.invoke(section)
+                                } else {
+                                    onSelect(section)
+                                }
+                            }
                             .padding(horizontal = itemHorizontalPadding, vertical = itemVerticalPadding),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
@@ -114,14 +135,22 @@ fun KaiBottomBar(
                             imageVector = icon,
                             contentDescription = label,
                             modifier = Modifier.size(iconSize),
-                            tint = if (selected) TarnishedGold else OldIvory
+                            tint = when {
+                                disabled -> TarnishedGold.copy(alpha = 0.55f)
+                                selected -> TarnishedGold
+                                else -> OldIvory
+                            }
                         )
                         Text(
                             text = label,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center,
-                            color = if (selected) TarnishedGold else OldIvory,
+                            color = when {
+                                disabled -> TarnishedGold.copy(alpha = 0.55f)
+                                selected -> TarnishedGold
+                                else -> OldIvory
+                            },
                             modifier = Modifier.padding(top = 4.dp),
                             style = labelStyle
                         )

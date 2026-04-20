@@ -21,6 +21,8 @@
     <string name="admin_badge">Administrator</string>
     <string name="password">Password</string>
     <string name="continue_with_google">Continue with Google</string>
+    <string name="continue_without_account">Continue without account</string>
+    <string name="create_account_and_sync">Create account and sync local data</string>
     <string name="or">or</string>
 
     <string name="great_library">Grand Library</string>
@@ -272,7 +274,6 @@
     <string name="edit_profile">Edit profile</string>
     <string name="change_profile_photo">Change profile photo</string>
     <string name="save_profile_changes">Save changes</string>
-
     <string name="login_screen_title">Kai Shelves</string>
     <string name="login_error_empty_fields">Please enter email or username and password</string>
     <string name="register_error_empty_fields">Please enter username, email and password</string>
@@ -283,4 +284,15 @@
     <string name="google_sign_in_cancelled">Google sign-in was cancelled</string>
     <string name="google_sign_in_not_available">Google sign-in is not configured yet. Add the Web client ID from Firebase.</string>
     <string name="google_sign_in_failed">Google sign-in could not be completed</string>
+    <string name="guest_mode_warning">Your lists and readings will be saved only on this device. If you lose access to it or erase it, you may lose that data.</string>
+    <string name="guest_restricted_title">Registration required</string>
+    <string name="guest_restricted_body">You will be able to access this section once you create an account or sign in.</string>
+    <string name="guest_merge_title">Choose what to do with your local data</string>
+    <string name="guest_merge_body">This account already has saved data. Choose how you want to combine it with the data from this device.</string>
+    <string name="guest_merge_local_summary">Data on this device</string>
+    <string name="guest_merge_cloud_summary">Data already in the account</string>
+    <string name="guest_merge_summary_format">Shelves: %1$d · Organized books: %2$d · Read books: %3$d · Tags: %4$d</string>
+    <string name="guest_merge_action_merge">Merge both libraries</string>
+    <string name="guest_merge_action_keep_cloud">Keep the account data</string>
+    <string name="guest_merge_action_replace_cloud">Replace the account data with local data</string>
 </resources>

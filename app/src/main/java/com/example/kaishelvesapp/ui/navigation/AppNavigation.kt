@@ -1,8 +1,17 @@
 package com.example.kaishelvesapp.ui.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -11,6 +20,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
+import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
+import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
@@ -96,10 +108,24 @@ fun AppNavigation(
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
     val friendRequestsState by friendRequestsViewModel.uiState.collectAsStateWithLifecycle()
+    val isGuestUser = authState.user?.isGuest == true
+    val guestRestrictedSections = remember(isGuestUser) {
+        if (isGuestUser) {
+            setOf(KaiSection.HOME, KaiSection.FRIENDS, KaiSection.GROUPS)
+        } else {
+            emptySet()
+        }
+    }
+    var showGuestRestrictedNotice by remember { mutableStateOf(false) }
 
-    val startDestination = if (authState.isLoggedIn) Routes.HOME else Routes.LOGIN
+    val startDestination = if (authState.isLoggedIn) Routes.DISCOVER else Routes.LOGIN
 
     fun navigateSection(section: KaiSection) {
+        if (guestRestrictedSections.contains(section)) {
+            showGuestRestrictedNotice = true
+            return
+        }
+
         when (section) {
             KaiSection.HOME -> navController.navigate(Routes.HOME)
             KaiSection.MY_BOOKS -> navController.navigate(Routes.LISTS)
@@ -138,15 +164,24 @@ fun AppNavigation(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalGuestUiRestrictions provides GuestUiRestrictions(
+            disabledSections = guestRestrictedSections,
+            onBlockedSectionClick = {
+                showGuestRestrictedNotice = true
+            }
+        )
     ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = startDestination
+            ) {
         composable(Routes.LOGIN) {
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.DISCOVER) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -160,7 +195,7 @@ fun AppNavigation(
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    navController.navigate(Routes.DISCOVER) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -409,6 +444,9 @@ fun AppNavigation(
                 onScanResult = ::scanFromSharedTopBar,
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onGoToRegister = {
+                    navController.navigate(Routes.REGISTER)
                 },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
@@ -675,6 +713,21 @@ fun AppNavigation(
                 },
                 onSectionSelected = { navigateSection(it) }
             )
+        }
+            }
+
+            if (showGuestRestrictedNotice) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GuestRestrictedAccessNotice(
+                        onDismiss = { showGuestRestrictedNotice = false }
+                    )
+                }
+            }
         }
     }
 }

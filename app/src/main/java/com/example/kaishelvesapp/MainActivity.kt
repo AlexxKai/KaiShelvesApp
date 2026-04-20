@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.kaishelvesapp.data.local.AppContextProvider
 import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
 import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.navigation.AppNavigation
@@ -16,6 +17,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesAppTheme
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppContextProvider.initialize(applicationContext)
         DeviceNotificationManager.ensureChannels(this)
         requestNotificationPermissionIfNeeded()
         setContent {

@@ -1,6 +1,11 @@
 package com.example.kaishelvesapp.data.repository
 
 import android.net.Uri
+import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.model.LibroLeido
+import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
@@ -25,15 +30,53 @@ data class UsernameConflictGroup(
     val users: List<UsernameConflictUser>
 )
 
+data class LibraryDataSummary(
+    val customLists: Int = 0,
+    val organizedBooks: Int = 0,
+    val readBooks: Int = 0,
+    val tags: Int = 0
+)
+
+enum class GuestMergeStrategy {
+    MERGE,
+    KEEP_CLOUD,
+    REPLACE_CLOUD
+}
+
+data class GuestMergeDecision(
+    val user: Usuario,
+    val localSummary: LibraryDataSummary,
+    val cloudSummary: LibraryDataSummary
+)
+
+sealed interface AuthOperationResult {
+    data class Success(val user: Usuario) : AuthOperationResult
+    data class PendingGuestMerge(val decision: GuestMergeDecision) : AuthOperationResult
+}
+
 private data class BootstrapAdminAccount(
     val uid: String,
     val email: String
+)
+
+private data class CloudLibrarySnapshot(
+    val lists: List<UserBookList>,
+    val listBooks: Map<String, List<Libro>>,
+    val readBooks: List<LibroLeido>,
+    val tags: List<UserBookTag>,
+    val bookTagIds: Map<String, List<String>>
+)
+
+private data class PendingGuestMergeState(
+    val user: Usuario,
+    val localState: com.example.kaishelvesapp.data.local.GuestLibraryState
 )
 
 class AuthRepository(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
+    private var pendingGuestMergeState: PendingGuestMergeState? = null
 
     private val bootstrapAdminAccounts = listOf(
         BootstrapAdminAccount(
@@ -43,11 +86,11 @@ class AuthRepository(
     )
 
     fun isAuthenticated(): Boolean {
-        return auth.currentUser != null
+        return auth.currentUser != null || GuestLocalStore.isSessionActive()
     }
 
     fun getCurrentUid(): String? {
-        return auth.currentUser?.uid
+        return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
     }
 
     suspend fun migrateLegacyUsernames() {
@@ -177,6 +220,12 @@ class AuthRepository(
     suspend fun getCurrentUserProfile(): Result<Usuario> {
         return try {
             val firebaseUser = auth.currentUser
+            if (firebaseUser == null) {
+                val guestProfile = GuestLocalStore.getActiveProfile()
+                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                return Result.success(guestProfile)
+            }
+
             val uid = firebaseUser?.uid
                 ?: return Result.failure(Exception("No hay sesion iniciada"))
 
@@ -203,7 +252,7 @@ class AuthRepository(
         }
     }
 
-    suspend fun login(identifier: String, password: String): Result<Usuario> {
+    suspend fun login(identifier: String, password: String): Result<AuthOperationResult> {
         return try {
             val resolvedEmail = resolveEmailForLogin(identifier)
                 .getOrElse { error -> return Result.failure(error) }
@@ -212,13 +261,13 @@ class AuthRepository(
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("No se pudo obtener el usuario autenticado"))
             val usuario = getOrCreateUserProfile(firebaseUser)
-            Result.success(usuario)
+            Result.success(resolvePostAuthResult(usuario))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun register(usuario: String, email: String, password: String): Result<Usuario> {
+    suspend fun register(usuario: String, email: String, password: String): Result<AuthOperationResult> {
         return try {
             ensureUsernameIsUnique(usuario)
 
@@ -241,13 +290,13 @@ class AuthRepository(
                 throw e
             }
 
-            Result.success(nuevoUsuario)
+            Result.success(resolvePostAuthResult(nuevoUsuario))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun signInWithGoogle(idToken: String): Result<Usuario> {
+    suspend fun signInWithGoogle(idToken: String): Result<AuthOperationResult> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = auth.signInWithCredential(credential).await()
@@ -255,7 +304,7 @@ class AuthRepository(
                 ?: return Result.failure(Exception("No se pudo obtener el usuario de Google"))
 
             val usuario = getOrCreateUserProfile(firebaseUser)
-            Result.success(usuario)
+            Result.success(resolvePostAuthResult(usuario))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -264,7 +313,26 @@ class AuthRepository(
     suspend fun updateProfile(newUsername: String, selectedPhotoUri: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            if (currentUser == null) {
+                val currentProfile = GuestLocalStore.getActiveProfile()
+                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                val resolvedPhotoUrl = when {
+                    selectedPhotoUri.isBlank() -> currentProfile.photoUrl
+                    selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(
+                        GuestLocalStore.GUEST_UID,
+                        Uri.parse(selectedPhotoUri)
+                    )
+                    else -> selectedPhotoUri
+                }
+
+                return Result.success(
+                    GuestLocalStore.updateProfile(
+                        username = newUsername,
+                        photoUrl = resolvedPhotoUrl
+                    )
+                )
+            }
+
             val uid = currentUser.uid
             val currentProfile = getCurrentUserProfile().getOrNull()
             ensureUsernameIsUnique(newUsername, currentUid = uid)
@@ -297,6 +365,54 @@ class AuthRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    fun continueAsGuest(username: String): Result<Usuario> {
+        return try {
+            val normalizedUsername = normalizeUsername(username)
+            if (normalizedUsername.isBlank()) {
+                return Result.failure(Exception("El nombre de usuario no puede estar vacio"))
+            }
+
+            Result.success(GuestLocalStore.activateGuestProfile(username.trim()))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun resolvePendingGuestMerge(strategy: GuestMergeStrategy): Result<Usuario> {
+        return try {
+            val pendingState = pendingGuestMergeState
+                ?: return Result.failure(Exception("No hay ninguna fusion pendiente"))
+
+            when (strategy) {
+                GuestMergeStrategy.MERGE -> mergeGuestLibraryIntoCloud(
+                    uid = pendingState.user.uid,
+                    localState = pendingState.localState
+                )
+
+                GuestMergeStrategy.KEEP_CLOUD -> Unit
+
+                GuestMergeStrategy.REPLACE_CLOUD -> {
+                    clearCloudLibrary(pendingState.user.uid)
+                    replaceCloudLibraryWithGuestData(
+                        uid = pendingState.user.uid,
+                        state = pendingState.localState
+                    )
+                }
+            }
+
+            GuestLocalStore.clearAll()
+            pendingGuestMergeState = null
+            Result.success(pendingState.user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun cancelPendingGuestMerge() {
+        pendingGuestMergeState = null
+        auth.signOut()
     }
 
     suspend fun syncPendingAccountNotifications() {
@@ -334,6 +450,7 @@ class AuthRepository(
 
     fun logout() {
         auth.signOut()
+        GuestLocalStore.deactivateSession()
     }
 
     private suspend fun resolveEmailForLogin(identifier: String): Result<String> {
@@ -389,6 +506,497 @@ class AuthRepository(
         return ProfileImageCodec.encodeImageAsDataUri(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
+        )
+    }
+
+    private suspend fun resolvePostAuthResult(user: Usuario): AuthOperationResult {
+        if (!hasGuestLibraryToMigrate()) {
+            pendingGuestMergeState = null
+            return AuthOperationResult.Success(user)
+        }
+
+        if (isTargetLibraryEmpty(user.uid)) {
+            replaceCloudLibraryWithGuestData(
+                uid = user.uid,
+                state = GuestLocalStore.readState()
+            )
+            GuestLocalStore.clearAll()
+            pendingGuestMergeState = null
+            return AuthOperationResult.Success(user)
+        }
+
+        val localState = GuestLocalStore.readState()
+        pendingGuestMergeState = PendingGuestMergeState(
+            user = user,
+            localState = localState
+        )
+
+        return AuthOperationResult.PendingGuestMerge(
+            decision = GuestMergeDecision(
+                user = user,
+                localSummary = buildGuestLibrarySummary(localState),
+                cloudSummary = buildCloudLibrarySummary(fetchCloudLibrarySnapshot(user.uid))
+            )
+        )
+    }
+
+    private fun userListsCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("listas")
+
+    private fun userReadCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("leidos")
+
+    private fun userTagsCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("etiquetas")
+
+    private fun userBookMetadataCollection(uid: String) = firestore.collection("usuarios")
+        .document(uid)
+        .collection("libros_metadata")
+
+    private fun safeBookDocId(rawId: String): String {
+        return rawId
+            .trim()
+            .ifBlank { "unknown_book" }
+            .replace("/", "_")
+    }
+
+    private fun buildBookPayload(libro: Libro, safeBookId: String): Map<String, Any> {
+        return mapOf(
+            "id" to safeBookId,
+            "isbn" to libro.isbn,
+            "titulo" to libro.titulo,
+            "autor" to libro.autor,
+            "editorial" to libro.editorial,
+            "genero" to libro.genero,
+            "fechaPublicacion" to libro.fechaPublicacion,
+            "paginas" to libro.paginas,
+            "imagen" to libro.imagen,
+            "pdf" to libro.pdf
+        )
+    }
+
+    private fun buildReadBookPayload(readBook: LibroLeido): Map<String, Any> {
+        return mapOf(
+            "id" to readBook.id,
+            "isbn" to readBook.isbn,
+            "titulo" to readBook.titulo,
+            "autor" to readBook.autor,
+            "editorial" to readBook.editorial,
+            "genero" to readBook.genero,
+            "fechaPublicacion" to readBook.fechaPublicacion,
+            "paginas" to readBook.paginas,
+            "imagen" to readBook.imagen,
+            "pdf" to readBook.pdf,
+            "fechaLeido" to readBook.fechaLeido,
+            "puntuacion" to readBook.puntuacion,
+            "resena" to readBook.resena,
+            "contieneSpoilers" to readBook.contieneSpoilers,
+            "siNo" to readBook.siNo
+        )
+    }
+
+    private fun hasGuestLibraryToMigrate(): Boolean {
+        return GuestLocalStore.isSessionActive() && GuestLocalStore.hasLibraryData()
+    }
+
+    private fun buildGuestLibrarySummary(state: com.example.kaishelvesapp.data.local.GuestLibraryState): LibraryDataSummary {
+        return LibraryDataSummary(
+            customLists = state.lists.count { !it.isSystem },
+            organizedBooks = state.listBooks.values.sumOf { it.size },
+            readBooks = state.readBooks.size,
+            tags = state.tags.size
+        )
+    }
+
+    private fun buildCloudLibrarySummary(snapshot: CloudLibrarySnapshot): LibraryDataSummary {
+        return LibraryDataSummary(
+            customLists = snapshot.lists.count { !it.isSystem },
+            organizedBooks = snapshot.listBooks.values.sumOf { it.size },
+            readBooks = snapshot.readBooks.size,
+            tags = snapshot.tags.size
+        )
+    }
+
+    private suspend fun isTargetLibraryEmpty(uid: String): Boolean {
+        val hasLists = userListsCollection(uid)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .isNotEmpty()
+        val hasReadBooks = userReadCollection(uid)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .isNotEmpty()
+        val hasTags = userTagsCollection(uid)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .isNotEmpty()
+        val hasMetadata = userBookMetadataCollection(uid)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .isNotEmpty()
+
+        return !hasLists && !hasReadBooks && !hasTags && !hasMetadata
+    }
+
+    private suspend fun replaceCloudLibraryWithGuestData(
+        uid: String,
+        state: com.example.kaishelvesapp.data.local.GuestLibraryState
+    ) {
+        var batch = firestore.batch()
+        var writesInBatch = 0
+
+        suspend fun flushBatch() {
+            if (writesInBatch == 0) return
+            batch.commit().await()
+            batch = firestore.batch()
+            writesInBatch = 0
+        }
+
+        fun trackWrite() {
+            writesInBatch++
+        }
+
+        state.lists.forEach { list ->
+            val listRef = userListsCollection(uid).document(list.id)
+            batch.set(
+                listRef,
+                list.copy(
+                    bookCount = state.listBooks[list.id].orEmpty().size,
+                    previewImageUrls = emptyList()
+                ),
+                SetOptions.merge()
+            )
+            trackWrite()
+            if (writesInBatch >= 350) {
+                flushBatch()
+            }
+
+            state.listBooks[list.id].orEmpty().forEach { book ->
+                val safeBookId = safeBookDocId(book.id.ifBlank { book.isbn })
+                if (safeBookId == "unknown_book") return@forEach
+
+                batch.set(
+                    listRef.collection("libros").document(safeBookId),
+                    buildBookPayload(book.copy(id = safeBookId), safeBookId) + mapOf(
+                        "activityAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                trackWrite()
+                if (writesInBatch >= 350) {
+                    flushBatch()
+                }
+            }
+        }
+
+        state.readBooks.forEach { readBook ->
+            val safeBookId = safeBookDocId(readBook.id.ifBlank { readBook.isbn })
+            if (safeBookId == "unknown_book") return@forEach
+
+            batch.set(
+                userReadCollection(uid).document(safeBookId),
+                buildReadBookPayload(readBook.copy(id = safeBookId)) + mapOf(
+                    "activityAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            trackWrite()
+            if (writesInBatch >= 350) {
+                flushBatch()
+            }
+        }
+
+        state.tags.forEach { tag ->
+            batch.set(
+                userTagsCollection(uid).document(tag.id),
+                UserBookTag(
+                    id = tag.id,
+                    name = tag.name,
+                    position = tag.position
+                ),
+                SetOptions.merge()
+            )
+            trackWrite()
+            if (writesInBatch >= 350) {
+                flushBatch()
+            }
+        }
+
+        state.bookTagIds.forEach { (bookId, tagIds) ->
+            val safeBookId = safeBookDocId(bookId)
+            if (safeBookId == "unknown_book") return@forEach
+
+            batch.set(
+                userBookMetadataCollection(uid).document(safeBookId),
+                mapOf("tagIds" to tagIds),
+                SetOptions.merge()
+            )
+            trackWrite()
+            if (writesInBatch >= 350) {
+                flushBatch()
+            }
+        }
+
+        flushBatch()
+    }
+
+    private suspend fun fetchCloudLibrarySnapshot(uid: String): CloudLibrarySnapshot {
+        val listsSnapshot = userListsCollection(uid).get().await()
+        val lists = listsSnapshot.documents.mapNotNull { document ->
+            document.toObject(UserBookList::class.java)?.copy(id = document.id)
+        }
+
+        val listBooks = buildMap {
+            listsSnapshot.documents.forEach { listDocument ->
+                val books = listDocument.reference
+                    .collection("libros")
+                    .get()
+                    .await()
+                    .documents
+                    .mapNotNull { document ->
+                        document.toObject(Libro::class.java)?.copy(
+                            id = document.getString("id").orEmpty().ifBlank { document.id }
+                        )
+                    }
+                put(listDocument.id, books)
+            }
+        }
+
+        val readBooks = userReadCollection(uid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                document.toObject(LibroLeido::class.java)?.copy(id = document.id)
+            }
+
+        val tags = userTagsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                document.toObject(UserBookTag::class.java)?.copy(id = document.id)
+            }
+
+        val bookTagIds = userBookMetadataCollection(uid)
+            .get()
+            .await()
+            .documents
+            .associate { document ->
+                val tagIds = (document.get("tagIds") as? List<*>)
+                    .orEmpty()
+                    .filterIsInstance<String>()
+                document.id to tagIds
+            }
+
+        return CloudLibrarySnapshot(
+            lists = lists,
+            listBooks = listBooks,
+            readBooks = readBooks,
+            tags = tags,
+            bookTagIds = bookTagIds
+        )
+    }
+
+    private suspend fun clearCloudLibrary(uid: String) {
+        userListsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .forEach { listDocument ->
+                val booksSnapshot = listDocument.reference.collection("libros").get().await()
+                booksSnapshot.documents.forEach { it.reference.delete().await() }
+                listDocument.reference.delete().await()
+            }
+
+        userReadCollection(uid)
+            .get()
+            .await()
+            .documents
+            .forEach { it.reference.delete().await() }
+
+        userTagsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .forEach { it.reference.delete().await() }
+
+        userBookMetadataCollection(uid)
+            .get()
+            .await()
+            .documents
+            .forEach { it.reference.delete().await() }
+    }
+
+    private suspend fun mergeGuestLibraryIntoCloud(
+        uid: String,
+        localState: com.example.kaishelvesapp.data.local.GuestLibraryState
+    ) {
+        val cloudSnapshot = fetchCloudLibrarySnapshot(uid)
+        val defaultLists = localState.lists.filter { it.isSystem }
+        val cloudListsById = cloudSnapshot.lists.associateBy { it.id }
+        val existingCustomLists = cloudSnapshot.lists.filterNot { it.isSystem }
+        val normalizedCloudCustomLists = existingCustomLists.associateBy {
+            normalizeUsername(it.name)
+        }.toMutableMap()
+        val currentMaxCustomPosition = existingCustomLists.maxOfOrNull { it.position } ?: defaultLists.size
+
+        val mergedLists = cloudListsById.toMutableMap()
+        val mergedListBooks = cloudSnapshot.listBooks
+            .mapValues { (_, books) -> books.associateBy { safeBookDocId(it.id.ifBlank { it.isbn }) }.toMutableMap() }
+            .toMutableMap()
+        val mergedReadBooks = cloudSnapshot.readBooks
+            .associateBy { safeBookDocId(it.id.ifBlank { it.isbn }) }
+            .toMutableMap()
+        val mergedTagsById = cloudSnapshot.tags.associateBy { it.id }.toMutableMap()
+        val normalizedCloudTags = cloudSnapshot.tags.associateBy { normalizeUsername(it.name) }.toMutableMap()
+        val mergedBookTagIds = cloudSnapshot.bookTagIds
+            .mapValues { (_, ids) -> ids.toMutableSet() }
+            .toMutableMap()
+        var nextCustomPosition = currentMaxCustomPosition + 1
+
+        val localTagIdToRemoteTagId = mutableMapOf<String, String>()
+        localState.tags.forEach { localTag ->
+            val normalizedName = normalizeUsername(localTag.name)
+            val existingTag = normalizedCloudTags[normalizedName]
+            if (existingTag != null) {
+                localTagIdToRemoteTagId[localTag.id] = existingTag.id
+            } else {
+                val newTagId = userTagsCollection(uid).document().id
+                val newTag = UserBookTag(
+                    id = newTagId,
+                    name = localTag.name,
+                    position = (mergedTagsById.values.maxOfOrNull { it.position } ?: -1) + 1
+                )
+                mergedTagsById[newTagId] = newTag
+                normalizedCloudTags[normalizedName] = newTag
+                localTagIdToRemoteTagId[localTag.id] = newTagId
+            }
+        }
+
+        localState.lists.forEach { localList ->
+            val targetList = when {
+                localList.isSystem -> {
+                    val fallback = defaultLists.firstOrNull { it.id == localList.id } ?: localList
+                    mergedLists[localList.id] ?: fallback
+                }
+
+                else -> {
+                    val normalizedName = normalizeUsername(localList.name)
+                    normalizedCloudCustomLists[normalizedName] ?: UserBookList(
+                        id = userListsCollection(uid).document().id,
+                        name = localList.name,
+                        description = localList.description,
+                        bookCount = 0,
+                        position = nextCustomPosition++
+                    ).also { created ->
+                        normalizedCloudCustomLists[normalizedName] = created
+                    }
+                }
+            }
+
+            mergedLists[targetList.id] = targetList.copy(
+                description = targetList.description.ifBlank { localList.description }
+            )
+
+            val targetBooks = mergedListBooks.getOrPut(targetList.id) { mutableMapOf() }
+            localState.listBooks[localList.id].orEmpty().forEach { localBook ->
+                val safeBookId = safeBookDocId(localBook.id.ifBlank { localBook.isbn })
+                if (safeBookId == "unknown_book") return@forEach
+                val currentBook = targetBooks[safeBookId]
+                targetBooks[safeBookId] = mergeBooks(
+                    primary = currentBook,
+                    secondary = localBook.copy(id = safeBookId)
+                )
+            }
+        }
+
+        localState.readBooks.forEach { localReadBook ->
+            val safeBookId = safeBookDocId(localReadBook.id.ifBlank { localReadBook.isbn })
+            if (safeBookId == "unknown_book") return@forEach
+            val current = mergedReadBooks[safeBookId]
+            mergedReadBooks[safeBookId] = mergeReadBooks(
+                primary = current,
+                secondary = localReadBook.copy(id = safeBookId)
+            )
+        }
+
+        localState.bookTagIds.forEach { (bookId, localTagIds) ->
+            val safeBookId = safeBookDocId(bookId)
+            if (safeBookId == "unknown_book") return@forEach
+            val targetTagIds = mergedBookTagIds.getOrPut(safeBookId) { mutableSetOf() }
+            localTagIds.forEach { localTagId ->
+                localTagIdToRemoteTagId[localTagId]?.let(targetTagIds::add)
+            }
+        }
+
+        clearCloudLibrary(uid)
+        replaceCloudLibraryWithGuestData(
+            uid = uid,
+            state = com.example.kaishelvesapp.data.local.GuestLibraryState(
+                profile = null,
+                isSessionActive = false,
+                lists = mergedLists.values.toList(),
+                listBooks = mergedListBooks.mapValues { (_, booksById) -> booksById.values.toList() },
+                readBooks = mergedReadBooks.values.toList(),
+                tags = mergedTagsById.values.toList(),
+                bookTagIds = mergedBookTagIds.mapValues { (_, tagIds) -> tagIds.toList() }
+            )
+        )
+    }
+
+    private fun mergeBooks(primary: Libro?, secondary: Libro): Libro {
+        if (primary == null) return secondary
+        return primary.copy(
+            id = primary.id.ifBlank { secondary.id },
+            isbn = primary.isbn.ifBlank { secondary.isbn },
+            titulo = primary.titulo.ifBlank { secondary.titulo },
+            autor = primary.autor.ifBlank { secondary.autor },
+            editorial = primary.editorial.ifBlank { secondary.editorial },
+            genero = primary.genero.ifBlank { secondary.genero },
+            fechaPublicacion = if (primary.fechaPublicacion != 0) primary.fechaPublicacion else secondary.fechaPublicacion,
+            paginas = if (primary.paginas != 0) primary.paginas else secondary.paginas,
+            imagen = primary.imagen.ifBlank { secondary.imagen },
+            pdf = primary.pdf.ifBlank { secondary.pdf }
+        )
+    }
+
+    private fun mergeReadBooks(primary: LibroLeido?, secondary: LibroLeido): LibroLeido {
+        if (primary == null) return secondary
+
+        val reviewToKeep = when {
+            primary.resena.isBlank() -> secondary.resena
+            secondary.resena.length > primary.resena.length -> secondary.resena
+            else -> primary.resena
+        }
+
+        return primary.copy(
+            id = primary.id.ifBlank { secondary.id },
+            isbn = primary.isbn.ifBlank { secondary.isbn },
+            titulo = primary.titulo.ifBlank { secondary.titulo },
+            autor = primary.autor.ifBlank { secondary.autor },
+            editorial = primary.editorial.ifBlank { secondary.editorial },
+            genero = primary.genero.ifBlank { secondary.genero },
+            fechaPublicacion = if (primary.fechaPublicacion != 0) primary.fechaPublicacion else secondary.fechaPublicacion,
+            paginas = if (primary.paginas != 0) primary.paginas else secondary.paginas,
+            imagen = primary.imagen.ifBlank { secondary.imagen },
+            pdf = primary.pdf.ifBlank { secondary.pdf },
+            fechaLeido = primary.fechaLeido.ifBlank { secondary.fechaLeido },
+            puntuacion = maxOf(primary.puntuacion, secondary.puntuacion),
+            resena = reviewToKeep,
+            contieneSpoilers = primary.contieneSpoilers || secondary.contieneSpoilers,
+            siNo = primary.siNo.ifBlank { secondary.siNo }
         )
     }
 

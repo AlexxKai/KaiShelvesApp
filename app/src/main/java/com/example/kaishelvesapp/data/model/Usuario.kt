@@ -5,5 +5,6 @@ data class Usuario(
     val usuario: String = "",
     val email: String = "",
     val photoUrl: String = "",
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val isGuest: Boolean = false
 )

@@ -256,11 +256,20 @@ fun KaiNavigationDrawerContent(
     userName: String = "",
     profileImageUrl: String = "",
     expanded: Boolean,
+    disabledSections: Set<KaiSection> = emptySet(),
+    onDisabledSectionClick: ((KaiSection) -> Unit)? = null,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
+    val guestUiRestrictions = LocalGuestUiRestrictions.current
+    val effectiveDisabledSections = if (disabledSections.isEmpty()) {
+        guestUiRestrictions.disabledSections
+    } else {
+        disabledSections
+    }
+    val effectiveDisabledClick = onDisabledSectionClick ?: guestUiRestrictions.onBlockedSectionClick
     ModalDrawerSheet(
         modifier = Modifier
             .fillMaxWidth(0.68f)
@@ -327,15 +336,49 @@ fun KaiNavigationDrawerContent(
             KaiDrawerItem(
                 label = stringResource(R.string.friends),
                 selected = currentSection == KaiSection.FRIENDS,
-                leadingIcon = { Icon(Icons.Filled.Groups, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.FRIENDS) }
+                disabled = effectiveDisabledSections.contains(KaiSection.FRIENDS),
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Groups,
+                        contentDescription = null,
+                        tint = if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
+                            TarnishedGold.copy(alpha = 0.55f)
+                        } else {
+                            TarnishedGold
+                        }
+                    )
+                },
+                onClick = {
+                    if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
+                        effectiveDisabledClick?.invoke(KaiSection.FRIENDS)
+                    } else {
+                        onSectionSelected(KaiSection.FRIENDS)
+                    }
+                }
             )
 
             KaiDrawerItem(
                 label = stringResource(R.string.groups),
                 selected = currentSection == KaiSection.GROUPS,
-                leadingIcon = { Icon(Icons.Filled.Handshake, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.GROUPS) }
+                disabled = effectiveDisabledSections.contains(KaiSection.GROUPS),
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Handshake,
+                        contentDescription = null,
+                        tint = if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
+                            TarnishedGold.copy(alpha = 0.55f)
+                        } else {
+                            TarnishedGold
+                        }
+                    )
+                },
+                onClick = {
+                    if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
+                        effectiveDisabledClick?.invoke(KaiSection.GROUPS)
+                    } else {
+                        onSectionSelected(KaiSection.GROUPS)
+                    }
+                }
             )
 
             KaiDrawerItem(
@@ -485,8 +528,13 @@ private fun KaiDrawerHeaderCard(
 private fun KaiDrawerItem(
     label: String,
     selected: Boolean,
+    disabled: Boolean = false,
     leadingIcon: @Composable (() -> Unit)? = null,
-    labelColor: Color = if (selected) TarnishedGold else OldIvory,
+    labelColor: Color = when {
+        disabled -> TarnishedGold.copy(alpha = 0.55f)
+        selected -> TarnishedGold
+        else -> OldIvory
+    },
     onClick: () -> Unit
 ) {
     NavigationDrawerItem(

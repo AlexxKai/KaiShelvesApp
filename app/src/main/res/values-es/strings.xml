@@ -7,20 +7,22 @@
     <string name="retry">Reintentar</string>
     <string name="save">Guardar</string>
     <string name="search">Buscar</string>
-    <string name="logout">Cerrar sesion</string>
-    <string name="open_navigation_menu">Abrir menu lateral</string>
-    <string name="profile_menu">Abrir menu de perfil</string>
+    <string name="logout">Cerrar sesión</string>
+    <string name="open_navigation_menu">Abrir menú lateral</string>
+    <string name="profile_menu">Abrir menú de perfil</string>
 
-    <string name="login">Iniciar sesion</string>
+    <string name="login">Iniciar sesión</string>
     <string name="register">Registrarse</string>
     <string name="create_account">Crear cuenta</string>
     <string name="i_already_have_an_account">Ya tengo cuenta</string>
-    <string name="email">Correo electronico</string>
+    <string name="email">Correo electrónico</string>
     <string name="email_or_username">Correo o usuario</string>
     <string name="username">Usuario</string>
     <string name="admin_badge">Administrador</string>
     <string name="password">Contraseña</string>
     <string name="continue_with_google">Continuar con Google</string>
+    <string name="continue_without_account">Continuar sin cuenta</string>
+    <string name="create_account_and_sync">Crear cuenta y sincronizar datos locales</string>
     <string name="or">o</string>
 
     <string name="great_library">Gran Biblioteca</string>
@@ -107,7 +109,7 @@
     <string name="selected_for_you">Seleccionados para ti</string>
     <string name="help">Ayuda</string>
     <string name="implementation_in_progress">Esta vista está en proceso de implementarse.</string>
-    <string name="reading_statistics">Estadisticas de lectura</string>
+    <string name="reading_statistics">Estadísticas de lectura</string>
     <string name="reading_statistics_subtitle">Revisa tu ritmo, tus valoraciones y la forma que toma tu biblioteca.</string>
     <string name="reading_statistics_summary">Tienes %1$d volumenes registrados en tu archivo de lecturas.</string>
     <string name="total_books_read">Libros leidos</string>
@@ -115,7 +117,7 @@
     <string name="favorite_genre">Genero mas repetido</string>
     <string name="total_pages_read">Paginas leidas</string>
     <string name="unknown_genre">Genero desconocido</string>
-    <string name="settings_privacy">Configuracion y privacidad</string>
+    <string name="settings_privacy">Configuración y privacidad</string>
     <string name="settings_privacy_subtitle">Controla tu archivo, tu visibilidad y los rincones privados de la aplicacion.</string>
     <string name="settings_section_account">Cuenta y preferencias</string>
     <string name="settings_section_account_body">Aqui agruparemos mas adelante idioma, notificaciones, preferencias de sesion y comportamiento de la cuenta.</string>
@@ -277,10 +279,21 @@
     <string name="login_error_empty_fields">Completa correo o usuario y contraseña</string>
     <string name="register_error_empty_fields">Completa usuario, correo y contraseña</string>
     <string name="register_error_short_password">La contraseña debe tener al menos 6 caracteres</string>
-    <string name="profile_error_empty_username">El nombre de usuario no puede estar vacio</string>
+    <string name="profile_error_empty_username">El nombre de usuario no puede estar vacío</string>
     <string name="register_success">Cuenta creada correctamente</string>
     <string name="login_subtitle">Accede a tu biblioteca oscura</string>
-    <string name="google_sign_in_cancelled">Se cancelo el inicio de sesion con Google</string>
-    <string name="google_sign_in_not_available">El acceso con Google todavia no esta configurado. Añade el Web client ID de Firebase.</string>
+    <string name="google_sign_in_cancelled">Se canceló el inicio de sesión con Google</string>
+    <string name="google_sign_in_not_available">El acceso con Google todavía no está configurado. Añade el Web client ID de Firebase.</string>
     <string name="google_sign_in_failed">No se pudo completar el acceso con Google</string>
+    <string name="guest_mode_warning">Tus listas y lecturas se guardarán solo en este dispositivo. Si pierdes el acceso o lo borras, podrías perder esos datos.</string>
+    <string name="guest_restricted_title">Es necesario registrarse</string>
+    <string name="guest_restricted_body">Podrás acceder a esta sección cuando crees una cuenta o inicies sesión.</string>
+    <string name="guest_merge_title">Elige qué hacer con tus datos locales</string>
+    <string name="guest_merge_body">Esta cuenta ya tiene datos guardados. Elige cómo quieres combinarlos con los datos de este dispositivo.</string>
+    <string name="guest_merge_local_summary">Datos de este dispositivo</string>
+    <string name="guest_merge_cloud_summary">Datos ya guardados en la cuenta</string>
+    <string name="guest_merge_summary_format">Estanterías: %1$d · Libros organizados: %2$d · Libros leídos: %3$d · Etiquetas: %4$d</string>
+    <string name="guest_merge_action_merge">Fusionar ambas bibliotecas</string>
+    <string name="guest_merge_action_keep_cloud">Conservar los datos de la cuenta</string>
+    <string name="guest_merge_action_replace_cloud">Reemplazar los datos de la cuenta con los datos locales</string>
 </resources>
