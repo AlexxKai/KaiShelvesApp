@@ -2,12 +2,14 @@ package com.example.kaishelvesapp.data.repository
 
 import android.net.Uri
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
@@ -160,6 +162,11 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = existingUser.usuario
             )
+            notifyUsernameChanged(
+                targetUser = updatedUser,
+                previousUsername = existingUser.usuario,
+                changedByAdmin = true
+            )
 
             Result.success(updatedUser)
         } catch (e: Exception) {
@@ -280,10 +287,48 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = currentProfile?.usuario.orEmpty()
             )
+            notifyUsernameChanged(
+                targetUser = updatedUser,
+                previousUsername = currentProfile?.usuario.orEmpty(),
+                changedByAdmin = false
+            )
 
             Result.success(updatedUser)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun syncPendingAccountNotifications() {
+        val currentUid = auth.currentUser?.uid ?: return
+        val context = FirebaseApp.getInstance().applicationContext
+        val pendingNotifications = firestore.collection("usuarios")
+            .document(currentUid)
+            .collection("notifications")
+            .whereEqualTo("localNotified", false)
+            .get()
+            .await()
+            .documents
+
+        pendingNotifications.forEach { document ->
+            val title = document.getString("title").orEmpty()
+            val body = document.getString("body").orEmpty()
+            if (title.isBlank() || body.isBlank()) {
+                return@forEach
+            }
+
+            val posted = DeviceNotificationManager.showAccountNotification(
+                context = context,
+                notificationId = document.id.hashCode(),
+                title = title,
+                body = body
+            )
+
+            if (posted) {
+                document.reference
+                    .set(mapOf("localNotified" to true), SetOptions.merge())
+                    .await()
+            }
         }
     }
 
@@ -345,6 +390,81 @@ class AuthRepository(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
         )
+    }
+
+    private suspend fun notifyUsernameChanged(
+        targetUser: Usuario,
+        previousUsername: String,
+        changedByAdmin: Boolean
+    ) {
+        val oldUsername = previousUsername.trim()
+        val newUsername = targetUser.usuario.trim()
+        if (oldUsername.isBlank() || newUsername.isBlank() || oldUsername == newUsername) {
+            return
+        }
+
+        val title = "Tu nombre de usuario ha cambiado"
+        val body = if (changedByAdmin) {
+            "Tu usuario ha sido actualizado de \"$oldUsername\" a \"$newUsername\"."
+        } else {
+            "Tu usuario se ha actualizado de \"$oldUsername\" a \"$newUsername\"."
+        }
+
+        val notificationRef = firestore.collection("usuarios")
+            .document(targetUser.uid)
+            .collection("notifications")
+            .document()
+
+        notificationRef.set(
+            mapOf(
+                "type" to "username_changed",
+                "title" to title,
+                "body" to body,
+                "previousUsername" to oldUsername,
+                "newUsername" to newUsername,
+                "read" to false,
+                "localNotified" to false,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        ).await()
+
+        queueUsernameChangeEmail(
+            user = targetUser,
+            title = title,
+            body = body,
+            previousUsername = oldUsername,
+            newUsername = newUsername
+        )
+    }
+
+    // This queue can be processed later by Firebase Functions or another backend worker.
+    private suspend fun queueUsernameChangeEmail(
+        user: Usuario,
+        title: String,
+        body: String,
+        previousUsername: String,
+        newUsername: String
+    ) {
+        if (user.email.isBlank()) return
+
+        firestore.collection("emailQueue")
+            .document()
+            .set(
+                mapOf(
+                    "toEmail" to user.email,
+                    "subject" to title,
+                    "body" to body,
+                    "template" to "username_changed",
+                    "status" to "pending",
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "metadata" to mapOf(
+                        "uid" to user.uid,
+                        "previousUsername" to previousUsername,
+                        "newUsername" to newUsername
+                    )
+                )
+            )
+            .await()
     }
 
     private suspend fun requireAdminAccess() {

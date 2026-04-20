@@ -115,6 +115,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
+                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -155,6 +156,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
+                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -192,6 +194,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
+                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -240,6 +243,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
+                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -280,6 +284,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { updatedUser ->
+                    repository.syncPendingAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
