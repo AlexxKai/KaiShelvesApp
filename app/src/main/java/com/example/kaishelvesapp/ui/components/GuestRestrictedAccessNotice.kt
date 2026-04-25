@@ -4,10 +4,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -21,12 +26,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
+import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 @Composable
 fun GuestRestrictedAccessNotice(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCreateAccountAndSync: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -62,6 +69,22 @@ fun GuestRestrictedAccessNotice(
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory
             )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Button(
+                onClick = onCreateAccountAndSync,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TarnishedGold,
+                    contentColor = Obsidian
+                ),
+                border = BorderStroke(1.dp, OldIvory.copy(alpha = 0.45f)),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+            ) {
+                Text(stringResource(R.string.create_account_and_sync))
+            }
         }
     }
 }

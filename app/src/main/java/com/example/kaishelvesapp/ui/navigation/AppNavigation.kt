@@ -724,7 +724,11 @@ fun AppNavigation(
                     contentAlignment = Alignment.Center
                 ) {
                     GuestRestrictedAccessNotice(
-                        onDismiss = { showGuestRestrictedNotice = false }
+                        onDismiss = { showGuestRestrictedNotice = false },
+                        onCreateAccountAndSync = {
+                            showGuestRestrictedNotice = false
+                            navController.navigate(Routes.REGISTER)
+                        }
                     )
                 }
             }
