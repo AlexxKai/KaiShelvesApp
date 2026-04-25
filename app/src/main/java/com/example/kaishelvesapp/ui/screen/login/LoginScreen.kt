@@ -43,14 +43,14 @@ import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 fun LoginScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: AuthViewModel,
-    onLoginSuccess: () -> Unit,
+    onLoginSuccess: (isGuest: Boolean) -> Unit,
     onGoToRegister: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(uiState.isLoggedIn) {
-        if (uiState.isLoggedIn) {
-            onLoginSuccess()
+    LaunchedEffect(uiState.isLoggedIn, uiState.user?.isGuest) {
+        if (uiState.isLoggedIn && uiState.user != null) {
+            onLoginSuccess(uiState.user?.isGuest == true)
         }
     }
 

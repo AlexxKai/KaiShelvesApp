@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -117,8 +118,32 @@ fun AppNavigation(
         }
     }
     var showGuestRestrictedNotice by remember { mutableStateOf(false) }
+    var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
 
     val startDestination = if (authState.isLoggedIn) Routes.DISCOVER else Routes.LOGIN
+
+    fun authenticatedStartRoute(isGuest: Boolean): String {
+        return if (isGuest) Routes.DISCOVER else Routes.HOME
+    }
+
+    LaunchedEffect(authState.isLoggedIn, authState.user?.isGuest) {
+        if (!authState.isLoggedIn) {
+            initialLoggedInRouteResolved = false
+            return@LaunchedEffect
+        }
+
+        val user = authState.user ?: return@LaunchedEffect
+        if (initialLoggedInRouteResolved) return@LaunchedEffect
+
+        val targetRoute = authenticatedStartRoute(user.isGuest)
+        initialLoggedInRouteResolved = true
+
+        if (navController.currentBackStackEntry?.destination?.route != targetRoute) {
+            navController.navigate(targetRoute) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     fun navigateSection(section: KaiSection) {
         if (guestRestrictedSections.contains(section)) {
@@ -180,8 +205,8 @@ fun AppNavigation(
         composable(Routes.LOGIN) {
             LoginScreen(
                 viewModel = authViewModel,
-                onLoginSuccess = {
-                    navController.navigate(Routes.DISCOVER) {
+                onLoginSuccess = { isGuest ->
+                    navController.navigate(authenticatedStartRoute(isGuest)) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -195,7 +220,7 @@ fun AppNavigation(
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate(Routes.DISCOVER) {
+                    navController.navigate(Routes.HOME) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
