@@ -68,12 +68,14 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.data.repository.FriendShelfBookItem
 import com.example.kaishelvesapp.data.repository.FriendShelfPreview
 import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.FriendProfileData
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.ActivitySocialActions
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.components.KaiSection
@@ -165,7 +167,13 @@ fun FriendProfileScreen(
                             }
                         },
                         onOpenFriendLists = onOpenFriendLists,
-                        onOpenFriendProfile = onOpenFriendProfile
+                        onOpenFriendProfile = onOpenFriendProfile,
+                        commentsByActivityId = uiState.commentsByActivityId,
+                        loadingCommentIds = uiState.loadingCommentIds,
+                        socialActionIds = uiState.socialActionIds,
+                        onToggleLike = viewModel::toggleLike,
+                        onLoadComments = viewModel::loadComments,
+                        onAddComment = viewModel::addComment
                     )
                 }
 
@@ -288,7 +296,13 @@ private fun FriendProfileContent(
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onOpenFriendLists: (String, String) -> Unit,
-    onOpenFriendProfile: (String) -> Unit
+    onOpenFriendProfile: (String) -> Unit,
+    commentsByActivityId: Map<String, List<ActivityComment>>,
+    loadingCommentIds: Set<String>,
+    socialActionIds: Set<String>,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -325,7 +339,15 @@ private fun FriendProfileContent(
         Spacer(modifier = Modifier.height(18.dp))
         GroupsSection(profile.user, profile.groupsCount)
         Spacer(modifier = Modifier.height(18.dp))
-        UpdatesSection(profile = profile)
+        UpdatesSection(
+            profile = profile,
+            commentsByActivityId = commentsByActivityId,
+            loadingCommentIds = loadingCommentIds,
+            socialActionIds = socialActionIds,
+            onToggleLike = onToggleLike,
+            onLoadComments = onLoadComments,
+            onAddComment = onAddComment
+        )
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -807,7 +829,13 @@ private fun GroupsSection(
 
 @Composable
 private fun UpdatesSection(
-    profile: FriendProfileData
+    profile: FriendProfileData,
+    commentsByActivityId: Map<String, List<ActivityComment>>,
+    loadingCommentIds: Set<String>,
+    socialActionIds: Set<String>,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
 ) {
     ProfileSectionCard(
         title = stringResource(R.string.updates_title)
@@ -825,7 +853,15 @@ private fun UpdatesSection(
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 profile.updates.forEach { item ->
-                    UpdateItem(item = item)
+                    UpdateItem(
+                        item = item,
+                        comments = commentsByActivityId[item.id].orEmpty(),
+                        isLoadingComments = item.id in loadingCommentIds,
+                        isSocialActionRunning = item.id in socialActionIds,
+                        onToggleLike = onToggleLike,
+                        onLoadComments = onLoadComments,
+                        onAddComment = onAddComment
+                    )
                 }
             }
         }
@@ -834,7 +870,13 @@ private fun UpdatesSection(
 
 @Composable
 private fun UpdateItem(
-    item: FriendActivityItem
+    item: FriendActivityItem,
+    comments: List<ActivityComment>,
+    isLoadingComments: Boolean,
+    isSocialActionRunning: Boolean,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -850,8 +892,7 @@ private fun UpdateItem(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = when (item.type) {
+            val title = when (item.type) {
                     FriendActivityType.FRIENDSHIP -> stringResource(
                         R.string.friendship_update_text,
                         item.user.usuario.ifBlank { stringResource(R.string.unknown_username) },
@@ -869,7 +910,10 @@ private fun UpdateItem(
                         R.string.friend_has_read,
                         item.user.usuario.ifBlank { stringResource(R.string.unknown_username) }
                     )
-                },
+                }
+
+            Text(
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = OldIvory
             )
@@ -901,6 +945,19 @@ private fun UpdateItem(
                 Spacer(modifier = Modifier.height(10.dp))
                 ActivityBookCard(book = book)
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            ActivitySocialActions(
+                item = item,
+                postTitle = title,
+                postTimestamp = stringResource(R.string.recently_label),
+                comments = comments,
+                isLoadingComments = isLoadingComments,
+                isSaving = isSocialActionRunning,
+                onToggleLike = onToggleLike,
+                onLoadComments = onLoadComments,
+                onAddComment = onAddComment
+            )
         }
     }
 }

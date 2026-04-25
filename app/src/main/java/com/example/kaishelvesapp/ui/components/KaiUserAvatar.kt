@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
@@ -33,6 +34,7 @@ fun KaiUserAvatar(
     displayName: String,
     imageUrl: String,
     modifier: Modifier = Modifier,
+    size: Dp = 52.dp,
     placeholderContent: @Composable BoxScope.() -> Unit = {
         Text(
             text = displayName
@@ -95,7 +97,7 @@ fun KaiUserAvatar(
     ) {
         Box(
             modifier = Modifier
-                .size(68.dp)
+                .size(size + 16.dp)
                 .blur(16.dp)
                 .background(
                     color = TarnishedGold.copy(alpha = 0.16f),
@@ -105,7 +107,7 @@ fun KaiUserAvatar(
 
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(size)
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                     brush = Brush.verticalGradient(

@@ -74,6 +74,7 @@ import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.ActivitySocialActions
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -234,21 +235,29 @@ fun HomeScreen(
                             items(
                                 items = uiState.activities,
                                 key = { item ->
-                                    buildString {
-                                        append(item.user.uid)
-                                        append('_')
-                                        append(item.type.name)
-                                        append('_')
-                                        append(item.book?.id ?: item.readBook?.id ?: "activity")
-                                        append('_')
-                                        append(item.timestampMillis ?: -1L)
+                                    item.id.ifBlank {
+                                        buildString {
+                                            append(item.user.uid)
+                                            append('_')
+                                            append(item.type.name)
+                                            append('_')
+                                            append(item.book?.id ?: item.readBook?.id ?: "activity")
+                                            append('_')
+                                            append(item.timestampMillis ?: -1L)
+                                        }
                                     }
                                 }
                             ) { item ->
                                 FeedActivityCard(
                                     item = item,
                                     onOpenFriendProfile = onOpenFriendProfile,
-                                    onOpenBook = onOpenBook
+                                    onOpenBook = onOpenBook,
+                                    comments = uiState.commentsByActivityId[item.id].orEmpty(),
+                                    isLoadingComments = item.id in uiState.loadingCommentIds,
+                                    isSocialActionRunning = item.id in uiState.socialActionIds,
+                                    onToggleLike = viewModel::toggleLike,
+                                    onLoadComments = viewModel::loadComments,
+                                    onAddComment = viewModel::addComment
                                 )
                             }
                         }
@@ -310,7 +319,13 @@ private fun HomeMessageCard(
 private fun FeedActivityCard(
     item: FriendActivityItem,
     onOpenFriendProfile: (String) -> Unit,
-    onOpenBook: (Libro) -> Unit
+    onOpenBook: (Libro) -> Unit,
+    comments: List<com.example.kaishelvesapp.data.repository.ActivityComment>,
+    isLoadingComments: Boolean,
+    isSocialActionRunning: Boolean,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
 ) {
     val book = remember(item) { item.book ?: item.readBook?.toLibro() }
 
@@ -386,20 +401,17 @@ private fun FeedActivityCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(18.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.home_feed_like),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF66D6D6)
-                )
-                Text(
-                    text = stringResource(R.string.home_feed_comment),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF66D6D6)
-                )
-            }
+            ActivitySocialActions(
+                item = item,
+                postTitle = activityTitle(item),
+                postTimestamp = formatActivityTimestamp(item.timestampMillis),
+                comments = comments,
+                isLoadingComments = isLoadingComments,
+                isSaving = isSocialActionRunning,
+                onToggleLike = onToggleLike,
+                onLoadComments = onLoadComments,
+                onAddComment = onAddComment
+            )
         }
     }
 }

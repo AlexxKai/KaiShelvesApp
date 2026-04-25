@@ -46,7 +46,14 @@
     <string name="home_empty_activity_title">Aun no hay movimiento</string>
     <string name="home_empty_activity_body">Cuando tus amigos anadan libros o acepten amistades, su actividad aparecera aqui.</string>
     <string name="home_feed_like">Me gusta</string>
+    <string name="home_feed_unlike">Ya no me gusta</string>
     <string name="home_feed_comment">Comentar</string>
+    <string name="likes_count">Conteo de me gusta</string>
+    <string name="comments_count">Conteo de comentarios</string>
+    <string name="comments_title">Comentarios</string>
+    <string name="no_comments_yet">Sin comentarios aun.</string>
+    <string name="write_comment_hint">Comentar</string>
+    <string name="send_comment">Enviar comentario</string>
     <string name="friends">Amigos</string>
     <string name="friends_screen_subtitle">Conecta con tu círculo lector y descubre sus bibliotecas.</string>
     <string name="search_friends">Buscar amigos</string>

@@ -46,7 +46,14 @@
     <string name="home_empty_activity_title">No movement yet</string>
     <string name="home_empty_activity_body">When your friends add books or accept friendships, their activity will show up here.</string>
     <string name="home_feed_like">Like</string>
+    <string name="home_feed_unlike">Unlike</string>
     <string name="home_feed_comment">Comment</string>
+    <string name="likes_count">Likes count</string>
+    <string name="comments_count">Comments count</string>
+    <string name="comments_title">Comments</string>
+    <string name="no_comments_yet">No comments yet.</string>
+    <string name="write_comment_hint">Comment</string>
+    <string name="send_comment">Send comment</string>
     <string name="friends">Friends</string>
     <string name="friends_screen_subtitle">Connect with your reading circle and discover their libraries.</string>
     <string name="search_friends">Search friends</string>

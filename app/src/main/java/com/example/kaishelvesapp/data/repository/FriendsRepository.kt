@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.tasks.await
@@ -52,12 +53,27 @@ enum class FriendActivityType {
 }
 
 data class FriendActivityItem(
+    val id: String = "",
     val type: FriendActivityType,
     val user: Usuario,
     val timestampMillis: Long? = null,
     val relatedUserName: String? = null,
     val book: Libro? = null,
-    val readBook: LibroLeido? = null
+    val readBook: LibroLeido? = null,
+    val social: ActivitySocialSummary = ActivitySocialSummary()
+)
+
+data class ActivitySocialSummary(
+    val likeCount: Int = 0,
+    val commentCount: Int = 0,
+    val likedByCurrentUser: Boolean = false
+)
+
+data class ActivityComment(
+    val id: String = "",
+    val user: Usuario = Usuario(),
+    val text: String = "",
+    val timestampMillis: Long? = null
 )
 
 data class FriendShelfBookItem(
@@ -119,6 +135,15 @@ class FriendsRepository(
     private fun sentRequestsCollection(uid: String) = usersCollection().document(uid).collection("friend_requests_sent")
 
     private fun receivedRequestsCollection(uid: String) = usersCollection().document(uid).collection("friend_requests_received")
+
+    private fun activitySocialDocument(activityId: String) = firestore.collection("activitySocial")
+        .document(activityId)
+
+    private fun activityLikesCollection(activityId: String) = activitySocialDocument(activityId)
+        .collection("likes")
+
+    private fun activityCommentsCollection(activityId: String) = activitySocialDocument(activityId)
+        .collection("comments")
 
     private fun DocumentSnapshot.stringValue(vararg keys: String): String {
         return keys.firstNotNullOfOrNull { key ->
@@ -217,6 +242,44 @@ class FriendsRepository(
             compareByDescending<FriendActivityItem> { it.timestampMillis ?: Long.MIN_VALUE }
                 .thenBy { it.user.usuario.ifBlank { it.user.email }.lowercase() }
         )
+    }
+
+    private fun activityId(
+        ownerUid: String,
+        type: FriendActivityType,
+        sourceId: String,
+        timestampMillis: Long?
+    ): String {
+        return listOf(
+            ownerUid,
+            type.name.lowercase(),
+            sourceId.ifBlank { "activity" },
+            timestampMillis?.toString().orEmpty()
+        )
+            .joinToString("_")
+            .replace(Regex("[^A-Za-z0-9_-]"), "_")
+            .take(220)
+    }
+
+    private suspend fun socialSummary(activityId: String, currentUid: String): ActivitySocialSummary {
+        if (activityId.isBlank()) return ActivitySocialSummary()
+
+        val likes = activityLikesCollection(activityId).get().await()
+        val comments = activityCommentsCollection(activityId).get().await()
+        return ActivitySocialSummary(
+            likeCount = likes.size(),
+            commentCount = comments.size(),
+            likedByCurrentUser = likes.documents.any { it.id == currentUid }
+        )
+    }
+
+    private suspend fun enrichWithSocial(
+        activities: List<FriendActivityItem>,
+        currentUid: String
+    ): List<FriendActivityItem> {
+        return activities.map { item ->
+            item.copy(social = socialSummary(item.id, currentUid))
+        }
     }
 
     suspend fun loadSuggestions(): Result<FriendSuggestionsData> {
@@ -424,6 +487,12 @@ class FriendsRepository(
 
                     add(
                         FriendActivityItem(
+                            id = activityId(
+                                ownerUid = friendUid,
+                                type = FriendActivityType.FRIENDSHIP,
+                                sourceId = uid,
+                                timestampMillis = document.timestampMillis("createdAt")
+                            ),
                             type = FriendActivityType.FRIENDSHIP,
                             user = friend,
                             timestampMillis = document.timestampMillis("createdAt"),
@@ -440,6 +509,12 @@ class FriendsRepository(
                     wantToReadDoc?.toObject(Libro::class.java)?.let { book ->
                         add(
                             FriendActivityItem(
+                                id = activityId(
+                                    ownerUid = friendUid,
+                                    type = FriendActivityType.WANT_TO_READ,
+                                    sourceId = wantToReadDoc.id,
+                                    timestampMillis = wantToReadDoc.timestampMillis("activityAt")
+                                ),
                                 type = FriendActivityType.WANT_TO_READ,
                                 user = friend,
                                 timestampMillis = wantToReadDoc.timestampMillis("activityAt"),
@@ -457,6 +532,12 @@ class FriendsRepository(
                     readingDoc?.toObject(Libro::class.java)?.let { book ->
                         add(
                             FriendActivityItem(
+                                id = activityId(
+                                    ownerUid = friendUid,
+                                    type = FriendActivityType.READING,
+                                    sourceId = readingDoc.id,
+                                    timestampMillis = readingDoc.timestampMillis("activityAt")
+                                ),
                                 type = FriendActivityType.READING,
                                 user = friend,
                                 timestampMillis = readingDoc.timestampMillis("activityAt"),
@@ -478,6 +559,13 @@ class FriendsRepository(
                     readDoc?.toObject(LibroLeido::class.java)?.let { readBook ->
                         add(
                             FriendActivityItem(
+                                id = activityId(
+                                    ownerUid = friendUid,
+                                    type = FriendActivityType.READ,
+                                    sourceId = readDoc.id,
+                                    timestampMillis = readDoc.timestampMillis("activityAt")
+                                        ?: parseReadDateToMillis(readBook.fechaLeido)
+                                ),
                                 type = FriendActivityType.READ,
                                 user = friend,
                                 timestampMillis = readDoc.timestampMillis("activityAt")
@@ -489,7 +577,7 @@ class FriendsRepository(
                 }
             }
 
-            Result.success(sortActivitiesByRecency(activities))
+            Result.success(enrichWithSocial(sortActivitiesByRecency(activities), uid))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -531,22 +619,28 @@ class FriendsRepository(
                 .await()
                 .exists()
 
-            val booksRead = readsCollection(friendUid)
+            val booksReadDocuments = readsCollection(friendUid)
                 .get()
                 .await()
                 .documents
+
+            val booksRead = booksReadDocuments
                 .mapNotNull { it.toObject(LibroLeido::class.java) }
 
-            val readingBooks = systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
+            val readingBookDocuments = systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
                 .get()
                 .await()
                 .documents
+
+            val readingBooks = readingBookDocuments
                 .mapNotNull { it.toObject(Libro::class.java) }
 
-            val wantToReadBooks = systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
+            val wantToReadBookDocuments = systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
                 .get()
                 .await()
                 .documents
+
+            val wantToReadBooks = wantToReadBookDocuments
                 .mapNotNull { it.toObject(Libro::class.java) }
 
             val friendDocuments = friendsCollection(friendUid)
@@ -577,6 +671,14 @@ class FriendsRepository(
                 if (friendDocuments.any { it.id == uid }) {
                     add(
                         FriendActivityItem(
+                            id = activityId(
+                                ownerUid = friendUid,
+                                type = FriendActivityType.FRIENDSHIP,
+                                sourceId = uid,
+                                timestampMillis = friendDocuments
+                                    .firstOrNull { it.id == uid }
+                                    ?.timestampMillis("createdAt")
+                            ),
                             type = FriendActivityType.FRIENDSHIP,
                             user = resolvedFriend,
                             timestampMillis = friendDocuments
@@ -587,34 +689,67 @@ class FriendsRepository(
                     )
                 }
 
-                wantToReadBooks.firstOrNull()?.let { book ->
+                wantToReadBookDocuments
+                    .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
+                    ?.let { document ->
+                        val book = document.toObject(Libro::class.java) ?: return@let
                     add(
                         FriendActivityItem(
+                            id = activityId(
+                                ownerUid = friendUid,
+                                type = FriendActivityType.WANT_TO_READ,
+                                sourceId = document.id,
+                                timestampMillis = document.timestampMillis("activityAt")
+                            ),
                             type = FriendActivityType.WANT_TO_READ,
                             user = resolvedFriend,
-                            timestampMillis = null,
+                            timestampMillis = document.timestampMillis("activityAt"),
                             book = book
                         )
                     )
                 }
 
-                readingBooks.firstOrNull()?.let { book ->
+                readingBookDocuments
+                    .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
+                    ?.let { document ->
+                        val book = document.toObject(Libro::class.java) ?: return@let
                     add(
                         FriendActivityItem(
+                            id = activityId(
+                                ownerUid = friendUid,
+                                type = FriendActivityType.READING,
+                                sourceId = document.id,
+                                timestampMillis = document.timestampMillis("activityAt")
+                            ),
                             type = FriendActivityType.READING,
                             user = resolvedFriend,
-                            timestampMillis = null,
+                            timestampMillis = document.timestampMillis("activityAt"),
                             book = book
                         )
                     )
                 }
 
-                booksRead.firstOrNull()?.let { book ->
+                booksReadDocuments
+                    .maxByOrNull { document ->
+                        document.timestampMillis("activityAt")
+                            ?: parseReadDateToMillis(document.getString("fechaLeido").orEmpty())
+                            ?: Long.MIN_VALUE
+                    }
+                    ?.let { document ->
+                        val book = document.toObject(LibroLeido::class.java) ?: return@let
                     add(
                         FriendActivityItem(
+                            id = activityId(
+                                ownerUid = friendUid,
+                                type = FriendActivityType.READ,
+                                sourceId = document.id,
+                                timestampMillis = document.timestampMillis("activityAt")
+                                    ?: parseReadDateToMillis(book.fechaLeido)
+                            ),
                             type = FriendActivityType.READ,
                             user = resolvedFriend,
-                            timestampMillis = parseReadDateToMillis(book.fechaLeido),
+                            timestampMillis = document.timestampMillis("activityAt")
+                                ?: parseReadDateToMillis(book.fechaLeido),
                             readBook = book
                         )
                     )
@@ -684,8 +819,122 @@ class FriendsRepository(
                     predefinedShelves = predefinedShelves,
                     friendPreviews = friendPreviews,
                     groupsCount = 0,
-                    updates = updates
+                    updates = enrichWithSocial(sortActivitiesByRecency(updates), uid)
                 )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleActivityLike(activityId: String): Result<ActivitySocialSummary> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesion para indicar que te gusta una publicacion"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            if (activityId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la publicacion"))
+            }
+
+            val socialRef = activitySocialDocument(activityId)
+            val likeRef = activityLikesCollection(activityId).document(uid)
+            val likeSnapshot = likeRef.get().await()
+            if (likeSnapshot.exists()) {
+                likeRef.delete().await()
+            } else {
+                val user = getUserProfile(uid) ?: Usuario(uid = uid)
+                socialRef.set(mapOf("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
+                likeRef.set(
+                    mapOf(
+                        "uid" to user.uid,
+                        "usuario" to user.usuario,
+                        "email" to user.email,
+                        "photoUrl" to user.photoUrl,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+
+            Result.success(socialSummary(activityId, uid))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadActivityComments(activityId: String): Result<List<ActivityComment>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(emptyList())
+            }
+
+            if (activityId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la publicacion"))
+            }
+
+            val comments = activityCommentsCollection(activityId)
+                .get()
+                .await()
+                .documents
+                .map { document ->
+                    ActivityComment(
+                        id = document.id,
+                        user = Usuario(
+                            uid = document.getString("uid").orEmpty(),
+                            usuario = document.getString("usuario").orEmpty(),
+                            email = document.getString("email").orEmpty(),
+                            photoUrl = document.getString("photoUrl").orEmpty()
+                        ),
+                        text = document.getString("text").orEmpty(),
+                        timestampMillis = document.timestampMillis("createdAt")
+                    )
+                }
+                .sortedBy { it.timestampMillis ?: Long.MAX_VALUE }
+
+            Result.success(comments)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addActivityComment(activityId: String, text: String): Result<Pair<ActivitySocialSummary, List<ActivityComment>>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesion para comentar una publicacion"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val trimmedText = text.trim()
+            if (activityId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la publicacion"))
+            }
+            if (trimmedText.isBlank()) {
+                return Result.failure(Exception("Escribe un comentario"))
+            }
+
+            val user = getUserProfile(uid) ?: Usuario(uid = uid)
+            activitySocialDocument(activityId)
+                .set(mapOf("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+                .await()
+            activityCommentsCollection(activityId)
+                .document()
+                .set(
+                    mapOf(
+                        "uid" to user.uid,
+                        "usuario" to user.usuario,
+                        "email" to user.email,
+                        "photoUrl" to user.photoUrl,
+                        "text" to trimmedText,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                .await()
+
+            Result.success(
+                socialSummary(activityId, uid) to loadActivityComments(activityId).getOrElse { emptyList() }
             )
         } catch (e: Exception) {
             Result.failure(e)
