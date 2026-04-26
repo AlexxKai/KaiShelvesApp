@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -79,9 +82,12 @@ fun BookShelfActions(
     var showOrganizerDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
     var showCreateDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
     var showRemoveDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
+    var showReadReviewDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
+    var pendingReadTagIds by rememberSaveable(safeBookId) { mutableStateOf(emptySet<String>()) }
 
     LaunchedEffect(safeBookId) {
         detailViewModel.cargarListasParaLibro(safeBookId)
+        detailViewModel.cargarEstadoLectura(safeBookId)
     }
 
     if (showOrganizerDialog) {
@@ -98,11 +104,19 @@ fun BookShelfActions(
                 }
             },
             onSave = { selectedListId, selectedTagIds ->
-                detailViewModel.guardarOrganizacion(
-                    libro = book,
-                    selectedListIds = selectedListId?.let(::setOf).orEmpty(),
-                    selectedTagIds = selectedTagIds
-                )
+                if (
+                    selectedListId == UserListsRepository.SYSTEM_LIST_READ_ID &&
+                    UserListsRepository.SYSTEM_LIST_READ_ID !in uiState.selectedListIds
+                ) {
+                    pendingReadTagIds = selectedTagIds
+                    showReadReviewDialog = true
+                } else {
+                    detailViewModel.guardarOrganizacion(
+                        libro = book,
+                        selectedListIds = selectedListId?.let(::setOf).orEmpty(),
+                        selectedTagIds = selectedTagIds
+                    )
+                }
                 showOrganizerDialog = false
             },
             onCreateNew = { showCreateDialog = true },
@@ -173,6 +187,31 @@ fun BookShelfActions(
                 }
             }
         }
+    }
+
+    if (showReadReviewDialog) {
+        ReadReviewDialog(
+            libro = book,
+            isSaving = uiState.isSavingLists,
+            initialRating = uiState.readBook?.puntuacion ?: 0,
+            initialReview = uiState.readBook?.resena.orEmpty(),
+            initialContainsSpoilers = uiState.readBook?.contieneSpoilers ?: false,
+            onDismiss = {
+                if (!uiState.isSavingLists) {
+                    showReadReviewDialog = false
+                }
+            },
+            onSave = { rating, review, containsSpoilers ->
+                detailViewModel.guardarLecturaConResena(
+                    libro = book,
+                    selectedTagIds = pendingReadTagIds,
+                    puntuacion = rating,
+                    resena = review,
+                    contieneSpoilers = containsSpoilers
+                )
+                showReadReviewDialog = false
+            }
+        )
     }
 
     BookShelfActionRow(
@@ -677,4 +716,169 @@ private fun BookShelfCreateDialog(
 private enum class BookShelfCreateType {
     TAG,
     SHELF
+}
+
+@Composable
+fun ReadReviewDialog(
+    libro: Libro,
+    isSaving: Boolean,
+    initialRating: Int,
+    initialReview: String,
+    initialContainsSpoilers: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (Int, String, Boolean) -> Unit
+) {
+    var rating by rememberSaveable(initialRating) { mutableStateOf(initialRating) }
+    var review by rememberSaveable(initialReview) { mutableStateOf(initialReview) }
+    var containsSpoilers by rememberSaveable(initialContainsSpoilers) { mutableStateOf(initialContainsSpoilers) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+            color = Obsidian.copy(alpha = 0.98f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss, enabled = !isSaving) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.cancel),
+                            tint = OldIvory
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(R.string.write_a_review),
+                        color = TarnishedGold,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    IconButton(
+                        onClick = { onSave(rating, review, containsSpoilers) },
+                        enabled = !isSaving
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Done,
+                            contentDescription = stringResource(R.string.save),
+                            tint = if (isSaving) OldIvory.copy(alpha = 0.5f) else TarnishedGold
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Obsidian),
+                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.35f)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        BookCover(
+                            imageUrl = libro.imagen,
+                            title = libro.titulo,
+                            modifier = Modifier
+                                .width(72.dp)
+                                .height(104.dp)
+                        )
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                                color = TarnishedGold,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (libro.autor.isNotBlank()) {
+                                Text(
+                                    text = stringResource(R.string.book_by_author, libro.autor),
+                                    color = OldIvory,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(R.string.rate_it),
+                        color = OldIvory,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        (1..5).forEach { star ->
+                            Icon(
+                                imageVector = if (star <= rating) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                contentDescription = null,
+                                tint = if (star <= rating) Color(0xFFE2B84C) else OldIvory.copy(alpha = 0.35f),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { rating = star }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = TarnishedGold.copy(alpha = 0.18f))
+
+                OutlinedTextField(
+                    value = review,
+                    onValueChange = { review = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    label = {
+                        Text(stringResource(R.string.write_review_optional))
+                    },
+                    minLines = 8
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Switch(
+                        checked = containsSpoilers,
+                        onCheckedChange = { containsSpoilers = it }
+                    )
+                    Text(
+                        text = stringResource(R.string.contains_spoilers),
+                        color = OldIvory,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+    }
 }

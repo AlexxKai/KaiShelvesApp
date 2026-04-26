@@ -80,6 +80,7 @@ import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
+import com.example.kaishelvesapp.ui.components.ReadReviewDialog
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
@@ -476,9 +477,12 @@ private fun FeedBookActions(
     var showOrganizerDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
     var showCreateDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
     var showRemoveDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
+    var showReadReviewDialog by rememberSaveable(safeBookId) { mutableStateOf(false) }
+    var pendingReadTagIds by rememberSaveable(safeBookId) { mutableStateOf(emptySet<String>()) }
 
     LaunchedEffect(safeBookId) {
         detailViewModel.cargarListasParaLibro(safeBookId)
+        detailViewModel.cargarEstadoLectura(safeBookId)
     }
 
     if (showOrganizerDialog) {
@@ -495,11 +499,19 @@ private fun FeedBookActions(
                 }
             },
             onSave = { selectedListId, selectedTagIds ->
-                detailViewModel.guardarOrganizacion(
-                    libro = book,
-                    selectedListIds = selectedListId?.let(::setOf).orEmpty(),
-                    selectedTagIds = selectedTagIds
-                )
+                if (
+                    selectedListId == UserListsRepository.SYSTEM_LIST_READ_ID &&
+                    UserListsRepository.SYSTEM_LIST_READ_ID !in uiState.selectedListIds
+                ) {
+                    pendingReadTagIds = selectedTagIds
+                    showReadReviewDialog = true
+                } else {
+                    detailViewModel.guardarOrganizacion(
+                        libro = book,
+                        selectedListIds = selectedListId?.let(::setOf).orEmpty(),
+                        selectedTagIds = selectedTagIds
+                    )
+                }
                 showOrganizerDialog = false
             },
             onCreateNew = { showCreateDialog = true },
@@ -570,6 +582,31 @@ private fun FeedBookActions(
                 }
             }
         }
+    }
+
+    if (showReadReviewDialog) {
+        ReadReviewDialog(
+            libro = book,
+            isSaving = uiState.isSavingLists,
+            initialRating = uiState.readBook?.puntuacion ?: 0,
+            initialReview = uiState.readBook?.resena.orEmpty(),
+            initialContainsSpoilers = uiState.readBook?.contieneSpoilers ?: false,
+            onDismiss = {
+                if (!uiState.isSavingLists) {
+                    showReadReviewDialog = false
+                }
+            },
+            onSave = { rating, review, containsSpoilers ->
+                detailViewModel.guardarLecturaConResena(
+                    libro = book,
+                    selectedTagIds = pendingReadTagIds,
+                    puntuacion = rating,
+                    resena = review,
+                    contieneSpoilers = containsSpoilers
+                )
+                showReadReviewDialog = false
+            }
+        )
     }
 
     FeedShelfActionRow(
