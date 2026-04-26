@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 data class BookDetailUiState(
     val isLoading: Boolean = false,
     val isListsLoading: Boolean = false,
+    val isBookSelectionLoading: Boolean = false,
     val isSavingLists: Boolean = false,
     val isAlreadyRead: Boolean = false,
     val readBook: LibroLeido? = null,
@@ -66,14 +67,20 @@ class BookDetailViewModel(
     }
 
     fun cargarListasParaLibro(bookId: String) {
+        val cachedLists = userListsRepository.getCachedUserListsOrDefault()
+        val cachedTags = userListsRepository.getCachedUserTags()
+
         _uiState.value = _uiState.value.copy(
-            isListsLoading = true,
+            isListsLoading = cachedLists.isEmpty(),
+            isBookSelectionLoading = bookId.isNotBlank(),
+            availableLists = cachedLists,
+            availableTags = cachedTags,
+            selectedListIds = emptySet(),
+            selectedTagIds = emptySet(),
             errorMessageRes = null
         )
 
         viewModelScope.launch {
-            val listsResult = userListsRepository.getUserLists()
-            val tagsResult = userListsRepository.getUserTags()
             val selectedResult = if (bookId.isBlank()) {
                 Result.success(emptySet())
             } else {
@@ -84,10 +91,13 @@ class BookDetailViewModel(
             } else {
                 userListsRepository.getSelectedTagIdsForBook(bookId)
             }
+            val listsResult = userListsRepository.getUserLists()
+            val tagsResult = userListsRepository.getUserTags()
 
             if (listsResult.isSuccess && selectedResult.isSuccess && tagsResult.isSuccess && selectedTagsResult.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     isListsLoading = false,
+                    isBookSelectionLoading = false,
                     availableLists = listsResult.getOrDefault(emptyList()),
                     selectedListIds = selectedResult.getOrDefault(emptySet()),
                     availableTags = tagsResult.getOrDefault(emptyList()),
@@ -97,6 +107,7 @@ class BookDetailViewModel(
             } else {
                 _uiState.value = _uiState.value.copy(
                     isListsLoading = false,
+                    isBookSelectionLoading = false,
                     errorMessageRes = R.string.book_lists_load_error
                 )
             }

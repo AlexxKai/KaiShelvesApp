@@ -28,6 +28,11 @@ class UserListsRepository(
         const val SYSTEM_LIST_WANT_TO_READ_KEY = "want_to_read"
         const val SYSTEM_LIST_READING_KEY = "reading"
         const val SYSTEM_LIST_READ_KEY = "read"
+
+        private var cachedListsOwnerId: String? = null
+        private var cachedUserLists: List<UserBookList>? = null
+        private var cachedTagsOwnerId: String? = null
+        private var cachedUserTags: List<UserBookTag>? = null
     }
 
     private val systemListIds = setOf(
@@ -46,6 +51,10 @@ class UserListsRepository(
         return auth.currentUser?.uid
             ?: GuestLocalStore.getActiveProfile()?.uid
             ?: throw IllegalStateException("Usuario no autenticado")
+    }
+
+    private fun currentOwnerIdOrNull(): String? {
+        return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
     }
 
     private fun isGuestSessionActive(): Boolean {
@@ -280,6 +289,20 @@ class UserListsRepository(
         )
     )
 
+    fun getCachedUserListsOrDefault(): List<UserBookList> {
+        val ownerId = currentOwnerIdOrNull()
+        return cachedUserLists
+            ?.takeIf { cachedListsOwnerId == ownerId }
+            ?: defaultSystemLists()
+    }
+
+    fun getCachedUserTags(): List<UserBookTag> {
+        val ownerId = currentOwnerIdOrNull()
+        return cachedUserTags
+            ?.takeIf { cachedTagsOwnerId == ownerId }
+            .orEmpty()
+    }
+
     private suspend fun ensureDefaultLists(uid: String) {
         val batch = firestore.batch()
         var changed = false
@@ -315,7 +338,10 @@ class UserListsRepository(
     suspend fun getUserLists(): Result<List<UserBookList>> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.success(localGuestLists(GuestLocalStore.readState()))
+                val lists = localGuestLists(GuestLocalStore.readState())
+                cachedListsOwnerId = currentOwnerIdOrNull()
+                cachedUserLists = lists
+                return Result.success(lists)
             }
 
             val uid = requireUid()
@@ -347,6 +373,8 @@ class UserListsRepository(
                         .thenBy { it.name.lowercase() }
                 )
 
+            cachedListsOwnerId = uid
+            cachedUserLists = lists
             Result.success(lists)
         } catch (e: Exception) {
             Result.failure(e)
@@ -477,6 +505,8 @@ class UserListsRepository(
                 val tags = GuestLocalStore.readState()
                     .tags
                     .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
+                cachedTagsOwnerId = currentOwnerIdOrNull()
+                cachedUserTags = tags
                 return Result.success(tags)
             }
 
@@ -490,6 +520,8 @@ class UserListsRepository(
                 }
                 .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
 
+            cachedTagsOwnerId = uid
+            cachedUserTags = tags
             Result.success(tags)
         } catch (e: Exception) {
             Result.failure(e)
