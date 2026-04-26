@@ -5,6 +5,7 @@
     <string name="cancel">Cancelar</string>
     <string name="delete">Eliminar</string>
     <string name="retry">Reintentar</string>
+    <string name="refresh">Actualizar</string>
     <string name="save">Guardar</string>
     <string name="search">Buscar</string>
     <string name="logout">Cerrar sesión</string>
@@ -111,6 +112,19 @@
     <string name="no_matching_users">No hay usuarios que coincidan con esa búsqueda.</string>
     <string name="try_another_user_search">Prueba con otro nombre de usuario o correo.</string>
     <string name="library">Biblioteca</string>
+    <string name="device_library_title">Biblioteca del dispositivo</string>
+    <string name="device_library_subtitle">Explora los archivos de lectura de la carpeta seleccionada.</string>
+    <string name="device_library_mode_folder">Mostrando una carpeta seleccionada</string>
+    <string name="device_library_no_folder_selected">Elige una carpeta para mostrar tus libros locales</string>
+    <string name="device_library_count">%1$d archivos</string>
+    <string name="device_library_choose_folder">Elegir carpeta</string>
+    <string name="device_library_filter_hint">Filtrar libros locales</string>
+    <string name="device_library_empty_title">No hay archivos para mostrar</string>
+    <string name="device_library_empty_body">Elige una carpeta con libros PDF, EPUB o texto para llenar esta vista.</string>
+    <string name="device_library_error_title">No se pudieron cargar los archivos</string>
+    <string name="open_file">Abrir archivo</string>
+    <string name="no_app_to_open_file">Ninguna app puede abrir este archivo</string>
+    <string name="could_not_open_file">No se pudo abrir este archivo</string>
     <string name="groups">Grupos</string>
     <string name="reading_challenges">Desafíos de lectura</string>
     <string name="selected_for_you">Seleccionados para ti</string>

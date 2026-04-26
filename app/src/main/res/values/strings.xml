@@ -5,6 +5,7 @@
     <string name="cancel">Cancel</string>
     <string name="delete">Delete</string>
     <string name="retry">Retry</string>
+    <string name="refresh">Refresh</string>
     <string name="save">Save</string>
     <string name="search">Search</string>
     <string name="logout">Log out</string>
@@ -111,6 +112,19 @@
     <string name="no_matching_users">There are no users matching this search.</string>
     <string name="try_another_user_search">Try another username or email.</string>
     <string name="library">Library</string>
+    <string name="device_library_title">Device library</string>
+    <string name="device_library_subtitle">Browse the reading files from your selected folder.</string>
+    <string name="device_library_mode_folder">Showing a selected folder</string>
+    <string name="device_library_no_folder_selected">Choose a folder to show your local books</string>
+    <string name="device_library_count">%1$d files</string>
+    <string name="device_library_choose_folder">Choose folder</string>
+    <string name="device_library_filter_hint">Filter local books</string>
+    <string name="device_library_empty_title">No files to show</string>
+    <string name="device_library_empty_body">Choose a folder with PDF, EPUB or text books to populate this view.</string>
+    <string name="device_library_error_title">Could not load files</string>
+    <string name="open_file">Open file</string>
+    <string name="no_app_to_open_file">No app can open this file</string>
+    <string name="could_not_open_file">Could not open this file</string>
     <string name="groups">Groups</string>
     <string name="reading_challenges">Reading challenges</string>
     <string name="selected_for_you">Selected for you</string>

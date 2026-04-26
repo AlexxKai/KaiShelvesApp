@@ -32,6 +32,7 @@ import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
 import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
+import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
@@ -432,10 +433,7 @@ fun AppNavigation(
         }
 
         composable(Routes.LIBRARY) {
-            PlaceholderScreen(
-                title = "Biblioteca",
-                subtitle = "Aquí prepararemos una vista específica para tu biblioteca.",
-                currentSection = KaiSection.LIBRARY,
+            DeviceLibraryScreen(
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
