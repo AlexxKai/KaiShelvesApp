@@ -87,6 +87,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -856,7 +857,7 @@ private fun ReviewContentDialog(
 @Composable
 private fun reviewDateLabel(readBook: LibroLeido): String {
     return if (readBook.fechaLeido.isNotBlank()) {
-        stringResource(R.string.read_date_value, readBook.fechaLeido)
+        stringResource(R.string.read_date_value, formatReadDateForDisplay(readBook.fechaLeido))
     } else {
         stringResource(R.string.review_written_now)
     }

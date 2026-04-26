@@ -57,6 +57,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import kotlinx.coroutines.launch
 
@@ -315,7 +316,7 @@ private fun ReadingItem(
                     )
 
                     Text(
-                        text = "${stringResource(R.string.read_date)}: ${libro.fechaLeido}",
+                        text = "${stringResource(R.string.read_date)}: ${formatReadDateForDisplay(libro.fechaLeido)}",
                         color = OldIvory
                     )
 

@@ -58,6 +58,7 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 
@@ -412,7 +413,10 @@ private fun ListBookCard(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = stringResource(R.string.read_date_value, readDate),
+                                text = stringResource(
+                                    R.string.read_date_value,
+                                    formatReadDateForDisplay(readDate)
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OldIvory.copy(alpha = 0.88f)
                             )
