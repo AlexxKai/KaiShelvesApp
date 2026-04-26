@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.BookShelfActions
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -405,14 +406,13 @@ private fun BookCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
             .animateContentSize(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold),
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -426,39 +426,52 @@ private fun BookCard(
                 )
                 .padding(16.dp)
         ) {
-            BookCover(
-                imageUrl = libro.imagen,
-                title = libro.titulo,
+            Row(
                 modifier = Modifier
-                    .width(64.dp)
-                    .height(96.dp)
-            )
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
+                    .fillMaxWidth()
+                    .clickable { onClick() }
             ) {
-                Text(
-                    text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = TarnishedGold
+                BookCover(
+                    imageUrl = libro.imagen,
+                    title = libro.titulo,
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(96.dp)
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                if (libro.autor.isNotBlank()) {
-                    Text("${stringResource(R.string.author)}: ${libro.autor}", color = OldIvory)
-                }
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TarnishedGold
+                    )
 
-                if (libro.fechaPublicacion != 0) {
-                    Text("${stringResource(R.string.year)}: ${libro.fechaPublicacion}", color = OldIvory)
-                }
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                if (libro.genero.isNotBlank()) {
-                    Text("${stringResource(R.string.genre)}: ${libro.genero}", color = OldIvory)
+                    if (libro.autor.isNotBlank()) {
+                        Text("${stringResource(R.string.author)}: ${libro.autor}", color = OldIvory)
+                    }
+
+                    if (libro.fechaPublicacion != 0) {
+                        Text("${stringResource(R.string.year)}: ${libro.fechaPublicacion}", color = OldIvory)
+                    }
+
+                    if (libro.genero.isNotBlank()) {
+                        Text("${stringResource(R.string.genre)}: ${libro.genero}", color = OldIvory)
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            BookShelfActions(
+                book = libro,
+                viewModelKeyPrefix = "catalog_detail_shelf"
+            )
         }
     }
 }

@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,7 +33,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +52,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.BookShelfActions
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -81,7 +79,6 @@ fun UserListDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    var removingBook by remember { mutableStateOf<Libro?>(null) }
     var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
     val isReadList = listId == com.example.kaishelvesapp.data.repository.UserListsRepository.SYSTEM_LIST_READ_ID
     val sortedBooks = remember(uiState.books, sortOption, isReadList) {
@@ -114,46 +111,6 @@ fun UserListDetailScreen(
             snackbarHostState.showSnackbar(context.getString(it))
             viewModel.clearMessages()
         }
-    }
-
-    removingBook?.let { libro ->
-        AlertDialog(
-            onDismissRequest = { removingBook = null },
-            title = {
-                Text(
-                    text = stringResource(R.string.remove_book_from_list),
-                    color = TarnishedGold
-                )
-            },
-            text = {
-                Text(
-                    text = stringResource(R.string.remove_book_from_list_confirmation, libro.titulo),
-                    color = OldIvory
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.removeBookFromList(listId, libro.id.ifBlank { libro.isbn })
-                        removingBook = null
-                    }
-                ) {
-                    Text(
-                        text = stringResource(R.string.delete),
-                        color = TarnishedGold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { removingBook = null }) {
-                    Text(
-                        text = stringResource(R.string.cancel),
-                        color = OldIvory
-                    )
-                }
-            },
-            containerColor = Obsidian
-        )
     }
 
     Scaffold(
@@ -236,8 +193,7 @@ fun UserListDetailScreen(
                         ListBookCard(
                             item = item,
                             isReadList = isReadList,
-                            onOpen = { onBookClick(item.book) },
-                            onRemove = { removingBook = item.book }
+                            onOpen = { onBookClick(item.book) }
                         )
                     }
                 }
@@ -381,8 +337,7 @@ private fun ListDetailHeaderCard(
 private fun ListBookCard(
     item: UserListDetailBookItem,
     isReadList: Boolean,
-    onOpen: () -> Unit,
-    onRemove: () -> Unit
+    onOpen: () -> Unit
 ) {
     val libro = item.book
     Card(
@@ -393,82 +348,85 @@ private fun ListBookCard(
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp)
         ) {
-            BookCover(
-                imageUrl = libro.imagen,
-                title = libro.titulo,
-                modifier = Modifier
-                    .width(62.dp)
-                    .height(92.dp)
-            )
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = TarnishedGold
+                BookCover(
+                    imageUrl = libro.imagen,
+                    title = libro.titulo,
+                    modifier = Modifier
+                        .width(62.dp)
+                        .height(92.dp)
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                if (libro.autor.isNotBlank()) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
                     Text(
-                        text = libro.autor,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OldIvory
-                    )
-                }
-
-                if (libro.genero.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = libro.genero,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OldIvory
-                    )
-                }
-
-                if (isReadList) {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = if ((item.rating ?: 0) > 0) {
-                            stringResource(R.string.rating_value, item.rating ?: 0)
-                        } else {
-                            stringResource(R.string.not_rated_yet)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OldIvory
+                        text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TarnishedGold
                     )
 
-                    item.readDate?.takeIf { it.isNotBlank() }?.let { readDate ->
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (libro.autor.isNotBlank()) {
+                        Text(
+                            text = libro.autor,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory
+                        )
+                    }
+
+                    if (libro.genero.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = libro.genero,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory
+                        )
+                    }
+
+                    if (isReadList) {
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = stringResource(R.string.read_date_value, readDate),
+                            text = if ((item.rating ?: 0) > 0) {
+                                stringResource(R.string.rating_value, item.rating ?: 0)
+                            } else {
+                                stringResource(R.string.not_rated_yet)
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = OldIvory.copy(alpha = 0.88f)
+                            color = OldIvory
                         )
+
+                        item.readDate?.takeIf { it.isNotBlank() }?.let { readDate ->
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = stringResource(R.string.read_date_value, readDate),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OldIvory.copy(alpha = 0.88f)
+                            )
+                        }
                     }
                 }
             }
 
-            IconButton(onClick = onRemove) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.remove_book_from_list),
-                    tint = TarnishedGold
-                )
-            }
+            Spacer(modifier = Modifier.height(14.dp))
+
+            BookShelfActions(
+                book = libro,
+                viewModelKeyPrefix = "list_detail_shelf"
+            )
         }
     }
 }
