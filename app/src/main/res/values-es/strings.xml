@@ -8,6 +8,7 @@
     <string name="refresh">Actualizar</string>
     <string name="save">Guardar</string>
     <string name="search">Buscar</string>
+    <string name="clear_search">Borrar busqueda</string>
     <string name="logout">Cerrar sesión</string>
     <string name="open_navigation_menu">Abrir menú lateral</string>
     <string name="profile_menu">Abrir menú de perfil</string>

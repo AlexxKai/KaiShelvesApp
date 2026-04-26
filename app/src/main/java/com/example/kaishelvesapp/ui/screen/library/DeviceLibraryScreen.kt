@@ -607,6 +607,17 @@ private fun DeviceLibrarySearchPanel(
                     leadingIcon = {
                         Icon(Icons.Filled.Search, contentDescription = null, tint = OldIvory)
                     },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = stringResource(R.string.clear_search),
+                                    tint = OldIvory
+                                )
+                            }
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(
                         onSearch = { onCommitSearch(query) }

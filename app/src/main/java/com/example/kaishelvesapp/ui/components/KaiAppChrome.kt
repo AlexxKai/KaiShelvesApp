@@ -34,6 +34,7 @@ import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Handshake
@@ -232,12 +233,26 @@ fun KaiPrimaryTopBar(
                 }
             },
             trailingIcon = {
-                IconButton(onClick = ::launchScanner) {
-                    Icon(
-                        imageVector = Icons.Filled.CameraAlt,
-                        contentDescription = stringResource(R.string.scan_isbn),
-                        tint = TarnishedGold
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchQueryChange("") }) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.clear_search),
+                                tint = TarnishedGold
+                            )
+                        }
+                    }
+
+                    IconButton(onClick = ::launchScanner) {
+                        Icon(
+                            imageVector = Icons.Filled.CameraAlt,
+                            contentDescription = stringResource(R.string.scan_isbn),
+                            tint = TarnishedGold
+                        )
+                    }
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),

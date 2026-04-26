@@ -8,6 +8,7 @@
     <string name="refresh">Refresh</string>
     <string name="save">Save</string>
     <string name="search">Search</string>
+    <string name="clear_search">Clear search</string>
     <string name="logout">Log out</string>
     <string name="open_navigation_menu">Open navigation menu</string>
     <string name="profile_menu">Open profile menu</string>
