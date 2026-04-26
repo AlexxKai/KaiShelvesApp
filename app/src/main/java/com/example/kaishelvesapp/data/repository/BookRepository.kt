@@ -13,6 +13,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import retrofit2.HttpException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -67,11 +68,15 @@ class BookRepository(
 
     private suspend fun searchGoogleBooks(
         query: String,
-        maxResults: Int
+        maxResults: Int,
+        startIndex: Int = 0,
+        orderBy: String? = null
     ) = try {
         api.searchBooks(
             query = query,
             maxResults = maxResults,
+            startIndex = startIndex,
+            orderBy = orderBy,
             langRestrict = currentGoogleBooksLanguage()
         )
     } catch (error: Exception) {
@@ -82,19 +87,54 @@ class BookRepository(
         publicApi.searchBooks(
             query = query,
             maxResults = maxResults,
+            startIndex = startIndex,
+            orderBy = orderBy,
             langRestrict = currentGoogleBooksLanguage()
         )
     }
 
     suspend fun obtenerLibros(): Result<List<Libro>> {
         return try {
-            val response = searchGoogleBooks(
-                query = "subject:fiction",
-                maxResults = 40
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            val recentYear = currentYear - 1
+            val newestQueries = listOf(
+                currentYear.toString(),
+                "published $currentYear",
+                "$currentYear books",
+                "$currentYear novel",
+                "$currentYear literatura",
+                "$currentYear libro",
+                "inauthor:a",
+                "inauthor:e",
+                "inauthor:o"
             )
 
-            val libros = response.items
-                .map { it.toLibro(fallbackGenero = "Ficcion") }
+            val libros = newestQueries
+                .flatMap { query ->
+                    searchGoogleBooks(
+                        query = query,
+                        maxResults = 40,
+                        orderBy = "newest"
+                    ).items
+                }
+                .map { it.toLibro() }
+                .filter { libro ->
+                    libro.titulo.isNotBlank() &&
+                        libro.autor.isNotBlank() &&
+                        libro.fechaPublicacion in recentYear..currentYear
+                }
+                .distinctBy { libro ->
+                    libro.id.ifBlank {
+                        libro.isbn.ifBlank {
+                            "${libro.titulo.lowercase()}-${libro.autor.lowercase()}"
+                        }
+                    }
+                }
+                .sortedWith(
+                    compareByDescending<Libro> { it.fechaPublicacion }
+                        .thenBy { it.titulo.lowercase() }
+                )
+                .take(40)
                 .localizeForCurrentLanguage()
 
             Result.success(libros)
