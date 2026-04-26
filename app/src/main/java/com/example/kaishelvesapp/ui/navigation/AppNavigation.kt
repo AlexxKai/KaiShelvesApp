@@ -155,7 +155,10 @@ fun AppNavigation(
         when (section) {
             KaiSection.HOME -> navController.navigate(Routes.HOME)
             KaiSection.MY_BOOKS -> navController.navigate(Routes.LISTS)
-            KaiSection.DISCOVER -> navController.navigate(Routes.DISCOVER)
+            KaiSection.DISCOVER -> {
+                catalogViewModel.refrescarNovedades()
+                navController.navigate(Routes.DISCOVER)
+            }
             KaiSection.SEARCH -> navController.navigate(Routes.SEARCH)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)

@@ -32,12 +32,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +75,7 @@ private enum class CatalogViewMode {
     DETAILED
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
@@ -152,71 +155,78 @@ fun CatalogScreen(
                 )
             }
         ) { innerPadding ->
-            Column(
+            PullToRefreshBox(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(innerPadding),
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = viewModel::refrescarNovedades
             ) {
-                when {
-                    uiState.isLoading -> {
-                        CatalogMessageBox {
-                            CircularProgressIndicator(color = TarnishedGold)
-                        }
-                    }
-
-                    uiState.errorMessage != null -> {
-                        CatalogMessageBox {
-                            Text(
-                                text = uiState.errorMessage ?: "Error desconocido",
-                                color = MaterialTheme.colorScheme.error,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Button(
-                                onClick = { viewModel.cargarLibros() },
-                                colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                            ) {
-                                Text(stringResource(R.string.retry))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    when {
+                        uiState.isLoading -> {
+                            CatalogMessageBox {
+                                CircularProgressIndicator(color = TarnishedGold)
                             }
                         }
-                    }
 
-                    uiState.libros.isEmpty() -> {
-                        CatalogMessageBox {
-                            Text(
-                                text = stringResource(R.string.no_books_found),
-                                color = OldIvory,
-                                textAlign = TextAlign.Center
-                            )
+                        uiState.errorMessage != null -> {
+                            CatalogMessageBox {
+                                Text(
+                                    text = uiState.errorMessage ?: "Error desconocido",
+                                    color = MaterialTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Button(
+                                    onClick = { viewModel.cargarLibros() },
+                                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                                ) {
+                                    Text(stringResource(R.string.retry))
+                                }
+                            }
                         }
-                    }
 
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            contentPadding = PaddingValues(bottom = 20.dp)
-                        ) {
-                            item {
-                                AnimatedContent(
-                                    targetState = viewMode,
-                                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                    label = "catalog_view_mode"
-                                ) { mode ->
-                                    when (mode) {
-                                        CatalogViewMode.COMPACT -> CompactCatalogSection(
-                                            books = uiState.libros,
-                                            onBookClick = onBookClick
-                                        )
+                        uiState.libros.isEmpty() -> {
+                            CatalogMessageBox {
+                                Text(
+                                    text = stringResource(R.string.no_books_found),
+                                    color = OldIvory,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
 
-                                        CatalogViewMode.DETAILED -> DetailedCatalogSection(
-                                            books = uiState.libros,
-                                            onBookClick = onBookClick
-                                        )
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                contentPadding = PaddingValues(bottom = 20.dp)
+                            ) {
+                                item {
+                                    AnimatedContent(
+                                        targetState = viewMode,
+                                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                        label = "catalog_view_mode"
+                                    ) { mode ->
+                                        when (mode) {
+                                            CatalogViewMode.COMPACT -> CompactCatalogSection(
+                                                books = uiState.libros,
+                                                onBookClick = onBookClick
+                                            )
+
+                                            CatalogViewMode.DETAILED -> DetailedCatalogSection(
+                                                books = uiState.libros,
+                                                onBookClick = onBookClick
+                                            )
+                                        }
                                     }
                                 }
                             }

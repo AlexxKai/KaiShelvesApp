@@ -16,6 +16,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.random.Random
 
 class BookRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -97,6 +98,18 @@ class BookRepository(
         return try {
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
             val recentYear = currentYear - 1
+            val authorSeeds = listOf(
+                "inauthor:a",
+                "inauthor:e",
+                "inauthor:i",
+                "inauthor:o",
+                "inauthor:u",
+                "inauthor:an",
+                "inauthor:ma",
+                "inauthor:jo",
+                "inauthor:la",
+                "inauthor:ca"
+            ).shuffled().take(4)
             val newestQueries = listOf(
                 currentYear.toString(),
                 "published $currentYear",
@@ -104,16 +117,19 @@ class BookRepository(
                 "$currentYear novel",
                 "$currentYear literatura",
                 "$currentYear libro",
-                "inauthor:a",
-                "inauthor:e",
-                "inauthor:o"
+                "$recentYear books",
+                "$recentYear novel",
+                "$recentYear literatura"
             )
+                .shuffled()
+                .take(5) + authorSeeds
 
             val libros = newestQueries
                 .flatMap { query ->
                     searchGoogleBooks(
                         query = query,
                         maxResults = 40,
+                        startIndex = listOf(0, 40, 80).random(),
                         orderBy = "newest"
                     ).items
                 }
@@ -134,7 +150,15 @@ class BookRepository(
                     compareByDescending<Libro> { it.fechaPublicacion }
                         .thenBy { it.titulo.lowercase() }
                 )
-                .take(40)
+                .let { sortedBooks ->
+                    val randomOffset = if (sortedBooks.size > 40) {
+                        Random.nextInt(0, (sortedBooks.size - 40).coerceAtMost(12) + 1)
+                    } else {
+                        0
+                    }
+
+                    sortedBooks.drop(randomOffset).take(40)
+                }
                 .localizeForCurrentLanguage()
 
             Result.success(libros)

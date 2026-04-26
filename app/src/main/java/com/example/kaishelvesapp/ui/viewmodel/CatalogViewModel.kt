@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 
 data class CatalogUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val libros: List<Libro> = emptyList(),
     val generos: List<String> = listOf("Todos"),
     val selectedGenero: String = "Todos",
@@ -35,9 +36,11 @@ class CatalogViewModel(
         cargarLibros()
     }
 
-    fun cargarLibros() {
+    fun cargarLibros(refresh: Boolean = false) {
+        val currentState = _uiState.value
         _uiState.value = _uiState.value.copy(
-            isLoading = true,
+            isLoading = !refresh || currentState.libros.isEmpty(),
+            isRefreshing = refresh && currentState.libros.isNotEmpty(),
             errorMessage = null
         )
 
@@ -48,17 +51,28 @@ class CatalogViewModel(
                 .onSuccess { libros ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         libros = libros,
                         errorMessage = null
                     )
                 }
                 .onFailure { error ->
+                    val existingBooks = _uiState.value.libros
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al cargar libros"
+                        isRefreshing = false,
+                        errorMessage = if (refresh && existingBooks.isNotEmpty()) {
+                            null
+                        } else {
+                            error.message ?: "Error al cargar libros"
+                        }
                     )
                 }
         }
+    }
+
+    fun refrescarNovedades() {
+        cargarLibros(refresh = true)
     }
 
     fun onSearchQueryChange(query: String) {
@@ -74,6 +88,7 @@ class CatalogViewModel(
 
         _uiState.value = state.copy(
             isLoading = true,
+            isRefreshing = false,
             errorMessage = null
         )
 
@@ -108,6 +123,7 @@ class CatalogViewModel(
 
         _uiState.value = _uiState.value.copy(
             isLoading = true,
+            isRefreshing = false,
             errorMessage = null,
             searchQuery = normalizedIsbn,
             selectedGenero = "Todos"
@@ -165,6 +181,7 @@ class CatalogViewModel(
 
         _uiState.value = _uiState.value.copy(
             isLoading = true,
+            isRefreshing = false,
             errorMessage = null
         )
 
