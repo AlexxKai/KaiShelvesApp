@@ -309,29 +309,10 @@ fun KaiNavigationDrawerContent(
             )
 
             KaiDrawerItem(
-                label = stringResource(R.string.profile),
-                selected = currentSection == KaiSection.PROFILE,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.AccountCircle,
-                        contentDescription = null,
-                        tint = TarnishedGold
-                    )
-                },
-                onClick = onGoToProfile
-            )
-
-            KaiDrawerItem(
-                label = stringResource(R.string.settings_privacy),
-                selected = false,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = null,
-                        tint = TarnishedGold
-                    )
-                },
-                onClick = onGoToSettingsPrivacy
+                label = stringResource(R.string.library),
+                selected = currentSection == KaiSection.LIBRARY,
+                leadingIcon = { Icon(Icons.Filled.LocalLibrary, contentDescription = null, tint = TarnishedGold) },
+                onClick = { onSectionSelected(KaiSection.LIBRARY) }
             )
 
             KaiDrawerItem(
@@ -339,13 +320,6 @@ fun KaiNavigationDrawerContent(
                 selected = currentSection == KaiSection.STATS,
                 leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
                 onClick = { onSectionSelected(KaiSection.STATS) }
-            )
-
-            KaiDrawerItem(
-                label = stringResource(R.string.library),
-                selected = currentSection == KaiSection.LIBRARY,
-                leadingIcon = { Icon(Icons.Filled.LocalLibrary, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.LIBRARY) }
             )
 
             KaiDrawerItem(
