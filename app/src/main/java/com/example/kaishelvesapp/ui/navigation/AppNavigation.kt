@@ -27,6 +27,7 @@ import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
+import com.example.kaishelvesapp.ui.screen.friends.FriendListDetailScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendProfileScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
@@ -50,6 +51,7 @@ import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendSuggestionsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendsViewModel
@@ -78,6 +80,7 @@ object Routes {
     const val FRIEND_SUGGESTIONS = "friend_suggestions"
     const val FRIEND_PROFILE = "friend_profile/{friendUid}"
     const val FRIEND_LISTS = "friend_lists/{friendUid}/{friendName}"
+    const val FRIEND_LIST_DETAIL = "friend_list_detail/{friendUid}/{listId}"
     const val NOTIFICATION_CENTER = "notification_center"
     const val GROUPS = "groups"
     const val CHALLENGES = "challenges"
@@ -89,6 +92,8 @@ fun listDetailRoute(listId: String): String = "list_detail/$listId"
 fun friendProfileRoute(friendUid: String): String = "friend_profile/$friendUid"
 fun friendListsRoute(friendUid: String, friendName: String): String =
     "friend_lists/$friendUid/${Uri.encode(friendName)}"
+fun friendListDetailRoute(friendUid: String, listId: String): String =
+    "friend_list_detail/$friendUid/${Uri.encode(listId)}"
 
 @Composable
 fun AppNavigation(
@@ -100,6 +105,7 @@ fun AppNavigation(
     val friendSuggestionsViewModel: FriendSuggestionsViewModel = viewModel()
     val friendProfileViewModel: FriendProfileViewModel = viewModel()
     val friendListsViewModel: FriendListsViewModel = viewModel()
+    val friendListDetailViewModel: FriendListDetailViewModel = viewModel()
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
@@ -598,6 +604,10 @@ fun AppNavigation(
                 onOpenFriendLists = { uid, name ->
                     navController.navigate(friendListsRoute(uid, name))
                 },
+                onOpenBook = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -614,7 +624,34 @@ fun AppNavigation(
                 friendName = backStackEntry.arguments?.getString("friendName").orEmpty(),
                 viewModel = friendListsViewModel,
                 onBack = { navController.popBackStack() },
+                onOpenList = { listId ->
+                    navController.navigate(
+                        friendListDetailRoute(
+                            backStackEntry.arguments?.getString("friendUid").orEmpty(),
+                            listId
+                        )
+                    )
+                },
                 onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(
+            route = Routes.FRIEND_LIST_DETAIL,
+            arguments = listOf(
+                navArgument("friendUid") { defaultValue = "" },
+                navArgument("listId") { defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            FriendListDetailScreen(
+                friendUid = backStackEntry.arguments?.getString("friendUid").orEmpty(),
+                listId = backStackEntry.arguments?.getString("listId").orEmpty(),
+                viewModel = friendListDetailViewModel,
+                onBack = { navController.popBackStack() },
+                onBookClick = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
+                }
             )
         }
 

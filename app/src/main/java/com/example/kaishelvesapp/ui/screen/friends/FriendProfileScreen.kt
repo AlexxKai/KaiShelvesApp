@@ -102,6 +102,7 @@ fun FriendProfileScreen(
     onOpenNotifications: () -> Unit,
     onFriendshipChanged: () -> Unit = {},
     onOpenFriendLists: (String, String) -> Unit = { _, _ -> },
+    onOpenBook: (Libro) -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -169,6 +170,7 @@ fun FriendProfileScreen(
                         },
                         onOpenFriendLists = onOpenFriendLists,
                         onOpenFriendProfile = onOpenFriendProfile,
+                        onOpenBook = onOpenBook,
                         commentsByActivityId = uiState.commentsByActivityId,
                         loadingCommentIds = uiState.loadingCommentIds,
                         socialActionIds = uiState.socialActionIds,
@@ -309,6 +311,7 @@ private fun FriendProfileContent(
     onSendFriendRequest: () -> Unit,
     onOpenFriendLists: (String, String) -> Unit,
     onOpenFriendProfile: (String) -> Unit,
+    onOpenBook: (Libro) -> Unit,
     commentsByActivityId: Map<String, List<ActivityComment>>,
     loadingCommentIds: Set<String>,
     socialActionIds: Set<String>,
@@ -339,7 +342,8 @@ private fun FriendProfileContent(
             shelves = profile.predefinedShelves,
             friendUid = profile.user.uid,
             friendName = profile.user.usuario.ifBlank { profile.user.email },
-            onOpenFriendLists = onOpenFriendLists
+            onOpenFriendLists = onOpenFriendLists,
+            onOpenBook = onOpenBook
         )
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -358,7 +362,8 @@ private fun FriendProfileContent(
             socialActionIds = socialActionIds,
             onToggleLike = onToggleLike,
             onLoadComments = onLoadComments,
-            onAddComment = onAddComment
+            onAddComment = onAddComment,
+            onOpenBook = onOpenBook
         )
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -599,7 +604,8 @@ private fun FriendShelvesCarouselSection(
     shelves: List<FriendShelfPreview>,
     friendUid: String,
     friendName: String,
-    onOpenFriendLists: (String, String) -> Unit
+    onOpenFriendLists: (String, String) -> Unit,
+    onOpenBook: (Libro) -> Unit
 ) {
     val visibleShelves = shelves.filter { it.bookCount > 0 || it.books.isNotEmpty() }
 
@@ -619,7 +625,10 @@ private fun FriendShelvesCarouselSection(
             ) {
                 visibleShelves.forEach { shelf ->
                     item(key = "shelf_${shelf.listId}") {
-                        FriendShelfRow(shelf = shelf)
+                        FriendShelfRow(
+                            shelf = shelf,
+                            onOpenBook = onOpenBook
+                        )
                     }
                 }
 
@@ -635,7 +644,8 @@ private fun FriendShelvesCarouselSection(
 
 @Composable
 private fun FriendShelfRow(
-    shelf: FriendShelfPreview
+    shelf: FriendShelfPreview,
+    onOpenBook: (Libro) -> Unit
 ) {
     Column(
         modifier = Modifier.width(392.dp)
@@ -654,7 +664,8 @@ private fun FriendShelfRow(
             shelf.books.take(4).forEach { item ->
                 FriendShelfBookTile(
                     item = item,
-                    isReadList = shelf.isReadList
+                    isReadList = shelf.isReadList,
+                    onOpenBook = onOpenBook
                 )
             }
         }
@@ -664,10 +675,13 @@ private fun FriendShelfRow(
 @Composable
 private fun FriendShelfBookTile(
     item: FriendShelfBookItem,
-    isReadList: Boolean
+    isReadList: Boolean,
+    onOpenBook: (Libro) -> Unit
 ) {
     Column(
-        modifier = Modifier.width(84.dp),
+        modifier = Modifier
+            .width(84.dp)
+            .clickable { onOpenBook(item.book) },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         BookCover(
@@ -847,7 +861,8 @@ private fun UpdatesSection(
     socialActionIds: Set<String>,
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    onOpenBook: (Libro) -> Unit
 ) {
     ProfileSectionCard(
         title = stringResource(R.string.updates_title)
@@ -872,7 +887,8 @@ private fun UpdatesSection(
                         isSocialActionRunning = item.id in socialActionIds,
                         onToggleLike = onToggleLike,
                         onLoadComments = onLoadComments,
-                        onAddComment = onAddComment
+                        onAddComment = onAddComment,
+                        onOpenBook = onOpenBook
                     )
                 }
             }
@@ -888,7 +904,8 @@ private fun UpdateItem(
     isSocialActionRunning: Boolean,
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    onOpenBook: (Libro) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -955,7 +972,10 @@ private fun UpdateItem(
 
             if (book != null) {
                 Spacer(modifier = Modifier.height(10.dp))
-                ActivityBookCard(book = book)
+                ActivityBookCard(
+                    book = book,
+                    onOpenBook = onOpenBook
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -976,9 +996,11 @@ private fun UpdateItem(
 
 @Composable
 private fun ActivityBookCard(
-    book: Libro
+    book: Libro,
+    onOpenBook: (Libro) -> Unit
 ) {
     Row(
+        modifier = Modifier.clickable { onOpenBook(book) },
         verticalAlignment = Alignment.Top
     ) {
         BookCover(

@@ -4,6 +4,7 @@ import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
+import com.example.kaishelvesapp.data.model.UserBookList
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -94,6 +95,17 @@ data class FriendBookListSummary(
     val name: String,
     val bookCount: Int,
     val previewImageUrls: List<String>
+)
+
+data class FriendBookListDetailBookItem(
+    val book: Libro,
+    val rating: Int? = null,
+    val readDate: String? = null
+)
+
+data class FriendBookListDetail(
+    val list: UserBookList?,
+    val books: List<FriendBookListDetailBookItem>
 )
 
 data class FriendProfileData(
@@ -1018,6 +1030,105 @@ class FriendsRepository(
                 )
 
             Result.success(lists)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadFriendListDetail(friendUid: String, listId: String): Result<FriendBookListDetail> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las listas sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
+            if (friendUid.isBlank() || listId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la lista"))
+            }
+
+            val listDocument = usersCollection()
+                .document(friendUid)
+                .collection("listas")
+                .document(listId)
+                .get()
+                .await()
+
+            val list = if (listDocument.exists()) {
+                UserBookList(
+                    id = listDocument.id,
+                    name = listDocument.getString("name")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: defaultSystemListTitle(listDocument.id),
+                    description = listDocument.getString("description").orEmpty(),
+                    bookCount = listDocument.getLong("bookCount")?.toInt() ?: 0,
+                    position = listDocument.getLong("position")?.toInt() ?: 0,
+                    isSystem = listDocument.getBoolean("isSystem") == true,
+                    systemKey = listDocument.getString("systemKey").orEmpty()
+                )
+            } else {
+                UserBookList(
+                    id = listId,
+                    name = defaultSystemListTitle(listId),
+                    isSystem = listId == SYSTEM_LIST_WANT_TO_READ_ID ||
+                        listId == SYSTEM_LIST_READING_ID ||
+                        listId == SYSTEM_LIST_READ_ID
+                )
+            }
+
+            val items = if (listId == SYSTEM_LIST_READ_ID) {
+                val readDocuments = readsCollection(friendUid).get().await().documents
+                if (readDocuments.isNotEmpty()) {
+                    readDocuments.mapNotNull { document ->
+                        val readBook = document.toObject(LibroLeido::class.java) ?: return@mapNotNull null
+                        FriendBookListDetailBookItem(
+                            book = Libro(
+                                id = readBook.id.ifBlank { readBook.isbn.ifBlank { document.id } },
+                                isbn = readBook.isbn,
+                                titulo = readBook.titulo,
+                                autor = readBook.autor,
+                                editorial = readBook.editorial,
+                                genero = readBook.genero,
+                                fechaPublicacion = readBook.fechaPublicacion,
+                                paginas = readBook.paginas,
+                                imagen = readBook.imagen,
+                                pdf = readBook.pdf
+                            ),
+                            rating = readBook.puntuacion,
+                            readDate = readBook.fechaLeido
+                        )
+                    }
+                } else {
+                    systemListBooksCollection(friendUid, listId)
+                        .get()
+                        .await()
+                        .documents
+                        .mapNotNull { document ->
+                            document.toObject(Libro::class.java)?.copy(
+                                id = document.getString("id").orEmpty().ifBlank { document.id }
+                            )?.let { book ->
+                                FriendBookListDetailBookItem(book = book)
+                            }
+                        }
+                }
+            } else {
+                systemListBooksCollection(friendUid, listId)
+                    .get()
+                    .await()
+                    .documents
+                    .mapNotNull { document ->
+                        document.toObject(Libro::class.java)?.copy(
+                            id = document.getString("id").orEmpty().ifBlank { document.id }
+                        )?.let { book ->
+                            FriendBookListDetailBookItem(book = book)
+                        }
+                    }
+            }
+
+            Result.success(
+                FriendBookListDetail(
+                    list = list.copy(bookCount = list.bookCount.takeIf { it > 0 } ?: items.size),
+                    books = items
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }

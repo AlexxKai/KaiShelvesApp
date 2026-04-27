@@ -2,6 +2,7 @@ package com.example.kaishelvesapp.ui.screen.friends
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,6 +58,7 @@ fun FriendListsScreen(
     friendName: String,
     viewModel: FriendListsViewModel,
     onBack: () -> Unit,
+    onOpenList: (String) -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -139,7 +141,10 @@ fun FriendListsScreen(
                         items = uiState.lists,
                         key = { it.id }
                     ) { list ->
-                        FriendListSummaryCard(list = list)
+                        FriendListSummaryCard(
+                            list = list,
+                            onOpen = { onOpenList(list.id) }
+                        )
                     }
                 }
             }
@@ -149,10 +154,13 @@ fun FriendListsScreen(
 
 @Composable
 private fun FriendListSummaryCard(
-    list: FriendBookListSummary
+    list: FriendBookListSummary,
+    onOpen: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.22f))
