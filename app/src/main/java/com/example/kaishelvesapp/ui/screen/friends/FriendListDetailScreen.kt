@@ -50,6 +50,7 @@ import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.repository.FriendBookListDetailBookItem
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -372,15 +373,18 @@ private fun FriendListBookCard(
 
                 if (isReadList) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if ((item.rating ?: 0) > 0) {
-                            stringResource(R.string.rating_value, item.rating ?: 0)
-                        } else {
-                            stringResource(R.string.not_rated_yet)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OldIvory
-                    )
+                    if ((item.rating ?: 0) > 0) {
+                        RatingStars(
+                            rating = item.rating ?: 0,
+                            iconSize = 14.dp
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.not_rated_yet),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory
+                        )
+                    }
 
                     item.readDate?.takeIf { it.isNotBlank() }?.let { readDate ->
                         Spacer(modifier = Modifier.height(4.dp))

@@ -466,17 +466,15 @@ private fun BookHeroSection(
                 }
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            if (readRating == 0) {
+                Spacer(modifier = Modifier.height(6.dp))
 
-            Text(
-                text = if (readRating > 0) {
-                    stringResource(R.string.rating_value, readRating)
-                } else {
-                    stringResource(R.string.not_rated_yet)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = OldIvory
-            )
+                Text(
+                    text = stringResource(R.string.not_rated_yet),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory
+                )
+            }
         }
     }
 }

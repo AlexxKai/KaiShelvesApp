@@ -326,16 +326,14 @@ private fun ReadingItem(
                         rating = libro.puntuacion
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    if (libro.puntuacion == 0) {
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                    Text(
-                        text = if (libro.puntuacion == 0) {
-                            stringResource(R.string.not_rated_yet)
-                        } else {
-                            stringResource(R.string.rating_value, libro.puntuacion)
-                        },
-                        color = OldIvory
-                    )
+                        Text(
+                            text = stringResource(R.string.not_rated_yet),
+                            color = OldIvory
+                        )
+                    }
                 }
             }
 

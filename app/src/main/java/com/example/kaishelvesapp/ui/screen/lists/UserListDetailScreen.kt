@@ -399,15 +399,18 @@ private fun ListBookCard(
                     if (isReadList) {
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text(
-                            text = if ((item.rating ?: 0) > 0) {
-                                stringResource(R.string.rating_value, item.rating ?: 0)
-                            } else {
-                                stringResource(R.string.not_rated_yet)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = OldIvory
-                        )
+                        if ((item.rating ?: 0) > 0) {
+                            RatingStars(
+                                rating = item.rating ?: 0,
+                                iconSize = 14.dp
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.not_rated_yet),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OldIvory
+                            )
+                        }
 
                         item.readDate?.takeIf { it.isNotBlank() }?.let { readDate ->
                             Spacer(modifier = Modifier.height(4.dp))
