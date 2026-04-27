@@ -368,26 +368,26 @@ private fun DeviceLibraryTopBar(
             }
         }
 
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 2.dp)
         ) {
             Row(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         showLibraryMenu = !showLibraryMenu
                         showSearchPanel = false
                         showFilterPanel = false
                     }
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Todos los libros",
+                    modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium,
                     color = OldIvory,
                     maxLines = 1,
@@ -401,73 +401,79 @@ private fun DeviceLibraryTopBar(
                 )
             }
 
-            IconButton(
-                onClick = {
-                    showSearchPanel = true
-                    showLibraryMenu = false
-                    showFilterPanel = false
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Search,
-                    contentDescription = stringResource(R.string.search),
-                    tint = OldIvory
-                )
-            }
-
-            IconButton(
-                onClick = {
-                    showFilterPanel = !showFilterPanel
-                    showSearchPanel = false
-                    showLibraryMenu = false
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.FilterAlt,
-                    contentDescription = "Filtro",
-                    tint = OldIvory
-                )
-            }
-
-            IconButton(onClick = onChooseFolder) {
-                Box(
-                    modifier = Modifier.size(32.dp),
-                    contentAlignment = Alignment.Center
+                IconButton(
+                    onClick = {
+                        showSearchPanel = true
+                        showLibraryMenu = false
+                        showFilterPanel = false
+                    }
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Folder,
-                        contentDescription = stringResource(R.string.device_library_choose_folder),
-                        tint = TarnishedGold,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Text(
-                        text = fileCount.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Obsidian,
-                        maxLines = 1,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .widthIn(max = 24.dp),
-                        textAlign = TextAlign.Center,
-                        overflow = TextOverflow.Clip
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.search),
+                        tint = OldIvory
                     )
                 }
-            }
 
-            IconButton(onClick = onRefresh, enabled = !isLoading && hasFolder) {
-                Icon(
-                    imageVector = Icons.Filled.Refresh,
-                    contentDescription = stringResource(R.string.refresh),
-                    tint = if (!isLoading && hasFolder) TarnishedGold else TarnishedGold.copy(alpha = 0.42f)
-                )
-            }
+                IconButton(
+                    onClick = {
+                        showFilterPanel = !showFilterPanel
+                        showSearchPanel = false
+                        showLibraryMenu = false
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FilterAlt,
+                        contentDescription = "Filtro",
+                        tint = OldIvory
+                    )
+                }
 
-            IconButton(onClick = { }) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = stringResource(R.string.more_option),
-                    tint = OldIvory
-                )
+                IconButton(onClick = onChooseFolder) {
+                    Box(
+                        modifier = Modifier.size(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Folder,
+                            contentDescription = stringResource(R.string.device_library_choose_folder),
+                            tint = TarnishedGold,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Text(
+                            text = fileCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Obsidian,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .widthIn(max = 24.dp),
+                            textAlign = TextAlign.Center,
+                            overflow = TextOverflow.Clip
+                        )
+                    }
+                }
+
+                IconButton(onClick = onRefresh, enabled = !isLoading && hasFolder) {
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = stringResource(R.string.refresh),
+                        tint = if (!isLoading && hasFolder) TarnishedGold else TarnishedGold.copy(alpha = 0.42f)
+                    )
+                }
+
+                IconButton(onClick = { }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.more_option),
+                        tint = OldIvory
+                    )
+                }
             }
         }
 
