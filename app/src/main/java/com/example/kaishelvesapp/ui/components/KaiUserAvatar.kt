@@ -35,6 +35,8 @@ fun KaiUserAvatar(
     imageUrl: String,
     modifier: Modifier = Modifier,
     size: Dp = 52.dp,
+    showBorder: Boolean = true,
+    showGlow: Boolean = true,
     placeholderContent: @Composable BoxScope.() -> Unit = {
         Text(
             text = displayName
@@ -90,25 +92,28 @@ fun KaiUserAvatar(
                 ?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
         }
     }
+    val avatarShape = RoundedCornerShape(18.dp)
 
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(size + 16.dp)
-                .blur(16.dp)
-                .background(
-                    color = TarnishedGold.copy(alpha = 0.16f),
-                    shape = RoundedCornerShape(24.dp)
-                )
-        )
+        if (showGlow) {
+            Box(
+                modifier = Modifier
+                    .size(size + 16.dp)
+                    .blur(16.dp)
+                    .background(
+                        color = TarnishedGold.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+            )
+        }
 
         Box(
             modifier = Modifier
                 .size(size)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(avatarShape)
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
@@ -118,10 +123,16 @@ fun KaiUserAvatar(
                         )
                     )
                 )
-                .border(
-                    width = 1.dp,
-                    color = TarnishedGold.copy(alpha = 0.35f),
-                    shape = RoundedCornerShape(18.dp)
+                .then(
+                    if (showBorder) {
+                        Modifier.border(
+                            width = 1.dp,
+                            color = TarnishedGold.copy(alpha = 0.35f),
+                            shape = avatarShape
+                        )
+                    } else {
+                        Modifier
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {

@@ -9,7 +9,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.kaishelvesapp.R
@@ -460,13 +460,15 @@ private fun KaiDrawerHeaderCard(
         animationSpec = tween(durationMillis = 520),
         label = "drawerHeaderOffset"
     )
+    val cardShape = RoundedCornerShape(26.dp)
 
     Card(
+        onClick = onGoToProfile,
         modifier = Modifier
             .fillMaxWidth()
             .offset(y = headerOffset.value.dp)
             .scale(headerScale.value),
-        shape = RoundedCornerShape(26.dp),
+        shape = cardShape,
         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.85f))
     ) {
@@ -484,56 +486,44 @@ private fun KaiDrawerHeaderCard(
                 )
                 .padding(18.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 KaiUserAvatar(
                     displayName = displayName,
                     imageUrl = profileImageUrl,
-                    modifier = Modifier.clickable(onClick = onGoToProfile)
+                    modifier = Modifier,
+                    size = 82.dp,
+                    showBorder = false,
+                    showGlow = false
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = displayName,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = TarnishedGold
+                )
 
-                Column {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = TarnishedGold
-                    )
-
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OldIvory
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.profile),
+                    modifier = Modifier.padding(top = 2.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.82f)
+                )
             }
 
             Text(
                 text = subtitle,
-                modifier = Modifier.padding(top = 14.dp),
+                modifier = Modifier.padding(top = 18.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory.copy(alpha = 0.95f)
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                TarnishedGold.copy(alpha = 0.22f),
-                                BloodWine.copy(alpha = 0.35f),
-                                DeepWalnut,
-                                TarnishedGold.copy(alpha = 0.18f)
-                            )
-                        )
-                    )
             )
         }
     }
