@@ -31,9 +31,10 @@
     <string name="main_hall">Main Hall</string>
     <string name="shelves_by_genre">Shelves by genre</string>
     <string name="each_shelf_leads_to_a_catalog_section">Each shelf leads to a different catalog section.</string>
-    <string name="library_welcome_subtitle">Walk through the shelves and choose a genre.</string>
-    <string name="library_guest_subtitle">Walk through the shelves and enter the archive.</string>
-    <string name="main_hall_description">A silent chamber, dark wood and rows of volumes waiting to be opened.</string>
+    <string name="library_welcome_subtitle">Walk through the shelves and let a clue lead you to the next volume.</string>
+    <string name="library_guest_subtitle">Walk through the shelves and enter the veiled archive.</string>
+    <string name="main_hall_description">Dark wood creaks in silence; between golden dust and closed spines, every volume keeps a clue waiting to be found.</string>
+    <string name="library_intro_dismiss_hint">Tap outside the curtains to open them.</string>
 
     <string name="catalog">Catalog</string>
     <string name="lists">Lists</string>

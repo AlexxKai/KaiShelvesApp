@@ -31,9 +31,10 @@
     <string name="main_hall">Sala principal</string>
     <string name="shelves_by_genre">Estanterias por genero</string>
     <string name="each_shelf_leads_to_a_catalog_section">Cada estanteria te conduce a una seccion distinta del catalogo.</string>
-    <string name="library_welcome_subtitle">Recorre las estanterias y elige un genero.</string>
-    <string name="library_guest_subtitle">Recorre las estanterias y adentrate en el archivo.</string>
-    <string name="main_hall_description">Una estancia silenciosa, madera oscura y filas de volumenes esperando ser abiertos.</string>
+    <string name="library_welcome_subtitle">Recorre las estanterias y deja que una pista te guie hasta el siguiente volumen.</string>
+    <string name="library_guest_subtitle">Recorre las estanterias y adentrate en el archivo velado.</string>
+    <string name="main_hall_description">La madera oscura cruje en silencio; entre polvo dorado y lomos cerrados, cada volumen guarda una pista esperando ser descubierta.</string>
+    <string name="library_intro_dismiss_hint">Pulsa fuera de las cortinas para abrirlas.</string>
 
     <string name="catalog">Catalogo</string>
     <string name="lists">Listas</string>
