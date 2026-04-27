@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,14 +71,16 @@ fun FriendListsScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            KaiTopBar(
-                title = stringResource(R.string.friend_lists_title, friendName),
-                subtitle = stringResource(R.string.friend_lists_subtitle),
-                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-                navigationContentDescription = stringResource(R.string.back),
-                onNavigationClick = onBack,
-                centerTitle = true
-            )
+            Box(modifier = Modifier.statusBarsPadding()) {
+                KaiTopBar(
+                    title = stringResource(R.string.friend_lists_title, friendName),
+                    subtitle = stringResource(R.string.friend_lists_subtitle),
+                    navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                    navigationContentDescription = stringResource(R.string.back),
+                    onNavigationClick = onBack,
+                    centerTitle = true
+                )
+            }
         },
         bottomBar = {
             KaiBottomBar(
