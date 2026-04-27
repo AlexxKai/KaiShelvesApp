@@ -420,11 +420,28 @@ private fun DeviceLibraryTopBar(
             }
 
             IconButton(onClick = onChooseFolder) {
-                Icon(
-                    imageVector = Icons.Filled.Folder,
-                    contentDescription = stringResource(R.string.device_library_choose_folder),
-                    tint = TarnishedGold
-                )
+                Box(
+                    modifier = Modifier.size(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Folder,
+                        contentDescription = stringResource(R.string.device_library_choose_folder),
+                        tint = TarnishedGold,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Text(
+                        text = fileCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Obsidian,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .widthIn(max = 24.dp),
+                        textAlign = TextAlign.Center,
+                        overflow = TextOverflow.Clip
+                    )
+                }
             }
 
             IconButton(onClick = onRefresh, enabled = !isLoading && hasFolder) {
@@ -434,13 +451,6 @@ private fun DeviceLibraryTopBar(
                     tint = if (!isLoading && hasFolder) TarnishedGold else TarnishedGold.copy(alpha = 0.42f)
                 )
             }
-
-            Text(
-                text = fileCount.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                color = OldIvory.copy(alpha = 0.78f),
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
 
             IconButton(onClick = { }) {
                 Icon(
