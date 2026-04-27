@@ -3,22 +3,29 @@ package com.example.kaishelvesapp.ui.screen.profile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,7 +33,9 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
@@ -34,6 +43,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -91,6 +102,14 @@ fun ProfileScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     var expandedLanguage by remember { mutableStateOf(false) }
+    var selectedProfileTab by remember { mutableStateOf(ProfileTab.Identity) }
+    var accountNotificationsEnabled by remember { mutableStateOf(true) }
+    var keepSessionOpen by remember { mutableStateOf(true) }
+    var confirmBeforeLogout by remember { mutableStateOf(false) }
+    var sessionProtectionEnabled by remember { mutableStateOf(true) }
+    var profileVisible by remember { mutableStateOf(true) }
+    var friendRequestPermissions by remember { mutableStateOf(true) }
+    var personalDataControl by remember { mutableStateOf(false) }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
@@ -205,6 +224,7 @@ fun ProfileScreen(
                     .padding(paddingValues)
                     .padding(innerPadding)
                     .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -229,117 +249,100 @@ fun ProfileScreen(
                             Column(
                                 modifier = Modifier.padding(24.dp)
                             ) {
-                                ProfileAvatarSection(
-                                    displayName = uiState.username.ifBlank {
-                                        userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
-                                    },
-                                    imageUrl = uiState.profilePhotoUri.ifBlank {
-                                        profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
-                                    },
-                                    isAdmin = uiState.user?.isAdmin == true,
-                                    isEditing = uiState.isEditingProfile,
-                                    onChangePhoto = { photoPickerLauncher.launch("image/*") }
+                                if (!uiState.isEditingProfile) {
+                                    IconButton(
+                                        onClick = onBack,
+                                        modifier = Modifier.align(Alignment.Start)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = stringResource(R.string.back),
+                                            tint = TarnishedGold
+                                        )
+                                    }
+                                }
+
+                                ProfileTabSelector(
+                                    selectedTab = selectedProfileTab,
+                                    onSelectTab = { selectedProfileTab = it }
                                 )
 
                                 Spacer(modifier = Modifier.height(20.dp))
 
-                                if (uiState.isEditingProfile) {
-                                    OutlinedTextField(
-                                        value = uiState.username,
-                                        onValueChange = viewModel::onUsernameChange,
-                                        label = { Text(stringResource(R.string.username)) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                                        singleLine = true
-                                    )
+                                when (selectedProfileTab) {
+                                    ProfileTab.Identity -> {
+                                        ProfileAvatarSection(
+                                            displayName = uiState.username.ifBlank {
+                                                userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
+                                            },
+                                            imageUrl = uiState.profilePhotoUri.ifBlank {
+                                                profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
+                                            },
+                                            isAdmin = uiState.user?.isAdmin == true,
+                                            onChangePhoto = { photoPickerLauncher.launch("image/*") }
+                                        )
 
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                        Spacer(modifier = Modifier.height(20.dp))
 
-                                    ProfileLine(
-                                        stringResource(R.string.email),
-                                        uiState.user?.email ?: "Sin email"
-                                    )
+                                        if (uiState.isEditingProfile) {
+                                            OutlinedTextField(
+                                                value = uiState.username,
+                                                onValueChange = viewModel::onUsernameChange,
+                                                label = { Text(stringResource(R.string.username)) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                                                singleLine = true
+                                            )
 
-                                    ProfileLine(
-                                        "UID",
-                                        uiState.user?.uid ?: "No disponible"
-                                    )
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    LanguageSection(
-                                        expandedLanguage = expandedLanguage,
-                                        onExpandedChange = { expandedLanguage = it },
-                                        onSelectLanguage = { language ->
-                                            expandedLanguage = false
-                                            activity?.let {
-                                                LanguageManager.setLanguage(it, language)
-                                            }
-                                        }
-                                    )
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                } else {
-                                    ProfileLine(
-                                        stringResource(R.string.username),
-                                        uiState.user?.usuario ?: "Sin nombre"
-                                    )
-
-                                    ProfileLine(
-                                        stringResource(R.string.email),
-                                        uiState.user?.email ?: "Sin email"
-                                    )
-
-                                    ProfileLine(
-                                        "UID",
-                                        uiState.user?.uid ?: "No disponible"
-                                    )
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    LanguageSection(
-                                        expandedLanguage = expandedLanguage,
-                                        onExpandedChange = { expandedLanguage = it },
-                                        onSelectLanguage = { language ->
-                                            expandedLanguage = false
-                                            activity?.let {
-                                                LanguageManager.setLanguage(it, language)
-                                            }
-                                        }
-                                    )
-
-                                    Spacer(modifier = Modifier.height(20.dp))
-
-                                    if (uiState.user?.isGuest == true) {
-                                        Button(
-                                            onClick = onGoToRegister,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                                        ) {
-                                            Text(stringResource(R.string.create_account_and_sync))
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                        } else {
+                                            ProfileLine(
+                                                stringResource(R.string.username),
+                                                uiState.user?.usuario ?: "Sin nombre"
+                                            )
                                         }
 
-                                        Spacer(modifier = Modifier.height(10.dp))
+                                        ProfileLine(
+                                            stringResource(R.string.email),
+                                            uiState.user?.email ?: "Sin email"
+                                        )
                                     }
 
-                                    Button(
-                                        onClick = onLogout,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
-                                    ) {
-                                        Text(stringResource(R.string.logout))
+                                    ProfileTab.Settings -> {
+                                        ProfileSettingsContent(
+                                            expandedLanguage = expandedLanguage,
+                                            onExpandedChange = { expandedLanguage = it },
+                                            onSelectLanguage = { language ->
+                                                expandedLanguage = false
+                                                activity?.let {
+                                                    LanguageManager.setLanguage(it, language)
+                                                }
+                                            },
+                                            notificationsEnabled = accountNotificationsEnabled,
+                                            onNotificationsEnabledChange = { accountNotificationsEnabled = it },
+                                            pendingRequestCount = pendingRequestCount,
+                                            onOpenNotifications = onOpenNotifications,
+                                            keepSessionOpen = keepSessionOpen,
+                                            onKeepSessionOpenChange = { keepSessionOpen = it },
+                                            confirmBeforeLogout = confirmBeforeLogout,
+                                            onConfirmBeforeLogoutChange = { confirmBeforeLogout = it },
+                                            isGuest = uiState.user?.isGuest == true,
+                                            onGoToRegister = onGoToRegister,
+                                            onLogout = onLogout
+                                        )
                                     }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    OutlinedButton(
-                                        onClick = onBack,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        border = BorderStroke(1.dp, TarnishedGold)
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.back),
-                                            color = TarnishedGold
+                                    ProfileTab.Privacy -> {
+                                        ProfilePrivacyContent(
+                                            sessionProtectionEnabled = sessionProtectionEnabled,
+                                            onSessionProtectionEnabledChange = { sessionProtectionEnabled = it },
+                                            profileVisible = profileVisible,
+                                            onProfileVisibleChange = { profileVisible = it },
+                                            friendRequestPermissions = friendRequestPermissions,
+                                            onFriendRequestPermissionsChange = { friendRequestPermissions = it },
+                                            personalDataControl = personalDataControl,
+                                            onPersonalDataControlChange = { personalDataControl = it },
+                                            onOpenPrivacySettings = onGoToSettingsPrivacy
                                         )
                                     }
                                 }
@@ -352,12 +355,293 @@ fun ProfileScreen(
     }
 }
 
+private enum class ProfileTab {
+    Identity,
+    Settings,
+    Privacy
+}
+
+@Composable
+private fun ProfileTabSelector(
+    selectedTab: ProfileTab,
+    onSelectTab: (ProfileTab) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ProfileTabButton(
+            text = stringResource(R.string.profile_tab_identity),
+            selected = selectedTab == ProfileTab.Identity,
+            onClick = { onSelectTab(ProfileTab.Identity) },
+            modifier = Modifier.weight(1f)
+        )
+        ProfileTabButton(
+            text = stringResource(R.string.profile_tab_settings),
+            selected = selectedTab == ProfileTab.Settings,
+            onClick = { onSelectTab(ProfileTab.Settings) },
+            modifier = Modifier.weight(1f)
+        )
+        ProfileTabButton(
+            text = stringResource(R.string.profile_tab_privacy),
+            selected = selectedTab == ProfileTab.Privacy,
+            onClick = { onSelectTab(ProfileTab.Privacy) },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ProfileTabButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, TarnishedGold),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (selected) TarnishedGold.copy(alpha = 0.2f) else Color.Transparent,
+            contentColor = if (selected) OldIvory else TarnishedGold
+        )
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
+}
+
+@Composable
+private fun ProfileSettingsContent(
+    expandedLanguage: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelectLanguage: (String) -> Unit,
+    notificationsEnabled: Boolean,
+    onNotificationsEnabledChange: (Boolean) -> Unit,
+    pendingRequestCount: Int,
+    onOpenNotifications: () -> Unit,
+    keepSessionOpen: Boolean,
+    onKeepSessionOpenChange: (Boolean) -> Unit,
+    confirmBeforeLogout: Boolean,
+    onConfirmBeforeLogoutChange: (Boolean) -> Unit,
+    isGuest: Boolean,
+    onGoToRegister: () -> Unit,
+    onLogout: () -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_settings_language)) {
+        LanguageSection(
+            expandedLanguage = expandedLanguage,
+            onExpandedChange = onExpandedChange,
+            onSelectLanguage = onSelectLanguage
+        )
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_settings_notifications)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_notifications_enabled),
+            body = stringResource(R.string.profile_notifications_enabled_body),
+            checked = notificationsEnabled,
+            onCheckedChange = onNotificationsEnabledChange
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = onOpenNotifications,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Text(
+                text = stringResource(R.string.profile_open_notifications, pendingRequestCount),
+                color = TarnishedGold
+            )
+        }
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_settings_session_preferences)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_keep_session_open),
+            body = stringResource(R.string.profile_keep_session_open_body),
+            checked = keepSessionOpen,
+            onCheckedChange = onKeepSessionOpenChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_confirm_before_logout),
+            body = stringResource(R.string.profile_confirm_before_logout_body),
+            checked = confirmBeforeLogout,
+            onCheckedChange = onConfirmBeforeLogoutChange
+        )
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_settings_account_behavior)) {
+        if (isGuest) {
+            Button(
+                onClick = onGoToRegister,
+                modifier = Modifier.fillMaxWidth(),
+                colors = KaiShelvesThemeDefaults.primaryButtonColors()
+            ) {
+                Text(stringResource(R.string.create_account_and_sync))
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth(),
+            colors = KaiShelvesThemeDefaults.primaryButtonColors()
+        ) {
+            Text(stringResource(R.string.logout))
+        }
+    }
+}
+
+@Composable
+private fun ProfilePrivacyContent(
+    sessionProtectionEnabled: Boolean,
+    onSessionProtectionEnabledChange: (Boolean) -> Unit,
+    profileVisible: Boolean,
+    onProfileVisibleChange: (Boolean) -> Unit,
+    friendRequestPermissions: Boolean,
+    onFriendRequestPermissionsChange: (Boolean) -> Unit,
+    personalDataControl: Boolean,
+    onPersonalDataControlChange: (Boolean) -> Unit,
+    onOpenPrivacySettings: () -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_session_protection)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_session_protection_enabled),
+            body = stringResource(R.string.profile_session_protection_enabled_body),
+            checked = sessionProtectionEnabled,
+            onCheckedChange = onSessionProtectionEnabledChange
+        )
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_visibility)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_visibility_enabled),
+            body = stringResource(R.string.profile_visibility_enabled_body),
+            checked = profileVisible,
+            onCheckedChange = onProfileVisibleChange
+        )
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_permissions)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_friend_request_permissions),
+            body = stringResource(R.string.profile_friend_request_permissions_body),
+            checked = friendRequestPermissions,
+            onCheckedChange = onFriendRequestPermissionsChange
+        )
+    }
+
+    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_personal_data_control)) {
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_personal_data_control),
+            body = stringResource(R.string.profile_personal_data_control_body),
+            checked = personalDataControl,
+            onCheckedChange = onPersonalDataControlChange
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = onOpenPrivacySettings,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Text(
+                text = stringResource(R.string.profile_open_privacy_settings),
+                color = TarnishedGold
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileSectionBlock(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp)
+            .border(
+                width = 1.dp,
+                color = TarnishedGold.copy(alpha = 0.34f),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(16.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = TarnishedGold
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        content()
+    }
+}
+
+@Composable
+private fun ProfileToggleRow(
+    title: String,
+    body: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = OldIvory
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.74f)
+            )
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Obsidian,
+                checkedTrackColor = TarnishedGold,
+                uncheckedThumbColor = TarnishedGold,
+                uncheckedTrackColor = Color.Transparent,
+                uncheckedBorderColor = TarnishedGold.copy(alpha = 0.6f)
+            )
+        )
+    }
+}
+
 @Composable
 private fun ProfileAvatarSection(
     displayName: String,
     imageUrl: String,
     isAdmin: Boolean,
-    isEditing: Boolean,
     onChangePhoto: () -> Unit
 ) {
     Column(
@@ -367,7 +651,8 @@ private fun ProfileAvatarSection(
         KaiUserAvatar(
             displayName = displayName,
             imageUrl = imageUrl,
-            modifier = Modifier.size(84.dp)
+            modifier = Modifier.size(132.dp),
+            size = 104.dp
         )
 
         if (isAdmin) {
@@ -387,18 +672,16 @@ private fun ProfileAvatarSection(
             }
         }
 
-        if (isEditing) {
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedButton(
-                onClick = onChangePhoto,
-                border = BorderStroke(1.dp, TarnishedGold)
-            ) {
-                Text(
-                    text = stringResource(R.string.change_profile_photo),
-                    color = TarnishedGold
-                )
-            }
+        OutlinedButton(
+            onClick = onChangePhoto,
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Text(
+                text = stringResource(R.string.change_profile_photo),
+                color = TarnishedGold
+            )
         }
     }
 }
