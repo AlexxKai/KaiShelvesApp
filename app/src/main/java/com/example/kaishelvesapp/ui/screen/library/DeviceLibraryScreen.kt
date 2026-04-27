@@ -20,6 +20,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,10 +40,14 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -86,6 +93,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -97,7 +105,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -943,18 +953,28 @@ private fun DeviceLibraryListView(
     files: List<DeviceLibraryFile>,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
-    LazyColumn(
-        modifier = modifier.background(ShelfBackgroundBrush),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        items(files, key = { it.uri.toString() }) { file ->
-            ShelfListRow(
-                file = file,
-                progress = readingProgressFor(file),
-                onClick = { onOpenFile(file) }
-            )
+    val listState = rememberLazyListState()
+
+    Box(modifier = modifier.background(ShelfBackgroundBrush)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(start = 16.dp, end = 28.dp, top = 18.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            items(files, key = { it.uri.toString() }) { file ->
+                ShelfListRow(
+                    file = file,
+                    progress = readingProgressFor(file),
+                    onClick = { onOpenFile(file) }
+                )
+            }
         }
+
+        DeviceLibraryLazyListScrollbar(
+            state = listState,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
@@ -964,18 +984,124 @@ private fun DeviceLibraryGridView(
     files: List<DeviceLibraryFile>,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        modifier = modifier.background(ShelfBackgroundBrush),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 96.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(26.dp)
+    val gridState = rememberLazyGridState()
+
+    Box(modifier = modifier.background(ShelfBackgroundBrush)) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.fillMaxSize(),
+            state = gridState,
+            contentPadding = PaddingValues(start = 18.dp, end = 30.dp, top = 18.dp, bottom = 96.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(26.dp)
+        ) {
+            items(files, key = { it.uri.toString() }) { file ->
+                ShelfGridBook(
+                    file = file,
+                    progress = readingProgressFor(file),
+                    onClick = { onOpenFile(file) }
+                )
+            }
+        }
+
+        DeviceLibraryLazyGridScrollbar(
+            state = gridState,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+    }
+}
+
+@Composable
+private fun DeviceLibraryLazyListScrollbar(
+    state: LazyListState,
+    modifier: Modifier = Modifier
+) {
+    DeviceLibraryFastScrollbar(
+        totalItems = state.layoutInfo.totalItemsCount,
+        visibleItems = state.layoutInfo.visibleItemsInfo.size,
+        firstVisibleItemIndex = state.firstVisibleItemIndex,
+        modifier = modifier,
+        onScrollToItem = { index -> state.scrollToItem(index) }
+    )
+}
+
+@Composable
+private fun DeviceLibraryLazyGridScrollbar(
+    state: LazyGridState,
+    modifier: Modifier = Modifier
+) {
+    DeviceLibraryFastScrollbar(
+        totalItems = state.layoutInfo.totalItemsCount,
+        visibleItems = state.layoutInfo.visibleItemsInfo.size,
+        firstVisibleItemIndex = state.firstVisibleItemIndex,
+        modifier = modifier,
+        onScrollToItem = { index -> state.scrollToItem(index) }
+    )
+}
+
+@Composable
+private fun DeviceLibraryFastScrollbar(
+    totalItems: Int,
+    visibleItems: Int,
+    firstVisibleItemIndex: Int,
+    modifier: Modifier = Modifier,
+    onScrollToItem: suspend (Int) -> Unit
+) {
+    if (totalItems <= visibleItems || visibleItems == 0) return
+
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val scrollbarWidth = 14.dp
+    var trackHeightPx by remember { mutableStateOf(0) }
+    val minThumbHeightPx = with(density) { 44.dp.toPx() }
+    val thumbHeightPx = if (trackHeightPx > 0) {
+        (trackHeightPx * visibleItems / totalItems.toFloat()).coerceAtLeast(minThumbHeightPx)
+    } else {
+        minThumbHeightPx
+    }
+    val scrollableItems = (totalItems - visibleItems).coerceAtLeast(1)
+    val scrollableTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(1f)
+    val thumbOffsetPx = scrollableTrackPx * (firstVisibleItemIndex / scrollableItems.toFloat())
+    val currentTrackHeightPx by rememberUpdatedState(trackHeightPx)
+    val currentScrollableTrackPx by rememberUpdatedState(scrollableTrackPx)
+    val currentScrollableItems by rememberUpdatedState(scrollableItems)
+    val currentFirstVisibleItemIndex by rememberUpdatedState(firstVisibleItemIndex)
+    val draggableState = rememberDraggableState { delta ->
+        if (currentTrackHeightPx == 0) return@rememberDraggableState
+        val currentOffset = currentScrollableTrackPx *
+            (currentFirstVisibleItemIndex / currentScrollableItems.toFloat())
+        val nextOffset = (currentOffset + delta).coerceIn(0f, currentScrollableTrackPx)
+        val targetIndex = (nextOffset / currentScrollableTrackPx * currentScrollableItems)
+            .toInt()
+            .coerceIn(0, currentScrollableItems)
+        scope.launch { onScrollToItem(targetIndex) }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = 18.dp, bottom = 96.dp, end = 4.dp),
+        contentAlignment = Alignment.CenterEnd
     ) {
-        items(files, key = { it.uri.toString() }) { file ->
-            ShelfGridBook(
-                file = file,
-                progress = readingProgressFor(file),
-                onClick = { onOpenFile(file) }
+        Box(
+            modifier = Modifier
+                .width(scrollbarWidth)
+                .fillMaxSize()
+                .onSizeChanged { trackHeightPx = it.height }
+                .clip(RoundedCornerShape(999.dp))
+                .background(OldIvory.copy(alpha = 0.12f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(scrollbarWidth)
+                    .height(with(density) { thumbHeightPx.toDp() })
+                    .graphicsLayer { translationY = thumbOffsetPx }
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(TarnishedGold.copy(alpha = 0.82f))
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = draggableState
+                    )
             )
         }
     }
