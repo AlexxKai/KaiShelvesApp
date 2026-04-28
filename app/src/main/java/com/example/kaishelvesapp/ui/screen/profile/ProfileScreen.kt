@@ -23,8 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,7 +32,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,10 +98,9 @@ fun ProfileScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val hasProfileChanges = uiState.isEditingProfile && (
+    val hasProfileChanges =
         uiState.username.trim() != uiState.user?.usuario.orEmpty().trim() ||
-            uiState.profilePhotoUri.trim() != uiState.user?.photoUrl.orEmpty().trim()
-        )
+            uiState.email.trim() != uiState.user?.email.orEmpty().trim()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val activity = context.findActivity()
@@ -120,7 +116,7 @@ fun ProfileScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.toString()?.let(viewModel::onProfilePhotoSelected)
+        uri?.toString()?.let(viewModel::saveProfilePhoto)
     }
 
     LaunchedEffect(Unit) {
@@ -184,41 +180,6 @@ fun ProfileScreen(
                     onOpenNotifications = onOpenNotifications
                 )
             },
-            floatingActionButton = {
-                if (selectedProfileTab != ProfileTab.Identity) {
-                    return@Scaffold
-                }
-
-                FloatingActionButton(
-                    onClick = {
-                        when {
-                            uiState.isLoading -> Unit
-                            !uiState.isEditingProfile -> viewModel.startEditingProfile()
-                            hasProfileChanges -> viewModel.saveProfileChanges()
-                            else -> viewModel.cancelEditingProfile()
-                        }
-                    },
-                    containerColor = TarnishedGold,
-                    contentColor = Obsidian
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(color = Obsidian)
-                    } else {
-                        Icon(
-                            imageVector = when {
-                                !uiState.isEditingProfile -> Icons.Filled.Edit
-                                hasProfileChanges -> Icons.Filled.Save
-                                else -> Icons.AutoMirrored.Filled.Undo
-                            },
-                            contentDescription = when {
-                                !uiState.isEditingProfile -> stringResource(R.string.edit_profile)
-                                hasProfileChanges -> stringResource(R.string.save_profile_changes)
-                                else -> stringResource(R.string.cancel)
-                            }
-                        )
-                    }
-                }
-            },
             bottomBar = {
                 KaiBottomBar(
                     current = KaiSection.PROFILE,
@@ -262,11 +223,12 @@ fun ProfileScreen(
                                 Column(
                                     modifier = Modifier.padding(24.dp)
                                 ) {
-                                    if (!uiState.isEditingProfile) {
-                                        IconButton(
-                                            onClick = onBack,
-                                            modifier = Modifier.align(Alignment.Start)
-                                        ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(onClick = onBack) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                                 contentDescription = stringResource(R.string.back),
@@ -274,8 +236,32 @@ fun ProfileScreen(
                                             )
                                         }
 
-                                        Spacer(modifier = Modifier.height(12.dp))
+                                        if (selectedProfileTab == ProfileTab.Identity) {
+                                            IconButton(
+                                                onClick = viewModel::saveProfileChanges,
+                                                enabled = hasProfileChanges && !uiState.isLoading
+                                            ) {
+                                                if (uiState.isLoading) {
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(24.dp),
+                                                        color = TarnishedGold
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Save,
+                                                        contentDescription = stringResource(R.string.save_profile_changes),
+                                                        tint = if (hasProfileChanges) {
+                                                            TarnishedGold
+                                                        } else {
+                                                            TarnishedGold.copy(alpha = 0.34f)
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
 
                                     when (selectedProfileTab) {
                                         ProfileTab.Identity -> {
@@ -292,27 +278,24 @@ fun ProfileScreen(
 
                                             Spacer(modifier = Modifier.height(20.dp))
 
-                                            if (uiState.isEditingProfile) {
-                                                OutlinedTextField(
-                                                    value = uiState.username,
-                                                    onValueChange = viewModel::onUsernameChange,
-                                                    label = { Text(stringResource(R.string.username)) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                                                    singleLine = true
-                                                )
+                                            OutlinedTextField(
+                                                value = uiState.username,
+                                                onValueChange = viewModel::onUsernameChange,
+                                                label = { Text(stringResource(R.string.username)) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                                                singleLine = true
+                                            )
 
-                                                Spacer(modifier = Modifier.height(16.dp))
-                                            } else {
-                                                ProfileLine(
-                                                    stringResource(R.string.username),
-                                                    uiState.user?.usuario ?: "Sin nombre"
-                                                )
-                                            }
+                                            Spacer(modifier = Modifier.height(16.dp))
 
-                                            ProfileLine(
-                                                stringResource(R.string.email),
-                                                uiState.user?.email ?: "Sin email"
+                                            OutlinedTextField(
+                                                value = uiState.email,
+                                                onValueChange = viewModel::onEmailChange,
+                                                label = { Text(stringResource(R.string.email)) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                                                singleLine = true
                                             )
                                         }
 

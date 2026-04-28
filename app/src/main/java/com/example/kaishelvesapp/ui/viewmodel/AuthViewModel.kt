@@ -76,6 +76,43 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(profilePhotoUri = uri)
     }
 
+    fun saveProfilePhoto(uri: String) {
+        val currentUser = _uiState.value.user ?: return
+
+        _uiState.value = _uiState.value.copy(
+            profilePhotoUri = uri,
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.updateProfile(
+                newUsername = currentUser.usuario,
+                newEmail = currentUser.email,
+                selectedPhotoUri = uri
+            )
+
+            result
+                .onSuccess { updatedUser ->
+                    repository.syncPendingAccountNotifications()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        profilePhotoUri = updatedUser.photoUrl,
+                        successMessage = "Foto de perfil actualizada correctamente"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        profilePhotoUri = currentUser.photoUrl,
+                        errorMessage = error.message ?: "No se pudo actualizar la foto de perfil"
+                    )
+                }
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
@@ -99,6 +136,7 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(
             isEditingProfile = true,
             username = _uiState.value.user?.usuario ?: "",
+            email = _uiState.value.user?.email ?: "",
             profilePhotoUri = _uiState.value.user?.photoUrl ?: "",
             errorMessage = null,
             successMessage = null
@@ -109,6 +147,7 @@ class AuthViewModel(
         _uiState.value = _uiState.value.copy(
             isEditingProfile = false,
             username = _uiState.value.user?.usuario ?: "",
+            email = _uiState.value.user?.email ?: "",
             profilePhotoUri = _uiState.value.user?.photoUrl ?: "",
             errorMessage = null
         )
@@ -129,6 +168,7 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
+                        email = usuario.email,
                         username = usuario.usuario,
                         guestUsername = if (usuario.isGuest) usuario.usuario else _uiState.value.guestUsername,
                         profilePhotoUri = usuario.photoUrl,
@@ -271,6 +311,7 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
+                        email = usuario.email,
                         username = usuario.usuario,
                         guestUsername = usuario.usuario,
                         profilePhotoUri = usuario.photoUrl,
@@ -314,6 +355,7 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
+                        email = usuario.email,
                         username = usuario.usuario,
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
@@ -332,11 +374,19 @@ class AuthViewModel(
 
     fun saveProfileChanges() {
         val username = _uiState.value.username.trim()
+        val email = _uiState.value.email.trim()
         val profilePhotoUri = _uiState.value.profilePhotoUri.trim()
 
         if (username.isBlank()) {
             _uiState.value = _uiState.value.copy(
                 errorMessage = "El nombre de usuario no puede estar vacio"
+            )
+            return
+        }
+
+        if (_uiState.value.user?.isGuest != true && email.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "El correo electronico no puede estar vacio"
             )
             return
         }
@@ -348,7 +398,7 @@ class AuthViewModel(
         )
 
         viewModelScope.launch {
-            val result = repository.updateProfile(username, profilePhotoUri)
+            val result = repository.updateProfile(username, email, profilePhotoUri)
 
             result
                 .onSuccess { updatedUser ->
@@ -356,9 +406,10 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
+                        email = updatedUser.email,
                         username = updatedUser.usuario,
                         profilePhotoUri = updatedUser.photoUrl,
-                        isEditingProfile = false,
+                        isEditingProfile = true,
                         successMessage = "Perfil actualizado correctamente"
                     )
                 }
@@ -411,6 +462,7 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     user = result.user,
+                    email = result.user.email,
                     username = result.user.usuario,
                     profilePhotoUri = result.user.photoUrl,
                     isLoggedIn = true,
@@ -423,6 +475,7 @@ class AuthViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     user = result.decision.user,
+                    email = result.decision.user.email,
                     username = result.decision.user.usuario,
                     profilePhotoUri = result.decision.user.photoUrl,
                     isLoggedIn = false,

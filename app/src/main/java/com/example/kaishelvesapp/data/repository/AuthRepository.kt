@@ -312,7 +312,7 @@ class AuthRepository(
         }
     }
 
-    suspend fun updateProfile(newUsername: String, selectedPhotoUri: String): Result<Usuario> {
+    suspend fun updateProfile(newUsername: String, newEmail: String, selectedPhotoUri: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
             if (currentUser == null) {
@@ -339,6 +339,15 @@ class AuthRepository(
             val currentProfile = getCurrentUserProfile().getOrNull()
             ensureUsernameIsUnique(newUsername, currentUid = uid)
 
+            val resolvedEmail = newEmail.trim()
+            if (resolvedEmail.isBlank()) {
+                return Result.failure(Exception("El correo electronico no puede estar vacio"))
+            }
+
+            if (!currentUser.email.equals(resolvedEmail, ignoreCase = true)) {
+                currentUser.updateEmail(resolvedEmail).await()
+            }
+
             val resolvedPhotoUrl = when {
                 selectedPhotoUri.isBlank() -> currentProfile?.photoUrl.orEmpty()
                 selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(uid, Uri.parse(selectedPhotoUri))
@@ -348,7 +357,7 @@ class AuthRepository(
             val updatedUser = Usuario(
                 uid = uid,
                 usuario = newUsername,
-                email = currentUser.email ?: "",
+                email = resolvedEmail,
                 photoUrl = resolvedPhotoUrl,
                 isAdmin = currentProfile?.isAdmin ?: false,
                 privacySettings = currentProfile?.privacySettings ?: UserPrivacySettings()
