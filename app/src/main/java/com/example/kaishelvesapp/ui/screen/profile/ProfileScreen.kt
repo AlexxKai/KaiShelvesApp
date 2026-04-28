@@ -1,10 +1,14 @@
 package com.example.kaishelvesapp.ui.screen.profile
 
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +44,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -54,17 +59,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
+import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -78,6 +91,7 @@ import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
+import kotlin.math.max
 
 @Composable
 fun ProfileScreen(
@@ -109,6 +123,7 @@ fun ProfileScreen(
     var accountNotificationsEnabled by remember { mutableStateOf(true) }
     var keepSessionOpen by remember { mutableStateOf(true) }
     var confirmBeforeLogout by remember { mutableStateOf(false) }
+    var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
@@ -116,7 +131,18 @@ fun ProfileScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.toString()?.let(viewModel::saveProfilePhoto)
+        pendingProfilePhotoUri = uri?.toString()
+    }
+
+    pendingProfilePhotoUri?.let { selectedPhotoUri ->
+        ProfilePhotoCropDialog(
+            imageUri = selectedPhotoUri,
+            onDismiss = { pendingProfilePhotoUri = null },
+            onConfirm = { croppedPhoto ->
+                pendingProfilePhotoUri = null
+                viewModel.saveProfilePhoto(croppedPhoto)
+            }
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -804,6 +830,173 @@ private fun ProfileAvatarSection(
                 text = stringResource(R.string.change_profile_photo),
                 color = TarnishedGold
             )
+        }
+    }
+}
+
+@Composable
+private fun ProfilePhotoCropDialog(
+    imageUri: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val cropSize = 260.dp
+    val density = LocalDensity.current
+    val viewportSizePx = with(density) { cropSize.roundToPx() }
+    val bitmap = remember(imageUri) {
+        runCatching {
+            context.contentResolver.openInputStream(Uri.parse(imageUri))?.use { input ->
+                BitmapFactory.decodeStream(input)
+            }
+        }.getOrNull()
+    }
+    var zoom by remember(imageUri) { mutableStateOf(1f) }
+    var offset by remember(imageUri) { mutableStateOf(Offset.Zero) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Ajustar foto de perfil",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TarnishedGold
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (bitmap == null) {
+                    Box(
+                        modifier = Modifier
+                            .size(cropSize)
+                            .border(1.dp, TarnishedGold.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No se pudo cargar la imagen",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    val baseScale = max(
+                        viewportSizePx.toFloat() / bitmap.width.toFloat(),
+                        viewportSizePx.toFloat() / bitmap.height.toFloat()
+                    )
+                    val scaledWidth = bitmap.width * baseScale * zoom
+                    val scaledHeight = bitmap.height * baseScale * zoom
+                    val maxOffsetX = ((scaledWidth - viewportSizePx) / 2f).coerceAtLeast(0f)
+                    val maxOffsetY = ((scaledHeight - viewportSizePx) / 2f).coerceAtLeast(0f)
+
+                    Box(
+                        modifier = Modifier
+                            .size(cropSize)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Color.Black.copy(alpha = 0.28f))
+                            .border(1.dp, TarnishedGold, RoundedCornerShape(18.dp))
+                            .pointerInput(bitmap) {
+                                detectTransformGestures { _, pan, gestureZoom, _ ->
+                                    val nextZoom = (zoom * gestureZoom).coerceIn(1f, 4f)
+                                    val nextScaledWidth = bitmap.width * baseScale * nextZoom
+                                    val nextScaledHeight = bitmap.height * baseScale * nextZoom
+                                    val nextMaxOffsetX = ((nextScaledWidth - viewportSizePx) / 2f)
+                                        .coerceAtLeast(0f)
+                                    val nextMaxOffsetY = ((nextScaledHeight - viewportSizePx) / 2f)
+                                        .coerceAtLeast(0f)
+
+                                    zoom = nextZoom
+                                    offset = Offset(
+                                        x = (offset.x + pan.x).coerceIn(-nextMaxOffsetX, nextMaxOffsetX),
+                                        y = (offset.y + pan.y).coerceIn(-nextMaxOffsetY, nextMaxOffsetY)
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Foto de perfil seleccionada",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = zoom
+                                    scaleY = zoom
+                                    translationX = offset.x.coerceIn(-maxOffsetX, maxOffsetX)
+                                    translationY = offset.y.coerceIn(-maxOffsetY, maxOffsetY)
+                                },
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Slider(
+                        value = zoom,
+                        onValueChange = { nextZoom ->
+                            val coercedZoom = nextZoom.coerceIn(1f, 4f)
+                            val nextScaledWidth = bitmap.width * baseScale * coercedZoom
+                            val nextScaledHeight = bitmap.height * baseScale * coercedZoom
+                            val nextMaxOffsetX = ((nextScaledWidth - viewportSizePx) / 2f)
+                                .coerceAtLeast(0f)
+                            val nextMaxOffsetY = ((nextScaledHeight - viewportSizePx) / 2f)
+                                .coerceAtLeast(0f)
+
+                            zoom = coercedZoom
+                            offset = Offset(
+                                x = offset.x.coerceIn(-nextMaxOffsetX, nextMaxOffsetX),
+                                y = offset.y.coerceIn(-nextMaxOffsetY, nextMaxOffsetY)
+                            )
+                        },
+                        valueRange = 1f..4f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, TarnishedGold)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cancel),
+                            color = TarnishedGold
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            val croppedPhoto = ProfileImageCodec.cropImageAsDataUri(
+                                context = context,
+                                uri = Uri.parse(imageUri),
+                                viewportSizePx = viewportSizePx,
+                                zoom = zoom,
+                                offsetX = offset.x,
+                                offsetY = offset.y
+                            )
+                            onConfirm(croppedPhoto)
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = bitmap != null,
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        Text(stringResource(R.string.save_profile_changes))
+                    }
+                }
+            }
         }
     }
 }

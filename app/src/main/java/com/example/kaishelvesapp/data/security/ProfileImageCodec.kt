@@ -45,6 +45,52 @@ object ProfileImageCodec {
         return DATA_URI_PREFIX + base64Image
     }
 
+    fun cropImageAsDataUri(
+        context: Context,
+        uri: Uri,
+        viewportSizePx: Int,
+        zoom: Float,
+        offsetX: Float,
+        offsetY: Float
+    ): String {
+        val rawBytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            input.readBytes()
+        } ?: error("No se pudo leer la imagen seleccionada")
+
+        val sourceBitmap = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+            ?: error("No se pudo preparar la imagen seleccionada")
+
+        val baseScale = maxOf(
+            viewportSizePx.toFloat() / sourceBitmap.width.toFloat(),
+            viewportSizePx.toFloat() / sourceBitmap.height.toFloat()
+        )
+        val totalScale = baseScale * zoom.coerceAtLeast(1f)
+        val scaledWidth = sourceBitmap.width * totalScale
+        val scaledHeight = sourceBitmap.height * totalScale
+        val imageLeft = viewportSizePx / 2f + offsetX - scaledWidth / 2f
+        val imageTop = viewportSizePx / 2f + offsetY - scaledHeight / 2f
+
+        val cropLeft = ((-imageLeft) / totalScale).toInt()
+            .coerceIn(0, sourceBitmap.width - 1)
+        val cropTop = ((-imageTop) / totalScale).toInt()
+            .coerceIn(0, sourceBitmap.height - 1)
+        val cropSize = (viewportSizePx / totalScale).toInt()
+            .coerceAtLeast(1)
+        val cropWidth = cropSize.coerceAtMost(sourceBitmap.width - cropLeft)
+        val cropHeight = cropSize.coerceAtMost(sourceBitmap.height - cropTop)
+
+        val croppedBitmap = Bitmap.createBitmap(
+            sourceBitmap,
+            cropLeft,
+            cropTop,
+            cropWidth,
+            cropHeight
+        )
+        val compressedBytes = compressBitmapForProfile(croppedBitmap)
+        val base64Image = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
+        return DATA_URI_PREFIX + base64Image
+    }
+
     fun decryptImageBytes(encryptedPayload: String): ByteArray? {
         return runCatching {
             val base64Image = decryptText(encryptedPayload)
@@ -58,6 +104,20 @@ object ProfileImageCodec {
 
         val scaledBitmap = Bitmap.createScaledBitmap(
             originalBitmap,
+            MAX_IMAGE_SIZE,
+            MAX_IMAGE_SIZE,
+            true
+        )
+
+        return ByteArrayOutputStream().use { output ->
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, output)
+            output.toByteArray()
+        }
+    }
+
+    private fun compressBitmapForProfile(bitmap: Bitmap): ByteArray {
+        val scaledBitmap = Bitmap.createScaledBitmap(
+            bitmap,
             MAX_IMAGE_SIZE,
             MAX_IMAGE_SIZE,
             true
