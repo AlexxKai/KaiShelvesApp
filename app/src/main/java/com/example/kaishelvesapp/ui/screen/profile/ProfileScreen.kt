@@ -3,10 +3,12 @@ package com.example.kaishelvesapp.ui.screen.profile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -58,7 +60,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
@@ -242,106 +248,116 @@ fun ProfileScreen(
                     }
 
                     else -> {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(28.dp),
-                            colors = CardDefaults.cardColors(containerColor = Obsidian),
-                            border = BorderStroke(1.dp, TarnishedGold)
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 51.dp),
+                                shape = RoundedCornerShape(28.dp),
+                                colors = CardDefaults.cardColors(containerColor = Obsidian),
+                                border = BorderStroke(1.dp, TarnishedGold)
                             ) {
-                                if (!uiState.isEditingProfile) {
-                                    IconButton(
-                                        onClick = onBack,
-                                        modifier = Modifier.align(Alignment.Start)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = stringResource(R.string.back),
-                                            tint = TarnishedGold
-                                        )
-                                    }
-                                }
-
-                                ProfileTabSelector(
-                                    selectedTab = selectedProfileTab,
-                                    onSelectTab = { selectedProfileTab = it }
-                                )
-
-                                Spacer(modifier = Modifier.height(20.dp))
-
-                                when (selectedProfileTab) {
-                                    ProfileTab.Identity -> {
-                                        ProfileAvatarSection(
-                                            displayName = uiState.username.ifBlank {
-                                                userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
-                                            },
-                                            imageUrl = uiState.profilePhotoUri.ifBlank {
-                                                profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
-                                            },
-                                            isAdmin = uiState.user?.isAdmin == true,
-                                            onChangePhoto = { photoPickerLauncher.launch("image/*") }
-                                        )
-
-                                        Spacer(modifier = Modifier.height(20.dp))
-
-                                        if (uiState.isEditingProfile) {
-                                            OutlinedTextField(
-                                                value = uiState.username,
-                                                onValueChange = viewModel::onUsernameChange,
-                                                label = { Text(stringResource(R.string.username)) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                                                singleLine = true
-                                            )
-
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                        } else {
-                                            ProfileLine(
-                                                stringResource(R.string.username),
-                                                uiState.user?.usuario ?: "Sin nombre"
+                                Column(
+                                    modifier = Modifier.padding(24.dp)
+                                ) {
+                                    if (!uiState.isEditingProfile) {
+                                        IconButton(
+                                            onClick = onBack,
+                                            modifier = Modifier.align(Alignment.Start)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = stringResource(R.string.back),
+                                                tint = TarnishedGold
                                             )
                                         }
 
-                                        ProfileLine(
-                                            stringResource(R.string.email),
-                                            uiState.user?.email ?: "Sin email"
-                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
                                     }
 
-                                    ProfileTab.Settings -> {
-                                        ProfileSettingsContent(
-                                            expandedLanguage = expandedLanguage,
-                                            onExpandedChange = { expandedLanguage = it },
-                                            onSelectLanguage = { language ->
-                                                expandedLanguage = false
-                                                activity?.let {
-                                                    LanguageManager.setLanguage(it, language)
-                                                }
-                                            },
-                                            notificationsEnabled = accountNotificationsEnabled,
-                                            onNotificationsEnabledChange = { accountNotificationsEnabled = it },
-                                            pendingRequestCount = pendingRequestCount,
-                                            onOpenNotifications = onOpenNotifications,
-                                            keepSessionOpen = keepSessionOpen,
-                                            onKeepSessionOpenChange = { keepSessionOpen = it },
-                                            confirmBeforeLogout = confirmBeforeLogout,
-                                            onConfirmBeforeLogoutChange = { confirmBeforeLogout = it },
-                                            isGuest = uiState.user?.isGuest == true,
-                                            onGoToRegister = onGoToRegister,
-                                            onLogout = onLogout
-                                        )
-                                    }
+                                    when (selectedProfileTab) {
+                                        ProfileTab.Identity -> {
+                                            ProfileAvatarSection(
+                                                displayName = uiState.username.ifBlank {
+                                                    userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
+                                                },
+                                                imageUrl = uiState.profilePhotoUri.ifBlank {
+                                                    profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
+                                                },
+                                                isAdmin = uiState.user?.isAdmin == true,
+                                                onChangePhoto = { photoPickerLauncher.launch("image/*") }
+                                            )
 
-                                    ProfileTab.Privacy -> {
-                                        ProfilePrivacyContent(
-                                            privacySettings = privacySettings,
-                                            onPrivacySettingsChange = viewModel::updatePrivacySettings
-                                        )
+                                            Spacer(modifier = Modifier.height(20.dp))
+
+                                            if (uiState.isEditingProfile) {
+                                                OutlinedTextField(
+                                                    value = uiState.username,
+                                                    onValueChange = viewModel::onUsernameChange,
+                                                    label = { Text(stringResource(R.string.username)) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                                                    singleLine = true
+                                                )
+
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                            } else {
+                                                ProfileLine(
+                                                    stringResource(R.string.username),
+                                                    uiState.user?.usuario ?: "Sin nombre"
+                                                )
+                                            }
+
+                                            ProfileLine(
+                                                stringResource(R.string.email),
+                                                uiState.user?.email ?: "Sin email"
+                                            )
+                                        }
+
+                                        ProfileTab.Settings -> {
+                                            ProfileSettingsContent(
+                                                expandedLanguage = expandedLanguage,
+                                                onExpandedChange = { expandedLanguage = it },
+                                                onSelectLanguage = { language ->
+                                                    expandedLanguage = false
+                                                    activity?.let {
+                                                        LanguageManager.setLanguage(it, language)
+                                                    }
+                                                },
+                                                notificationsEnabled = accountNotificationsEnabled,
+                                                onNotificationsEnabledChange = { accountNotificationsEnabled = it },
+                                                pendingRequestCount = pendingRequestCount,
+                                                onOpenNotifications = onOpenNotifications,
+                                                keepSessionOpen = keepSessionOpen,
+                                                onKeepSessionOpenChange = { keepSessionOpen = it },
+                                                confirmBeforeLogout = confirmBeforeLogout,
+                                                onConfirmBeforeLogoutChange = { confirmBeforeLogout = it },
+                                                isGuest = uiState.user?.isGuest == true,
+                                                onGoToRegister = onGoToRegister,
+                                                onLogout = onLogout
+                                            )
+                                        }
+
+                                        ProfileTab.Privacy -> {
+                                            ProfilePrivacyContent(
+                                                privacySettings = privacySettings,
+                                                onPrivacySettingsChange = viewModel::updatePrivacySettings
+                                            )
+                                        }
                                     }
                                 }
                             }
+
+                            ProfileTabSelector(
+                                selectedTab = selectedProfileTab,
+                                onSelectTab = { selectedProfileTab = it },
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(horizontal = 26.dp)
+                                    .zIndex(1f)
+                            )
                         }
                     }
                 }
@@ -359,11 +375,15 @@ private enum class ProfileTab {
 @Composable
 private fun ProfileTabSelector(
     selectedTab: ProfileTab,
-    onSelectTab: (ProfileTab) -> Unit
+    onSelectTab: (ProfileTab) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Bottom
     ) {
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_identity),
@@ -393,20 +413,57 @@ private fun ProfileTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(999.dp),
-        border = BorderStroke(1.dp, TarnishedGold),
-        colors = ButtonDefaults.outlinedButtonColors(
-            containerColor = if (selected) TarnishedGold.copy(alpha = 0.2f) else Color.Transparent,
-            contentColor = if (selected) OldIvory else TarnishedGold
-        )
+    Box(
+        modifier = modifier.height(if (selected) 52.dp else 42.dp)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium
-        )
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = 0.dp,
+                bottomEnd = 0.dp
+            ),
+            border = BorderStroke(1.dp, TarnishedGold),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (selected) Obsidian else Obsidian.copy(alpha = 0.86f),
+                contentColor = if (selected) OldIvory else TarnishedGold
+            )
+        ) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                val tabTextSize = when {
+                    maxWidth < 72.dp -> 10.sp
+                    maxWidth < 88.dp -> 11.sp
+                    else -> 12.sp
+                }
+
+                Text(
+                    text = text,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.labelMedium.copy(fontSize = tabTextSize),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        }
+
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .padding(horizontal = 1.dp)
+                    .background(Obsidian)
+            )
+        }
     }
 }
 
