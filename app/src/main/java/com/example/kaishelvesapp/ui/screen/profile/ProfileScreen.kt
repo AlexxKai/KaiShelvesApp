@@ -107,9 +107,15 @@ fun ProfileScreen(
     var keepSessionOpen by remember { mutableStateOf(true) }
     var confirmBeforeLogout by remember { mutableStateOf(false) }
     var sessionProtectionEnabled by remember { mutableStateOf(true) }
+    var sensitiveActionConfirmation by remember { mutableStateOf(true) }
     var profileVisible by remember { mutableStateOf(true) }
+    var emailVisible by remember { mutableStateOf(false) }
+    var readingActivityVisible by remember { mutableStateOf(true) }
+    var friendsVisible by remember { mutableStateOf(true) }
     var friendRequestPermissions by remember { mutableStateOf(true) }
+    var socialInteractionPermissions by remember { mutableStateOf(true) }
     var personalDataControl by remember { mutableStateOf(false) }
+    var personalizedSuggestions by remember { mutableStateOf(true) }
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
@@ -181,6 +187,10 @@ fun ProfileScreen(
                 )
             },
             floatingActionButton = {
+                if (selectedProfileTab != ProfileTab.Identity) {
+                    return@Scaffold
+                }
+
                 FloatingActionButton(
                     onClick = {
                         when {
@@ -222,7 +232,7 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(innerPadding)
+                    .padding(top = innerPadding.calculateTopPadding())
                     .padding(16.dp)
                     .verticalScroll(rememberScrollState())
             ) {
@@ -336,13 +346,24 @@ fun ProfileScreen(
                                         ProfilePrivacyContent(
                                             sessionProtectionEnabled = sessionProtectionEnabled,
                                             onSessionProtectionEnabledChange = { sessionProtectionEnabled = it },
+                                            sensitiveActionConfirmation = sensitiveActionConfirmation,
+                                            onSensitiveActionConfirmationChange = { sensitiveActionConfirmation = it },
                                             profileVisible = profileVisible,
                                             onProfileVisibleChange = { profileVisible = it },
+                                            emailVisible = emailVisible,
+                                            onEmailVisibleChange = { emailVisible = it },
+                                            readingActivityVisible = readingActivityVisible,
+                                            onReadingActivityVisibleChange = { readingActivityVisible = it },
+                                            friendsVisible = friendsVisible,
+                                            onFriendsVisibleChange = { friendsVisible = it },
                                             friendRequestPermissions = friendRequestPermissions,
                                             onFriendRequestPermissionsChange = { friendRequestPermissions = it },
+                                            socialInteractionPermissions = socialInteractionPermissions,
+                                            onSocialInteractionPermissionsChange = { socialInteractionPermissions = it },
                                             personalDataControl = personalDataControl,
                                             onPersonalDataControlChange = { personalDataControl = it },
-                                            onOpenPrivacySettings = onGoToSettingsPrivacy
+                                            personalizedSuggestions = personalizedSuggestions,
+                                            onPersonalizedSuggestionsChange = { personalizedSuggestions = it }
                                         )
                                     }
                                 }
@@ -510,13 +531,24 @@ private fun ProfileSettingsContent(
 private fun ProfilePrivacyContent(
     sessionProtectionEnabled: Boolean,
     onSessionProtectionEnabledChange: (Boolean) -> Unit,
+    sensitiveActionConfirmation: Boolean,
+    onSensitiveActionConfirmationChange: (Boolean) -> Unit,
     profileVisible: Boolean,
     onProfileVisibleChange: (Boolean) -> Unit,
+    emailVisible: Boolean,
+    onEmailVisibleChange: (Boolean) -> Unit,
+    readingActivityVisible: Boolean,
+    onReadingActivityVisibleChange: (Boolean) -> Unit,
+    friendsVisible: Boolean,
+    onFriendsVisibleChange: (Boolean) -> Unit,
     friendRequestPermissions: Boolean,
     onFriendRequestPermissionsChange: (Boolean) -> Unit,
+    socialInteractionPermissions: Boolean,
+    onSocialInteractionPermissionsChange: (Boolean) -> Unit,
     personalDataControl: Boolean,
     onPersonalDataControlChange: (Boolean) -> Unit,
-    onOpenPrivacySettings: () -> Unit
+    personalizedSuggestions: Boolean,
+    onPersonalizedSuggestionsChange: (Boolean) -> Unit
 ) {
     ProfileSectionBlock(title = stringResource(R.string.profile_privacy_session_protection)) {
         ProfileToggleRow(
@@ -524,6 +556,18 @@ private fun ProfilePrivacyContent(
             body = stringResource(R.string.profile_session_protection_enabled_body),
             checked = sessionProtectionEnabled,
             onCheckedChange = onSessionProtectionEnabledChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_sensitive_action_confirmation),
+            body = stringResource(R.string.profile_sensitive_action_confirmation_body),
+            checked = sensitiveActionConfirmation,
+            onCheckedChange = onSensitiveActionConfirmationChange
         )
     }
 
@@ -534,6 +578,42 @@ private fun ProfilePrivacyContent(
             checked = profileVisible,
             onCheckedChange = onProfileVisibleChange
         )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_email_visibility),
+            body = stringResource(R.string.profile_email_visibility_body),
+            checked = emailVisible,
+            onCheckedChange = onEmailVisibleChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_reading_activity_visibility),
+            body = stringResource(R.string.profile_reading_activity_visibility_body),
+            checked = readingActivityVisible,
+            onCheckedChange = onReadingActivityVisibleChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_friends_visibility),
+            body = stringResource(R.string.profile_friends_visibility_body),
+            checked = friendsVisible,
+            onCheckedChange = onFriendsVisibleChange
+        )
     }
 
     ProfileSectionBlock(title = stringResource(R.string.profile_privacy_permissions)) {
@@ -542,6 +622,18 @@ private fun ProfilePrivacyContent(
             body = stringResource(R.string.profile_friend_request_permissions_body),
             checked = friendRequestPermissions,
             onCheckedChange = onFriendRequestPermissionsChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_social_interaction_permissions),
+            body = stringResource(R.string.profile_social_interaction_permissions_body),
+            checked = socialInteractionPermissions,
+            onCheckedChange = onSocialInteractionPermissionsChange
         )
     }
 
@@ -553,18 +645,21 @@ private fun ProfilePrivacyContent(
             onCheckedChange = onPersonalDataControlChange
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
 
-        OutlinedButton(
-            onClick = onOpenPrivacySettings,
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, TarnishedGold)
-        ) {
-            Text(
-                text = stringResource(R.string.profile_open_privacy_settings),
-                color = TarnishedGold
-            )
-        }
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_personalized_suggestions),
+            body = stringResource(R.string.profile_personalized_suggestions_body),
+            checked = personalizedSuggestions,
+            onCheckedChange = onPersonalizedSuggestionsChange
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        ProfileInfoLine(stringResource(R.string.profile_privacy_local_notice))
     }
 }
 
@@ -594,6 +689,17 @@ private fun ProfileSectionBlock(
 
         content()
     }
+}
+
+@Composable
+private fun ProfileInfoLine(
+    text: String
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = OldIvory.copy(alpha = 0.72f)
+    )
 }
 
 @Composable
