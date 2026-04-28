@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.repository.AuthRepository
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
 import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
@@ -365,6 +366,34 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "No se pudo actualizar el perfil"
+                    )
+                }
+        }
+    }
+
+    fun updatePrivacySettings(privacySettings: UserPrivacySettings) {
+        val previousUser = _uiState.value.user
+        val optimisticUser = previousUser?.copy(privacySettings = privacySettings)
+
+        if (optimisticUser != null) {
+            _uiState.value = _uiState.value.copy(
+                user = optimisticUser,
+                errorMessage = null
+            )
+        }
+
+        viewModelScope.launch {
+            repository.updatePrivacySettings(privacySettings)
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        user = updatedUser,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        user = previousUser,
+                        errorMessage = error.message ?: "No se pudo actualizar la privacidad"
                     )
                 }
         }

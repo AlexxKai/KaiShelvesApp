@@ -5,6 +5,7 @@ import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -172,6 +173,7 @@ class FriendsRepository(
         }
 
         val uid = snapshot.stringValue("uid").ifBlank { fallbackUid }
+        val storedUser = snapshot.toObject(Usuario::class.java)
         val username = snapshot.stringValue("usuario", "username", "displayName", "nombreUsuario")
         val email = snapshot.stringValue("email", "correo", "mail")
         val photoUrl = snapshot.stringValue(
@@ -193,7 +195,10 @@ class FriendsRepository(
                 uid = uid,
                 usuario = username,
                 email = email,
-                photoUrl = photoUrl
+                photoUrl = photoUrl,
+                isAdmin = storedUser?.isAdmin ?: false,
+                isGuest = storedUser?.isGuest ?: false,
+                privacySettings = storedUser?.privacySettings ?: UserPrivacySettings()
             )
         }
     }
@@ -223,7 +228,12 @@ class FriendsRepository(
             email = primary?.email?.takeIf { it.isNotBlank() }
                 ?: fallback?.email.orEmpty(),
             photoUrl = primary?.photoUrl?.takeIf { it.isNotBlank() }
-                ?: fallback?.photoUrl.orEmpty()
+                ?: fallback?.photoUrl.orEmpty(),
+            isAdmin = primary?.isAdmin ?: fallback?.isAdmin ?: false,
+            isGuest = primary?.isGuest ?: fallback?.isGuest ?: false,
+            privacySettings = primary?.privacySettings
+                ?: fallback?.privacySettings
+                ?: UserPrivacySettings()
         )
     }
 
@@ -271,6 +281,24 @@ class FriendsRepository(
             .joinToString("_")
             .replace(Regex("[^A-Za-z0-9_-]"), "_")
             .take(220)
+    }
+
+    private fun activityOwnerUid(activityId: String): String {
+        return activityId.substringBefore("_").trim()
+    }
+
+    private suspend fun activitySocialInteractionError(activityId: String, currentUid: String): String? {
+        val ownerUid = activityOwnerUid(activityId)
+        if (ownerUid.isBlank() || ownerUid == currentUid) {
+            return null
+        }
+
+        val owner = getUserProfile(ownerUid) ?: return null
+        if (!owner.privacySettings.socialInteractionPermissions) {
+            return "Este usuario no permite interacciones en su actividad"
+        }
+
+        return null
     }
 
     private suspend fun socialSummary(activityId: String, currentUid: String): ActivitySocialSummary {
@@ -337,7 +365,7 @@ class FriendsRepository(
                     .await()
                     .let { snapshotToUser(it, candidateUid) }
 
-                if (user != null) {
+                if (user != null && user.privacySettings.profileVisible && user.privacySettings.friendRequestPermissions) {
                     candidatesById[candidateUid] = FriendSuggestion(
                         user = user,
                         source = SuggestionSource.FRIEND_OF_FRIEND
@@ -353,7 +381,9 @@ class FriendsRepository(
                     if (
                         candidateUid != uid &&
                         candidateUid !in currentFriends &&
-                        candidateUid !in sentRequestIds
+                        candidateUid !in sentRequestIds &&
+                        user.privacySettings.profileVisible &&
+                        user.privacySettings.friendRequestPermissions
                     ) {
                         candidatesById[candidateUid] = FriendSuggestion(
                             user = user.copy(uid = candidateUid),
@@ -391,6 +421,11 @@ class FriendsRepository(
 
             if (targetUser.uid.isBlank() || targetUser.uid == uid) {
                 return Result.failure(Exception("Usuario no valido"))
+            }
+
+            val targetProfile = getUserProfile(targetUser.uid) ?: targetUser
+            if (!targetProfile.privacySettings.profileVisible || !targetProfile.privacySettings.friendRequestPermissions) {
+                return Result.failure(Exception("Este usuario no acepta solicitudes de amistad ahora mismo"))
             }
 
             val batch = firestore.batch()
@@ -496,6 +531,9 @@ class FriendsRepository(
                         fallback = cachedFriend,
                         uid = friendUid
                     ) ?: return@forEach
+                    if (!friend.privacySettings.profileVisible || !friend.privacySettings.readingActivityVisible) {
+                        return@forEach
+                    }
 
                     add(
                         FriendActivityItem(
@@ -625,40 +663,59 @@ class FriendsRepository(
                 .get()
                 .await()
                 .exists()
+            if (friendUid != uid && !isFriend && !resolvedFriend.privacySettings.profileVisible) {
+                return Result.failure(Exception("Este perfil no esta visible ahora mismo"))
+            }
             val isRequestSent = sentRequestsCollection(uid)
                 .document(friendUid)
                 .get()
                 .await()
                 .exists()
 
-            val booksReadDocuments = readsCollection(friendUid)
-                .get()
-                .await()
-                .documents
+            val canShowReadingActivity = resolvedFriend.privacySettings.readingActivityVisible || friendUid == uid
+            val canShowFriends = resolvedFriend.privacySettings.friendsVisible || friendUid == uid
+
+            val booksReadDocuments = if (canShowReadingActivity) {
+                readsCollection(friendUid)
+                    .get()
+                    .await()
+                    .documents
+            } else {
+                emptyList()
+            }
 
             val booksRead = booksReadDocuments
                 .mapNotNull { it.toObject(LibroLeido::class.java) }
 
-            val readingBookDocuments = systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
-                .get()
-                .await()
-                .documents
+            val readingBookDocuments = if (canShowReadingActivity) {
+                systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
+                    .get()
+                    .await()
+                    .documents
+            } else {
+                emptyList()
+            }
 
             val readingBooks = readingBookDocuments
                 .mapNotNull { it.toObject(Libro::class.java) }
 
-            val wantToReadBookDocuments = systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
-                .get()
-                .await()
-                .documents
+            val wantToReadBookDocuments = if (canShowReadingActivity) {
+                systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
+                    .get()
+                    .await()
+                    .documents
+            } else {
+                emptyList()
+            }
 
             val wantToReadBooks = wantToReadBookDocuments
                 .mapNotNull { it.toObject(Libro::class.java) }
 
-            val friendDocuments = friendsCollection(friendUid)
+            val allFriendDocuments = friendsCollection(friendUid)
                 .get()
                 .await()
                 .documents
+            val friendDocuments = if (canShowFriends) allFriendDocuments else emptyList()
 
             val friendPreviews = friendDocuments
                 .take(5)
@@ -850,6 +907,9 @@ class FriendsRepository(
             if (activityId.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar la publicacion"))
             }
+            activitySocialInteractionError(activityId, uid)?.let { error ->
+                return Result.failure(Exception(error))
+            }
 
             val socialRef = activitySocialDocument(activityId)
             val likeRef = activityLikesCollection(activityId).document(uid)
@@ -925,6 +985,9 @@ class FriendsRepository(
             }
             if (trimmedText.isBlank()) {
                 return Result.failure(Exception("Escribe un comentario"))
+            }
+            activitySocialInteractionError(activityId, uid)?.let { error ->
+                return Result.failure(Exception(error))
             }
 
             val user = getUserProfile(uid) ?: Usuario(uid = uid)

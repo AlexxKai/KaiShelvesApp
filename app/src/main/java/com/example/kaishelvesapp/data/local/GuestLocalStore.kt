@@ -6,6 +6,7 @@ import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 
@@ -185,6 +186,23 @@ object GuestLocalStore {
 
         return updatedState.profile
             ?: error("No se pudo actualizar el perfil invitado")
+    }
+
+    fun updatePrivacySettings(privacySettings: UserPrivacySettings): Usuario {
+        val updatedState = updateState { currentState ->
+            val profile = currentState.profile
+                ?: throw IllegalStateException("No hay sesion invitada iniciada")
+
+            currentState.copy(
+                profile = profile.copy(
+                    privacySettings = privacySettings,
+                    isGuest = true
+                )
+            )
+        }
+
+        return updatedState.profile
+            ?: error("No se pudo actualizar la privacidad del perfil invitado")
     }
 
     fun deactivateSession() {

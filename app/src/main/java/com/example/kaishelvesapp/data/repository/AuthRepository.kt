@@ -7,6 +7,7 @@ import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.google.firebase.auth.FirebaseAuth
@@ -243,7 +244,8 @@ class AuthRepository(
                     ?: firebaseUser?.email.orEmpty(),
                 photoUrl = storedUser?.photoUrl?.takeIf { it.isNotBlank() }
                     ?: firebaseUser?.photoUrl?.toString().orEmpty(),
-                isAdmin = storedUser?.isAdmin ?: false
+                isAdmin = storedUser?.isAdmin ?: false,
+                privacySettings = storedUser?.privacySettings ?: UserPrivacySettings()
             )
 
             Result.success(syncBootstrapAdminAccess(usuario))
@@ -348,7 +350,8 @@ class AuthRepository(
                 usuario = newUsername,
                 email = currentUser.email ?: "",
                 photoUrl = resolvedPhotoUrl,
-                isAdmin = currentProfile?.isAdmin ?: false
+                isAdmin = currentProfile?.isAdmin ?: false,
+                privacySettings = currentProfile?.privacySettings ?: UserPrivacySettings()
             )
 
             saveUserProfile(
@@ -360,6 +363,31 @@ class AuthRepository(
                 previousUsername = currentProfile?.usuario.orEmpty(),
                 changedByAdmin = false
             )
+
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updatePrivacySettings(privacySettings: UserPrivacySettings): Result<Usuario> {
+        return try {
+            val currentUser = auth.currentUser
+            if (currentUser == null) {
+                return Result.success(GuestLocalStore.updatePrivacySettings(privacySettings))
+            }
+
+            val currentProfile = getCurrentUserProfile().getOrNull()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val updatedUser = currentProfile.copy(privacySettings = privacySettings)
+
+            firestore.collection("usuarios")
+                .document(currentUser.uid)
+                .set(
+                    mapOf("privacySettings" to privacySettings),
+                    SetOptions.merge()
+                )
+                .await()
 
             Result.success(updatedUser)
         } catch (e: Exception) {
@@ -1196,7 +1224,8 @@ class AuthRepository(
                     ?: firebaseUser.email.orEmpty(),
                 photoUrl = existingUser.photoUrl.takeIf { it.isNotBlank() }
                     ?: firebaseUser.photoUrl?.toString().orEmpty(),
-                isAdmin = existingUser.isAdmin
+                isAdmin = existingUser.isAdmin,
+                privacySettings = existingUser.privacySettings
             )
             )
         }
