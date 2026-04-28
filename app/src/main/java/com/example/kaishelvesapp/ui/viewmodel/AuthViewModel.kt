@@ -8,6 +8,7 @@ import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.repository.AuthRepository
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
 import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
+import com.example.kaishelvesapp.data.repository.LoginProviderState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,10 @@ data class AuthUiState(
     val loginIdentifier: String = "",
     val email: String = "",
     val password: String = "",
+    val accessUsername: String = "",
+    val accessEmail: String = "",
+    val accessPassword: String = "",
+    val accessPasswordConfirmation: String = "",
     val username: String = "",
     val guestUsername: String = "",
     val profilePhotoUri: String = "",
@@ -26,6 +31,9 @@ data class AuthUiState(
     val successMessage: String? = null,
     val isLoggedIn: Boolean = false,
     val isEditingProfile: Boolean = false,
+    val hasPasswordLogin: Boolean = false,
+    val hasGoogleLogin: Boolean = false,
+    val loginProviders: List<LoginProviderState> = emptyList(),
     val pendingGuestMergeDecision: GuestMergeDecision? = null
 )
 
@@ -62,6 +70,22 @@ class AuthViewModel(
 
     fun onPasswordChange(value: String) {
         _uiState.value = _uiState.value.copy(password = value)
+    }
+
+    fun onAccessUsernameChange(value: String) {
+        _uiState.value = _uiState.value.copy(accessUsername = value)
+    }
+
+    fun onAccessEmailChange(value: String) {
+        _uiState.value = _uiState.value.copy(accessEmail = value)
+    }
+
+    fun onAccessPasswordChange(value: String) {
+        _uiState.value = _uiState.value.copy(accessPassword = value)
+    }
+
+    fun onAccessPasswordConfirmationChange(value: String) {
+        _uiState.value = _uiState.value.copy(accessPasswordConfirmation = value)
     }
 
     fun onUsernameChange(value: String) {
@@ -170,9 +194,13 @@ class AuthViewModel(
                         user = usuario,
                         email = usuario.email,
                         username = usuario.usuario,
+                        accessUsername = usuario.usuario,
                         guestUsername = if (usuario.isGuest) usuario.usuario else _uiState.value.guestUsername,
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
+                        hasPasswordLogin = repository.hasPasswordLogin(),
+                        hasGoogleLogin = repository.hasGoogleLogin(),
+                        loginProviders = repository.getLoginProviders(),
                         errorMessage = null
                     )
                 }
@@ -408,6 +436,7 @@ class AuthViewModel(
                         user = updatedUser,
                         email = updatedUser.email,
                         username = updatedUser.usuario,
+                        accessUsername = updatedUser.usuario,
                         profilePhotoUri = updatedUser.photoUrl,
                         isEditingProfile = true,
                         successMessage = "Perfil actualizado correctamente"
@@ -417,6 +446,101 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "No se pudo actualizar el perfil"
+                    )
+                }
+        }
+    }
+
+    fun savePasswordLogin() {
+        val email = _uiState.value.accessEmail.trim()
+        val password = _uiState.value.accessPassword.trim()
+        val confirmation = _uiState.value.accessPasswordConfirmation.trim()
+
+        if (email.isBlank() || password.isBlank() || confirmation.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Completa email, contraseña y confirmación"
+            )
+            return
+        }
+
+        if (password != confirmation) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Las contraseñas no coinciden"
+            )
+            return
+        }
+
+        if (password.length < 6) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val hadPasswordLogin = _uiState.value.hasPasswordLogin
+            val result = repository.savePasswordLogin(email, password)
+
+            result
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        email = updatedUser.email,
+                        username = updatedUser.usuario,
+                        accessUsername = updatedUser.usuario,
+                        accessEmail = "",
+                        accessPassword = "",
+                        accessPasswordConfirmation = "",
+                        hasPasswordLogin = true,
+                        loginProviders = repository.getLoginProviders(),
+                        successMessage = if (hadPasswordLogin) {
+                            "Contraseña actualizada correctamente"
+                        } else {
+                            "Inicio de sesión con email y contraseña asociado correctamente"
+                        }
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo actualizar el acceso con contraseña"
+                    )
+                }
+        }
+    }
+
+    fun unlinkLoginProvider(providerId: String) {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.unlinkLoginProvider(providerId)
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        email = updatedUser.email,
+                        username = updatedUser.usuario,
+                        hasPasswordLogin = repository.hasPasswordLogin(),
+                        hasGoogleLogin = repository.hasGoogleLogin(),
+                        loginProviders = repository.getLoginProviders(),
+                        successMessage = "Inicio de sesión eliminado correctamente"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo quitar ese inicio de sesión"
                     )
                 }
         }
@@ -464,8 +588,12 @@ class AuthViewModel(
                     user = result.user,
                     email = result.user.email,
                     username = result.user.usuario,
+                    accessUsername = result.user.usuario,
                     profilePhotoUri = result.user.photoUrl,
                     isLoggedIn = true,
+                    hasPasswordLogin = repository.hasPasswordLogin(),
+                    hasGoogleLogin = repository.hasGoogleLogin(),
+                    loginProviders = repository.getLoginProviders(),
                     pendingGuestMergeDecision = null,
                     errorMessage = null
                 )

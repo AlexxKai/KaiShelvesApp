@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,6 +51,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,6 +70,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,6 +80,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
+import com.example.kaishelvesapp.data.repository.LoginProviderState
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
@@ -124,6 +128,7 @@ fun ProfileScreen(
     var keepSessionOpen by remember { mutableStateOf(true) }
     var confirmBeforeLogout by remember { mutableStateOf(false) }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
+    var showLoginOptionsDialog by remember { mutableStateOf(false) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
@@ -145,6 +150,21 @@ fun ProfileScreen(
         )
     }
 
+    if (showLoginOptionsDialog) {
+        PasswordLoginDialog(
+            email = uiState.accessEmail,
+            password = uiState.accessPassword,
+            passwordConfirmation = uiState.accessPasswordConfirmation,
+            isLoading = uiState.isLoading,
+            hasPasswordLogin = uiState.hasPasswordLogin,
+            onEmailChange = viewModel::onAccessEmailChange,
+            onPasswordChange = viewModel::onAccessPasswordChange,
+            onPasswordConfirmationChange = viewModel::onAccessPasswordConfirmationChange,
+            onDismiss = { showLoginOptionsDialog = false },
+            onConfirm = viewModel::savePasswordLogin
+        )
+    }
+
     LaunchedEffect(Unit) {
         if (uiState.user == null && uiState.isLoggedIn) {
             viewModel.loadCurrentUserProfile()
@@ -158,6 +178,7 @@ fun ProfileScreen(
         }
 
         uiState.successMessage?.let {
+            showLoginOptionsDialog = false
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessages()
         }
@@ -313,16 +334,32 @@ fun ProfileScreen(
                                                 singleLine = true
                                             )
 
-                                            Spacer(modifier = Modifier.height(16.dp))
+                                            if (!uiState.hasGoogleLogin) {
+                                                Spacer(modifier = Modifier.height(16.dp))
 
-                                            OutlinedTextField(
-                                                value = uiState.email,
-                                                onValueChange = viewModel::onEmailChange,
-                                                label = { Text(stringResource(R.string.email)) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                                                singleLine = true
-                                            )
+                                                OutlinedTextField(
+                                                    value = uiState.email,
+                                                    onValueChange = viewModel::onEmailChange,
+                                                    label = { Text(stringResource(R.string.email)) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                                                    singleLine = true
+                                                )
+                                            }
+
+                                            if (uiState.user?.isGuest != true) {
+                                                Spacer(modifier = Modifier.height(20.dp))
+
+                                                LoginProvidersSection(
+                                                    providers = uiState.loginProviders,
+                                                    isLoading = uiState.isLoading,
+                                                    onOpenLoginOptions = {
+                                                        viewModel.onAccessEmailChange("")
+                                                        showLoginOptionsDialog = true
+                                                    },
+                                                    onUnlinkProvider = viewModel::unlinkLoginProvider
+                                                )
+                                            }
                                         }
 
                                         ProfileTab.Settings -> {
@@ -474,6 +511,266 @@ private fun ProfileTabButton(
             )
         }
     }
+}
+
+@Composable
+private fun LoginProvidersSection(
+    providers: List<LoginProviderState>,
+    isLoading: Boolean,
+    onOpenLoginOptions: () -> Unit,
+    onUnlinkProvider: (String) -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_login_methods_section_title)) {
+        providers.forEachIndexed { index, provider ->
+            LoginProviderRow(
+                provider = provider,
+                isLoading = isLoading,
+                onOpenLoginOptions = onOpenLoginOptions,
+                onUnlinkProvider = onUnlinkProvider
+            )
+
+            if (index < providers.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = TarnishedGold.copy(alpha = 0.18f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoginProviderRow(
+    provider: LoginProviderState,
+    isLoading: Boolean,
+    onOpenLoginOptions: () -> Unit,
+    onUnlinkProvider: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ProviderLogo(
+            label = providerLogoLabel(provider.providerId)
+        )
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = providerDisplayName(provider.providerId),
+                style = MaterialTheme.typography.bodyLarge,
+                color = OldIvory
+            )
+            Text(
+                text = when {
+                    provider.isPrimary -> stringResource(R.string.profile_login_method_primary)
+                    provider.isLinked -> stringResource(R.string.profile_login_method_linked)
+                    else -> stringResource(R.string.profile_login_method_available)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.74f)
+            )
+        }
+
+        when {
+            provider.isPrimary -> {
+                Text(
+                    text = stringResource(R.string.profile_login_method_required),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TarnishedGold
+                )
+            }
+
+            provider.isLinked -> {
+                TextButton(
+                    onClick = { onUnlinkProvider(provider.providerId) },
+                    enabled = !isLoading
+                ) {
+                    Text(
+                        text = stringResource(R.string.profile_remove_login_method),
+                        color = TarnishedGold
+                    )
+                }
+            }
+
+            provider.providerId == PASSWORD_PROVIDER_ID -> {
+                OutlinedButton(
+                    onClick = onOpenLoginOptions,
+                    enabled = !isLoading,
+                    border = BorderStroke(1.dp, TarnishedGold)
+                ) {
+                    Text(
+                        text = stringResource(R.string.profile_link_login_short_action),
+                        color = TarnishedGold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProviderLogo(
+    label: String
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .border(
+                width = 1.dp,
+                color = TarnishedGold,
+                shape = RoundedCornerShape(20.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = TarnishedGold
+        )
+    }
+}
+
+@Composable
+private fun providerDisplayName(providerId: String): String {
+    return when (providerId) {
+        GOOGLE_PROVIDER_ID -> stringResource(R.string.profile_provider_google)
+        PASSWORD_PROVIDER_ID -> stringResource(R.string.profile_provider_password)
+        FACEBOOK_PROVIDER_ID -> stringResource(R.string.profile_provider_facebook)
+        APPLE_PROVIDER_ID -> stringResource(R.string.profile_provider_apple)
+        GITHUB_PROVIDER_ID -> stringResource(R.string.profile_provider_github)
+        else -> providerId
+    }
+}
+
+private fun providerLogoLabel(providerId: String): String {
+    return when (providerId) {
+        GOOGLE_PROVIDER_ID -> "G"
+        PASSWORD_PROVIDER_ID -> "@"
+        FACEBOOK_PROVIDER_ID -> "f"
+        APPLE_PROVIDER_ID -> "A"
+        GITHUB_PROVIDER_ID -> "GH"
+        else -> "?"
+    }
+}
+
+@Composable
+private fun PasswordLoginDialog(
+    email: String,
+    password: String,
+    passwordConfirmation: String,
+    isLoading: Boolean,
+    hasPasswordLogin: Boolean,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onPasswordConfirmationChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (!isLoading) {
+                onDismiss()
+            }
+        },
+        containerColor = Obsidian,
+        titleContentColor = TarnishedGold,
+        textContentColor = OldIvory,
+        title = {
+            Text(
+                text = stringResource(
+                    if (hasPasswordLogin) {
+                        R.string.profile_password_section_title
+                    } else {
+                        R.string.profile_link_login_section_title
+                    }
+                )
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.profile_link_login_dialog_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.78f)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = onEmailChange,
+                    label = { Text(stringResource(R.string.email)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = onPasswordChange,
+                    label = {
+                        Text(
+                            stringResource(
+                                if (hasPasswordLogin) {
+                                    R.string.profile_new_password
+                                } else {
+                                    R.string.password
+                                }
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = passwordConfirmation,
+                    onValueChange = onPasswordConfirmationChange,
+                    label = { Text(stringResource(R.string.profile_confirm_password)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !isLoading
+            ) {
+                Text(
+                    text = stringResource(
+                        if (hasPasswordLogin) {
+                            R.string.profile_change_password
+                        } else {
+                            R.string.profile_link_login_action
+                        }
+                    ),
+                    color = TarnishedGold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading
+            ) {
+                Text(
+                    text = stringResource(R.string.cancel),
+                    color = OldIvory
+                )
+            }
+        }
+    )
 }
 
 @Composable
@@ -1081,3 +1378,9 @@ private fun ProfileLine(
         )
     }
 }
+
+private const val GOOGLE_PROVIDER_ID = "google.com"
+private const val PASSWORD_PROVIDER_ID = "password"
+private const val FACEBOOK_PROVIDER_ID = "facebook.com"
+private const val APPLE_PROVIDER_ID = "apple.com"
+private const val GITHUB_PROVIDER_ID = "github.com"

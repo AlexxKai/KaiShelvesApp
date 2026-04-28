@@ -10,6 +10,7 @@ import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.FirebaseUser
@@ -55,6 +56,12 @@ sealed interface AuthOperationResult {
     data class PendingGuestMerge(val decision: GuestMergeDecision) : AuthOperationResult
 }
 
+data class LoginProviderState(
+    val providerId: String,
+    val isLinked: Boolean,
+    val isPrimary: Boolean
+)
+
 private data class BootstrapAdminAccount(
     val uid: String,
     val email: String
@@ -92,6 +99,49 @@ class AuthRepository(
 
     fun getCurrentUid(): String? {
         return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
+    }
+
+    fun hasPasswordLogin(): Boolean {
+        return auth.currentUser
+            ?.providerData
+            ?.any { it.providerId == EmailAuthProvider.PROVIDER_ID } == true
+    }
+
+    fun hasGoogleLogin(): Boolean {
+        return auth.currentUser
+            ?.providerData
+            ?.any { it.providerId == GoogleAuthProvider.PROVIDER_ID } == true
+    }
+
+    suspend fun getLoginProviders(): List<LoginProviderState> {
+        val currentUser = auth.currentUser ?: return emptyList()
+        val linkedProviderIds = currentUser.providerData
+            .map { it.providerId }
+            .filter { it != "firebase" }
+            .toSet()
+        val userRef = firestore.collection("usuarios").document(currentUser.uid)
+        val storedPrimaryProviderId = userRef
+            .get()
+            .await()
+            .getString("primaryLoginProvider")
+            .orEmpty()
+        val primaryProviderId = storedPrimaryProviderId
+            .takeIf { it in linkedProviderIds }
+            ?: linkedProviderIds.firstOrNull().orEmpty()
+
+        if (storedPrimaryProviderId.isBlank() && primaryProviderId.isNotBlank()) {
+            userRef
+                .set(mapOf("primaryLoginProvider" to primaryProviderId), SetOptions.merge())
+                .await()
+        }
+
+        return supportedLoginProviderIds.map { providerId ->
+            LoginProviderState(
+                providerId = providerId,
+                isLinked = providerId in linkedProviderIds,
+                isPrimary = providerId == primaryProviderId
+            )
+        }
     }
 
     suspend fun migrateLegacyUsernames() {
@@ -404,6 +454,95 @@ class AuthRepository(
         }
     }
 
+    suspend fun savePasswordLogin(email: String, password: String): Result<Usuario> {
+        return try {
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val credentialEmail = email.trim()
+
+            if (credentialEmail.isBlank()) {
+                return Result.failure(Exception("El correo electrónico no puede estar vacío"))
+            }
+
+            if (password.length < 6) {
+                return Result.failure(Exception("La contraseña debe tener al menos 6 caracteres"))
+            }
+
+            val currentProfile = getCurrentUserProfile().getOrNull()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            if (hasPasswordLogin()) {
+                if (!currentUser.email.equals(credentialEmail, ignoreCase = true)) {
+                    currentUser.updateEmail(credentialEmail).await()
+                }
+                currentUser.updatePassword(password).await()
+            } else {
+                val credential = EmailAuthProvider.getCredential(credentialEmail, password)
+                currentUser.linkWithCredential(credential).await()
+            }
+
+            val updatedUser = currentProfile.copy(email = credentialEmail)
+            saveUserProfile(
+                user = updatedUser,
+                previousUsername = currentProfile.usuario
+            )
+
+            firestore.collection("usuarios")
+                .document(currentUser.uid)
+                .set(
+                    mapOf(
+                        "passwordLoginEmail" to credentialEmail,
+                        "passwordLoginUsername" to currentProfile.usuario
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun unlinkLoginProvider(providerId: String): Result<Usuario> {
+        return try {
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val providerStates = getLoginProviders()
+            val targetProvider = providerStates.firstOrNull { it.providerId == providerId }
+                ?: return Result.failure(Exception("Proveedor no disponible"))
+
+            if (!targetProvider.isLinked) {
+                return Result.failure(Exception("Ese inicio de sesión no está asociado"))
+            }
+
+            if (targetProvider.isPrimary) {
+                return Result.failure(Exception("No se puede quitar el inicio de sesión original"))
+            }
+
+            currentUser.unlink(providerId).await()
+
+            if (providerId == EmailAuthProvider.PROVIDER_ID) {
+                firestore.collection("usuarios")
+                    .document(currentUser.uid)
+                    .set(
+                        mapOf(
+                            "passwordLoginEmail" to FieldValue.delete(),
+                            "passwordLoginUsername" to FieldValue.delete()
+                        ),
+                        SetOptions.merge()
+                    )
+                    .await()
+            }
+
+            val updatedUser = getCurrentUserProfile().getOrNull()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun continueAsGuest(username: String): Result<Usuario> {
         return try {
             val normalizedUsername = normalizeUsername(username)
@@ -496,10 +635,6 @@ class AuthRepository(
             return Result.failure(Exception("Completa correo o usuario"))
         }
 
-        if ("@" in normalizedIdentifier) {
-            return Result.success(normalizedIdentifier)
-        }
-
         val usernameMatches = firestore.collection("usuarios")
             .whereEqualTo("usuario", normalizedIdentifier)
             .limit(2)
@@ -513,12 +648,20 @@ class AuthRepository(
 
         val matchedEmail = usernameMatches
             .firstOrNull()
-            ?.getString("email")
+            ?.let { document ->
+                document.getString("passwordLoginEmail")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: document.getString("email")
+            }
             ?.trim()
             .orEmpty()
 
         if (matchedEmail.isNotBlank()) {
             return Result.success(matchedEmail)
+        }
+
+        if ("@" in normalizedIdentifier) {
+            return Result.success(normalizedIdentifier)
         }
 
         val emailMatch = firestore.collection("usuarios")
@@ -1162,7 +1305,7 @@ class AuthRepository(
                 throw IllegalStateException("El nombre de usuario ya esta en uso")
             }
 
-            transaction.set(userRef, user)
+            transaction.set(userRef, user, SetOptions.merge())
             transaction.set(
                 usernameRef,
                 mapOf(
@@ -1301,5 +1444,15 @@ class AuthRepository(
             previousUsername = user.usuario
         )
         return updatedUser
+    }
+
+    private companion object {
+        val supportedLoginProviderIds = listOf(
+            GoogleAuthProvider.PROVIDER_ID,
+            EmailAuthProvider.PROVIDER_ID,
+            "facebook.com",
+            "apple.com",
+            "github.com"
+        )
     }
 }
