@@ -31,7 +31,9 @@ fun GoogleSignInButton(
     enabled: Boolean,
     onIdTokenReceived: (String) -> Unit,
     onError: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fillMaxWidth: Boolean = true,
+    label: String? = null
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
@@ -79,7 +81,11 @@ fun GoogleSignInButton(
                 }
             }
         },
-        modifier = modifier.fillMaxWidth(),
+        modifier = if (fillMaxWidth) {
+            modifier.fillMaxWidth()
+        } else {
+            modifier
+        },
         enabled = enabled,
         border = BorderStroke(1.dp, TarnishedGold),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -87,7 +93,7 @@ fun GoogleSignInButton(
             contentColor = OldIvory
         )
     ) {
-        Text(text = stringResource(R.string.continue_with_google))
+        Text(text = label ?: stringResource(R.string.continue_with_google))
     }
 }
 

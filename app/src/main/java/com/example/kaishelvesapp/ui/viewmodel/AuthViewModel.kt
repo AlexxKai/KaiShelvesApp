@@ -546,6 +546,44 @@ class AuthViewModel(
         }
     }
 
+    fun linkGoogleLogin(idToken: String) {
+        if (idToken.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "No se pudo validar la cuenta de Google"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.linkGoogleLogin(idToken)
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        email = updatedUser.email,
+                        username = updatedUser.usuario,
+                        profilePhotoUri = updatedUser.photoUrl,
+                        hasPasswordLogin = repository.hasPasswordLogin(),
+                        hasGoogleLogin = repository.hasGoogleLogin(),
+                        loginProviders = repository.getLoginProviders(),
+                        successMessage = "Inicio de sesión con Google asociado correctamente"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo asociar Google como inicio de sesión"
+                    )
+                }
+        }
+    }
+
     fun updatePrivacySettings(privacySettings: UserPrivacySettings) {
         val previousUser = _uiState.value.user
         val optimisticUser = previousUser?.copy(privacySettings = privacySettings)

@@ -64,11 +64,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -87,6 +89,7 @@ import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
+import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
@@ -357,7 +360,9 @@ fun ProfileScreen(
                                                         viewModel.onAccessEmailChange("")
                                                         showLoginOptionsDialog = true
                                                     },
-                                                    onUnlinkProvider = viewModel::unlinkLoginProvider
+                                                    onUnlinkProvider = viewModel::unlinkLoginProvider,
+                                                    onLinkGoogle = viewModel::linkGoogleLogin,
+                                                    onGoogleError = viewModel::showError
                                                 )
                                             }
                                         }
@@ -518,7 +523,9 @@ private fun LoginProvidersSection(
     providers: List<LoginProviderState>,
     isLoading: Boolean,
     onOpenLoginOptions: () -> Unit,
-    onUnlinkProvider: (String) -> Unit
+    onUnlinkProvider: (String) -> Unit,
+    onLinkGoogle: (String) -> Unit,
+    onGoogleError: (String) -> Unit
 ) {
     ProfileSectionBlock(title = stringResource(R.string.profile_login_methods_section_title)) {
         providers.forEachIndexed { index, provider ->
@@ -526,7 +533,9 @@ private fun LoginProvidersSection(
                 provider = provider,
                 isLoading = isLoading,
                 onOpenLoginOptions = onOpenLoginOptions,
-                onUnlinkProvider = onUnlinkProvider
+                onUnlinkProvider = onUnlinkProvider,
+                onLinkGoogle = onLinkGoogle,
+                onGoogleError = onGoogleError
             )
 
             if (index < providers.lastIndex) {
@@ -544,7 +553,9 @@ private fun LoginProviderRow(
     provider: LoginProviderState,
     isLoading: Boolean,
     onOpenLoginOptions: () -> Unit,
-    onUnlinkProvider: (String) -> Unit
+    onUnlinkProvider: (String) -> Unit,
+    onLinkGoogle: (String) -> Unit,
+    onGoogleError: (String) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -552,7 +563,8 @@ private fun LoginProviderRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         ProviderLogo(
-            label = providerLogoLabel(provider.providerId)
+            providerId = provider.providerId,
+            contentDescription = providerDisplayName(provider.providerId)
         )
 
         Column(modifier = Modifier.weight(1f)) {
@@ -605,18 +617,30 @@ private fun LoginProviderRow(
                     )
                 }
             }
+
+            provider.providerId == GOOGLE_PROVIDER_ID -> {
+                GoogleSignInButton(
+                    enabled = !isLoading,
+                    onIdTokenReceived = onLinkGoogle,
+                    onError = onGoogleError,
+                    fillMaxWidth = false,
+                    label = stringResource(R.string.profile_link_login_short_action)
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun ProviderLogo(
-    label: String
+    providerId: String,
+    contentDescription: String
 ) {
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(20.dp))
+            .background(OldIvory)
             .border(
                 width = 1.dp,
                 color = TarnishedGold,
@@ -624,10 +648,11 @@ private fun ProviderLogo(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = TarnishedGold
+        Image(
+            painter = painterResource(providerIconRes(providerId)),
+            contentDescription = contentDescription,
+            modifier = Modifier.size(26.dp),
+            colorFilter = providerIconColorFilter(providerId)
         )
     }
 }
@@ -644,14 +669,14 @@ private fun providerDisplayName(providerId: String): String {
     }
 }
 
-private fun providerLogoLabel(providerId: String): String {
+private fun providerIconRes(providerId: String): Int {
     return when (providerId) {
-        GOOGLE_PROVIDER_ID -> "G"
-        PASSWORD_PROVIDER_ID -> "@"
-        FACEBOOK_PROVIDER_ID -> "f"
-        APPLE_PROVIDER_ID -> "A"
-        GITHUB_PROVIDER_ID -> "GH"
-        else -> "?"
+        GOOGLE_PROVIDER_ID -> R.drawable.sesion_google
+        PASSWORD_PROVIDER_ID -> R.drawable.sesion_email
+        FACEBOOK_PROVIDER_ID -> R.drawable.sesion_facebook
+        APPLE_PROVIDER_ID -> R.drawable.sesion_apple
+        GITHUB_PROVIDER_ID -> R.drawable.sesion_github
+        else -> R.drawable.sesion_email
     }
 }
 
@@ -1376,6 +1401,15 @@ private fun ProfileLine(
             style = MaterialTheme.typography.bodyLarge,
             color = OldIvory
         )
+    }
+}
+
+private fun providerIconColorFilter(providerId: String): ColorFilter? {
+    return when (providerId) {
+        GITHUB_PROVIDER_ID,
+        APPLE_PROVIDER_ID,
+        PASSWORD_PROVIDER_ID -> ColorFilter.tint(Obsidian)
+        else -> null
     }
 }
 

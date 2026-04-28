@@ -141,6 +141,39 @@ class AuthRepository(
                 isLinked = providerId in linkedProviderIds,
                 isPrimary = providerId == primaryProviderId
             )
+        }.sortedWith(
+            compareByDescending<LoginProviderState> { it.isPrimary }
+                .thenBy { supportedLoginProviderIds.indexOf(it.providerId) }
+        )
+    }
+
+    suspend fun linkGoogleLogin(idToken: String): Result<Usuario> {
+        return try {
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            if (idToken.isBlank()) {
+                return Result.failure(Exception("No se pudo validar la cuenta de Google"))
+            }
+
+            val credential = GoogleAuthProvider.getCredential(idToken, null)
+            currentUser.linkWithCredential(credential).await()
+
+            val currentProfile = getCurrentUserProfile().getOrNull()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val updatedUser = currentProfile.copy(
+                photoUrl = currentProfile.photoUrl.ifBlank {
+                    auth.currentUser?.photoUrl?.toString().orEmpty()
+                }
+            )
+
+            saveUserProfile(
+                user = updatedUser,
+                previousUsername = currentProfile.usuario
+            )
+
+            Result.success(updatedUser)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -337,6 +370,7 @@ class AuthRepository(
 
             try {
                 saveUserProfile(nuevoUsuario)
+                setPrimaryLoginProviderIfMissing(firebaseUser.uid, EmailAuthProvider.PROVIDER_ID)
             } catch (e: Exception) {
                 firebaseUser.delete().await()
                 throw e
@@ -356,6 +390,7 @@ class AuthRepository(
                 ?: return Result.failure(Exception("No se pudo obtener el usuario de Google"))
 
             val usuario = getOrCreateUserProfile(firebaseUser)
+            setPrimaryLoginProviderIfMissing(firebaseUser.uid, GoogleAuthProvider.PROVIDER_ID)
             Result.success(resolvePostAuthResult(usuario))
         } catch (e: Exception) {
             Result.failure(e)
@@ -1356,6 +1391,21 @@ class AuthRepository(
 
     private fun normalizeUsername(username: String): String {
         return username.trim().lowercase()
+    }
+
+    private suspend fun setPrimaryLoginProviderIfMissing(uid: String, providerId: String) {
+        val userRef = firestore.collection("usuarios").document(uid)
+        val storedPrimaryProviderId = userRef
+            .get()
+            .await()
+            .getString("primaryLoginProvider")
+            .orEmpty()
+
+        if (storedPrimaryProviderId.isBlank()) {
+            userRef
+                .set(mapOf("primaryLoginProvider" to providerId), SetOptions.merge())
+                .await()
+        }
     }
 
     private suspend fun getOrCreateUserProfile(firebaseUser: FirebaseUser): Usuario {
