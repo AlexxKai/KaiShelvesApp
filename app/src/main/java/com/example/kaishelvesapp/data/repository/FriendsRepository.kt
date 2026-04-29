@@ -212,6 +212,25 @@ class FriendsRepository(
         return snapshotToUser(userSnapshot, uid)
     }
 
+    private fun Usuario.visibleTo(viewerUid: String?): Usuario {
+        return if (uid == viewerUid || privacySettings.emailVisible) {
+            this
+        } else {
+            copy(email = "")
+        }
+    }
+
+    private suspend fun canOpenProfile(targetUid: String, viewerUid: String, targetUser: Usuario): Boolean {
+        return targetUid == viewerUid ||
+            targetUser.privacySettings.profileVisible ||
+            friendsCollection(viewerUid).document(targetUid).get().await().exists()
+    }
+
+    private suspend fun canOpenReadingActivity(targetUid: String, viewerUid: String, targetUser: Usuario): Boolean {
+        return canOpenProfile(targetUid, viewerUid, targetUser) &&
+            (targetUid == viewerUid || targetUser.privacySettings.readingActivityVisible)
+    }
+
     private fun mergeUserProfile(
         primary: Usuario?,
         fallback: Usuario?,
@@ -367,7 +386,7 @@ class FriendsRepository(
 
                 if (user != null && user.privacySettings.profileVisible && user.privacySettings.friendRequestPermissions) {
                     candidatesById[candidateUid] = FriendSuggestion(
-                        user = user,
+                        user = user.visibleTo(uid),
                         source = SuggestionSource.FRIEND_OF_FRIEND
                     )
                 }
@@ -386,7 +405,7 @@ class FriendsRepository(
                         user.privacySettings.friendRequestPermissions
                     ) {
                         candidatesById[candidateUid] = FriendSuggestion(
-                            user = user.copy(uid = candidateUid),
+                            user = user.copy(uid = candidateUid).visibleTo(uid),
                             source = SuggestionSource.RANDOM
                         )
                     }
@@ -484,11 +503,19 @@ class FriendsRepository(
                 )
                     ?: return@mapNotNull null
 
-                val booksReadCount = readsCollection(friendUid).get().await().size()
-                val friendsCount = friendsCollection(friendUid).get().await().size()
+                val booksReadCount = if (friend.privacySettings.readingActivityVisible) {
+                    readsCollection(friendUid).get().await().size()
+                } else {
+                    0
+                }
+                val friendsCount = if (friend.privacySettings.friendsVisible) {
+                    friendsCollection(friendUid).get().await().size()
+                } else {
+                    0
+                }
 
                 FriendListItem(
-                    user = friend,
+                    user = friend.visibleTo(uid),
                     booksRead = booksReadCount,
                     friendsCount = friendsCount
                 )
@@ -544,7 +571,7 @@ class FriendsRepository(
                                 timestampMillis = document.timestampMillis("createdAt")
                             ),
                             type = FriendActivityType.FRIENDSHIP,
-                            user = friend,
+                            user = friend.visibleTo(uid),
                             timestampMillis = document.timestampMillis("createdAt"),
                             relatedUserName = currentUserName
                         )
@@ -566,7 +593,7 @@ class FriendsRepository(
                                     timestampMillis = wantToReadDoc.timestampMillis("activityAt")
                                 ),
                                 type = FriendActivityType.WANT_TO_READ,
-                                user = friend,
+                                user = friend.visibleTo(uid),
                                 timestampMillis = wantToReadDoc.timestampMillis("activityAt"),
                                 book = book
                             )
@@ -589,7 +616,7 @@ class FriendsRepository(
                                     timestampMillis = readingDoc.timestampMillis("activityAt")
                                 ),
                                 type = FriendActivityType.READING,
-                                user = friend,
+                                user = friend.visibleTo(uid),
                                 timestampMillis = readingDoc.timestampMillis("activityAt"),
                                 book = book
                             )
@@ -617,7 +644,7 @@ class FriendsRepository(
                                         ?: parseReadDateToMillis(readBook.fechaLeido)
                                 ),
                                 type = FriendActivityType.READ,
-                                user = friend,
+                                user = friend.visibleTo(uid),
                                 timestampMillis = readDoc.timestampMillis("activityAt")
                                     ?: parseReadDateToMillis(readBook.fechaLeido),
                                 readBook = readBook
@@ -717,8 +744,7 @@ class FriendsRepository(
                 .documents
             val friendDocuments = if (canShowFriends) allFriendDocuments else emptyList()
 
-            val friendPreviews = friendDocuments
-                .take(5)
+            val visibleFriendProfiles = friendDocuments
                 .mapNotNull { document ->
                     val previewUid = document.getString("uid").orEmpty().ifBlank { document.id }
                     mergeUserProfile(
@@ -727,6 +753,11 @@ class FriendsRepository(
                         uid = previewUid
                     )
                 }
+                .filter { preview ->
+                    preview.uid == uid || preview.privacySettings.profileVisible
+                }
+
+            val friendPreviews = visibleFriendProfiles.take(5)
 
             val currentUserName = usersCollection()
                 .document(uid)
@@ -749,7 +780,7 @@ class FriendsRepository(
                                     ?.timestampMillis("createdAt")
                             ),
                             type = FriendActivityType.FRIENDSHIP,
-                            user = resolvedFriend,
+                            user = resolvedFriend.visibleTo(uid),
                             timestampMillis = friendDocuments
                                 .firstOrNull { it.id == uid }
                                 ?.timestampMillis("createdAt"),
@@ -771,7 +802,7 @@ class FriendsRepository(
                                 timestampMillis = document.timestampMillis("activityAt")
                             ),
                             type = FriendActivityType.WANT_TO_READ,
-                            user = resolvedFriend,
+                            user = resolvedFriend.visibleTo(uid),
                             timestampMillis = document.timestampMillis("activityAt"),
                             book = book
                         )
@@ -791,7 +822,7 @@ class FriendsRepository(
                                 timestampMillis = document.timestampMillis("activityAt")
                             ),
                             type = FriendActivityType.READING,
-                            user = resolvedFriend,
+                            user = resolvedFriend.visibleTo(uid),
                             timestampMillis = document.timestampMillis("activityAt"),
                             book = book
                         )
@@ -816,7 +847,7 @@ class FriendsRepository(
                                     ?: parseReadDateToMillis(book.fechaLeido)
                             ),
                             type = FriendActivityType.READ,
-                            user = resolvedFriend,
+                            user = resolvedFriend.visibleTo(uid),
                             timestampMillis = document.timestampMillis("activityAt")
                                 ?: parseReadDateToMillis(book.fechaLeido),
                             readBook = book
@@ -877,16 +908,16 @@ class FriendsRepository(
 
             Result.success(
                 FriendProfileData(
-                    user = resolvedFriend,
+                    user = resolvedFriend.visibleTo(uid),
                     isFriend = isFriend,
                     isRequestSent = isRequestSent,
                     booksReadCount = booksRead.size,
-                    friendsCount = friendDocuments.size,
+                    friendsCount = visibleFriendProfiles.size,
                     readingBooks = readingBooks.take(6),
                     wantToReadBooks = wantToReadBooks.take(6),
                     readBooks = booksRead.take(6),
                     predefinedShelves = predefinedShelves,
-                    friendPreviews = friendPreviews,
+                    friendPreviews = friendPreviews.map { it.visibleTo(uid) },
                     groupsCount = 0,
                     updates = enrichWithSocial(sortActivitiesByRecency(updates), uid)
                 )
@@ -942,6 +973,8 @@ class FriendsRepository(
                 return Result.success(emptyList())
             }
 
+            val currentUid = currentUid()
+
             if (activityId.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar la publicacion"))
             }
@@ -951,14 +984,16 @@ class FriendsRepository(
                 .await()
                 .documents
                 .map { document ->
+                    val commentUid = document.getString("uid").orEmpty()
+                    val commenter = getUserProfile(commentUid)
                     ActivityComment(
                         id = document.id,
-                        user = Usuario(
-                            uid = document.getString("uid").orEmpty(),
+                        user = (commenter ?: Usuario(
+                            uid = commentUid,
                             usuario = document.getString("usuario").orEmpty(),
                             email = document.getString("email").orEmpty(),
                             photoUrl = document.getString("photoUrl").orEmpty()
-                        ),
+                        )).visibleTo(currentUid),
                         text = document.getString("text").orEmpty(),
                         timestampMillis = document.timestampMillis("createdAt")
                     )
@@ -1054,6 +1089,14 @@ class FriendsRepository(
                 return Result.failure(Exception("No se pudo identificar al usuario"))
             }
 
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+            val friend = getUserProfile(friendUid)
+                ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
+            if (!canOpenReadingActivity(friendUid, uid, friend)) {
+                return Result.failure(Exception("Este usuario no muestra su actividad de lectura ahora mismo"))
+            }
+
             val listsSnapshot = usersCollection()
                 .document(friendUid)
                 .collection("listas")
@@ -1106,6 +1149,14 @@ class FriendsRepository(
 
             if (friendUid.isBlank() || listId.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar la lista"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+            val friend = getUserProfile(friendUid)
+                ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
+            if (!canOpenReadingActivity(friendUid, uid, friend)) {
+                return Result.failure(Exception("Este usuario no muestra su actividad de lectura ahora mismo"))
             }
 
             val listDocument = usersCollection()
@@ -1215,10 +1266,15 @@ class FriendsRepository(
                 .await()
                 .documents
                 .mapNotNull { document ->
-                    snapshotToUser(
-                        snapshot = document,
-                        fallbackUid = document.getString("uid").orEmpty().ifBlank { document.id }
-                    )
+                    val requestUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    mergeUserProfile(
+                        primary = getUserProfile(requestUid),
+                        fallback = snapshotToUser(
+                            snapshot = document,
+                            fallbackUid = requestUid
+                        ),
+                        uid = requestUid
+                    )?.visibleTo(uid)
                 }
 
             Result.success(
