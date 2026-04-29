@@ -306,6 +306,8 @@
     <string name="profile_login_method_available">Todavía no asociado</string>
     <string name="profile_login_method_required">Obligatorio</string>
     <string name="profile_remove_login_method">Quitar</string>
+    <string name="profile_remove_login_method_title">¿Quitar método de inicio de sesión?</string>
+    <string name="profile_remove_login_method_message">¿Quieres quitar %1$s de tus métodos de inicio de sesión asociados?</string>
     <string name="profile_provider_google">Google</string>
     <string name="profile_provider_password">Email + contraseña</string>
     <string name="profile_provider_facebook">Facebook</string>

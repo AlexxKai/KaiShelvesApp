@@ -306,6 +306,8 @@
     <string name="profile_login_method_available">Not linked yet</string>
     <string name="profile_login_method_required">Required</string>
     <string name="profile_remove_login_method">Remove</string>
+    <string name="profile_remove_login_method_title">Remove sign-in method?</string>
+    <string name="profile_remove_login_method_message">Do you want to remove %1$s from your linked sign-in methods?</string>
     <string name="profile_provider_google">Google</string>
     <string name="profile_provider_password">Email + password</string>
     <string name="profile_provider_facebook">Facebook</string>

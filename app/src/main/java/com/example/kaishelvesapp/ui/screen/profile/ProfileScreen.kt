@@ -623,13 +623,60 @@ private fun LoginProvidersSection(
     onLinkGoogle: (String) -> Unit,
     onGoogleError: (String) -> Unit
 ) {
+    var providerPendingRemoval by remember { mutableStateOf<LoginProviderState?>(null) }
+    val pendingProvider = providerPendingRemoval
+
+    if (pendingProvider != null) {
+        val providerName = providerDisplayName(pendingProvider.providerId)
+        AlertDialog(
+            onDismissRequest = {
+                if (!isLoading) {
+                    providerPendingRemoval = null
+                }
+            },
+            title = {
+                Text(text = stringResource(R.string.profile_remove_login_method_title))
+            },
+            text = {
+                Text(
+                    text = stringResource(
+                        R.string.profile_remove_login_method_message,
+                        providerName
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        providerPendingRemoval = null
+                        onUnlinkProvider(pendingProvider.providerId)
+                    },
+                    enabled = !isLoading
+                ) {
+                    Text(text = stringResource(R.string.profile_remove_login_method))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { providerPendingRemoval = null },
+                    enabled = !isLoading
+                ) {
+                    Text(text = stringResource(R.string.cancel))
+                }
+            },
+            containerColor = Obsidian,
+            titleContentColor = OldIvory,
+            textContentColor = OldIvory.copy(alpha = 0.9f)
+        )
+    }
+
     ProfileSectionBlock(title = stringResource(R.string.profile_login_methods_section_title)) {
         providers.forEachIndexed { index, provider ->
             LoginProviderRow(
                 provider = provider,
                 isLoading = isLoading,
                 onOpenLoginOptions = onOpenLoginOptions,
-                onUnlinkProvider = onUnlinkProvider,
+                onUnlinkProvider = { _ -> providerPendingRemoval = provider },
                 onLinkGoogle = onLinkGoogle,
                 onGoogleError = onGoogleError
             )
