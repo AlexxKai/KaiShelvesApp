@@ -321,6 +321,7 @@
     <string name="profile_link_login_dialog_body">Choose the email and password you want to use in addition to the original sign-in method.</string>
     <string name="profile_password_section_title">Password access</string>
     <string name="profile_password_section_body">Change the password used to sign in with your username or email.</string>
+    <string name="profile_current_password">Current password</string>
     <string name="profile_new_password">New password</string>
     <string name="profile_confirm_password">Confirm password</string>
     <string name="profile_change_password">Change password</string>

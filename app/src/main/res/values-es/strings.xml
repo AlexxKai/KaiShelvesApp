@@ -321,6 +321,7 @@
     <string name="profile_link_login_dialog_body">Elige el email y la contraseña que quieres usar además del método original de inicio de sesión.</string>
     <string name="profile_password_section_title">Acceso con contraseña</string>
     <string name="profile_password_section_body">Cambia la contraseña que se usa para iniciar sesión con tu usuario o correo.</string>
+    <string name="profile_current_password">Contraseña actual</string>
     <string name="profile_new_password">Nueva contraseña</string>
     <string name="profile_confirm_password">Confirmar contraseña</string>
     <string name="profile_change_password">Cambiar contraseña</string>

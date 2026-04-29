@@ -122,6 +122,9 @@ fun ProfileScreen(
     val hasProfileChanges =
         uiState.username.trim() != uiState.user?.usuario.orEmpty().trim() ||
             uiState.email.trim() != uiState.user?.email.orEmpty().trim()
+    val hasPrimaryPasswordLogin = uiState.loginProviders.any { provider ->
+        provider.providerId == PASSWORD_PROVIDER_ID && provider.isPrimary
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val activity = context.findActivity()
@@ -350,6 +353,21 @@ fun ProfileScreen(
                                                 )
                                             }
 
+                                            if (hasPrimaryPasswordLogin) {
+                                                Spacer(modifier = Modifier.height(16.dp))
+
+                                                PasswordChangeFields(
+                                                    currentPassword = uiState.accessCurrentPassword,
+                                                    password = uiState.accessPassword,
+                                                    passwordConfirmation = uiState.accessPasswordConfirmation,
+                                                    isLoading = uiState.isLoading,
+                                                    onCurrentPasswordChange = viewModel::onAccessCurrentPasswordChange,
+                                                    onPasswordChange = viewModel::onAccessPasswordChange,
+                                                    onPasswordConfirmationChange = viewModel::onAccessPasswordConfirmationChange,
+                                                    onConfirm = viewModel::changeCurrentPassword
+                                                )
+                                            }
+
                                             if (uiState.user?.isGuest != true) {
                                                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -515,6 +533,65 @@ private fun ProfileTabButton(
                     .background(Obsidian)
             )
         }
+    }
+}
+
+@Composable
+private fun PasswordChangeFields(
+    currentPassword: String,
+    password: String,
+    passwordConfirmation: String,
+    isLoading: Boolean,
+    onCurrentPasswordChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onPasswordConfirmationChange: (String) -> Unit,
+    onConfirm: () -> Unit
+) {
+    OutlinedTextField(
+        value = currentPassword,
+        onValueChange = onCurrentPasswordChange,
+        label = { Text(stringResource(R.string.profile_current_password)) },
+        modifier = Modifier.fillMaxWidth(),
+        colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation()
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    OutlinedTextField(
+        value = password,
+        onValueChange = onPasswordChange,
+        label = { Text(stringResource(R.string.profile_new_password)) },
+        modifier = Modifier.fillMaxWidth(),
+        colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation()
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    OutlinedTextField(
+        value = passwordConfirmation,
+        onValueChange = onPasswordConfirmationChange,
+        label = { Text(stringResource(R.string.profile_confirm_password)) },
+        modifier = Modifier.fillMaxWidth(),
+        colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation()
+    )
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    OutlinedButton(
+        onClick = onConfirm,
+        enabled = !isLoading,
+        border = BorderStroke(1.dp, TarnishedGold)
+    ) {
+        Text(
+            text = stringResource(R.string.profile_change_password),
+            color = TarnishedGold
+        )
     }
 }
 

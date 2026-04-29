@@ -539,6 +539,52 @@ class AuthRepository(
         }
     }
 
+    suspend fun changePassword(
+        email: String,
+        currentPassword: String,
+        newPassword: String
+    ): Result<Usuario> {
+        return try {
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val credentialEmail = email.trim()
+
+            if (credentialEmail.isBlank()) {
+                return Result.failure(Exception("El correo electronico no puede estar vacio"))
+            }
+
+            if (currentPassword.isBlank()) {
+                return Result.failure(Exception("La contrasena actual no puede estar vacia"))
+            }
+
+            if (newPassword.length < 6) {
+                return Result.failure(Exception("La contrasena debe tener al menos 6 caracteres"))
+            }
+
+            val credential = EmailAuthProvider.getCredential(credentialEmail, currentPassword)
+            currentUser.reauthenticate(credential).await()
+            currentUser.updatePassword(newPassword).await()
+
+            val currentProfile = getCurrentUserProfile().getOrNull()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            firestore.collection("usuarios")
+                .document(currentUser.uid)
+                .set(
+                    mapOf(
+                        "passwordLoginEmail" to credentialEmail,
+                        "passwordLoginUsername" to currentProfile.usuario
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            Result.success(currentProfile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun unlinkLoginProvider(providerId: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser

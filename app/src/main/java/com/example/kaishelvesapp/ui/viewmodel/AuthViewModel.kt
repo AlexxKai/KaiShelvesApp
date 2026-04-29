@@ -20,6 +20,7 @@ data class AuthUiState(
     val password: String = "",
     val accessUsername: String = "",
     val accessEmail: String = "",
+    val accessCurrentPassword: String = "",
     val accessPassword: String = "",
     val accessPasswordConfirmation: String = "",
     val username: String = "",
@@ -78,6 +79,10 @@ class AuthViewModel(
 
     fun onAccessEmailChange(value: String) {
         _uiState.value = _uiState.value.copy(accessEmail = value)
+    }
+
+    fun onAccessCurrentPasswordChange(value: String) {
+        _uiState.value = _uiState.value.copy(accessCurrentPassword = value)
     }
 
     fun onAccessPasswordChange(value: String) {
@@ -511,6 +516,69 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = error.message ?: "No se pudo actualizar el acceso con contraseña"
+                    )
+                }
+        }
+    }
+
+    fun changeCurrentPassword() {
+        val email = _uiState.value.user?.email?.trim().orEmpty().ifBlank {
+            _uiState.value.email.trim()
+        }
+        val currentPassword = _uiState.value.accessCurrentPassword.trim()
+        val password = _uiState.value.accessPassword.trim()
+        val confirmation = _uiState.value.accessPasswordConfirmation.trim()
+
+        if (currentPassword.isBlank() || password.isBlank() || confirmation.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Completa contraseña actual, nueva contraseña y confirmación"
+            )
+            return
+        }
+
+        if (password != confirmation) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Las contraseñas no coinciden"
+            )
+            return
+        }
+
+        if (password.length < 6) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val result = repository.changePassword(email, currentPassword, password)
+
+            result
+                .onSuccess { updatedUser ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        user = updatedUser,
+                        email = updatedUser.email,
+                        username = updatedUser.usuario,
+                        accessUsername = updatedUser.usuario,
+                        accessCurrentPassword = "",
+                        accessPassword = "",
+                        accessPasswordConfirmation = "",
+                        hasPasswordLogin = true,
+                        loginProviders = repository.getLoginProviders(),
+                        successMessage = "Contraseña actualizada correctamente"
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "No se pudo actualizar la contraseña"
                     )
                 }
         }
