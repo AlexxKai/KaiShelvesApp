@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -74,7 +75,8 @@ import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 fun BookShelfActions(
     book: Libro,
     modifier: Modifier = Modifier,
-    viewModelKeyPrefix: String = "book_shelf"
+    viewModelKeyPrefix: String = "book_shelf",
+    compact: Boolean = false
 ) {
     val safeBookId = book.id.ifBlank { book.isbn }
     val detailViewModel: BookDetailViewModel = viewModel(key = "${viewModelKeyPrefix}_$safeBookId")
@@ -217,6 +219,7 @@ fun BookShelfActions(
     BookShelfActionRow(
         uiState = uiState,
         modifier = modifier,
+        compact = compact,
         onPrimaryShelfAction = {
             if (uiState.selectedListIds.isEmpty()) {
                 detailViewModel.guardarOrganizacion(
@@ -236,6 +239,7 @@ fun BookShelfActions(
 private fun BookShelfActionRow(
     uiState: BookDetailUiState,
     modifier: Modifier,
+    compact: Boolean,
     onPrimaryShelfAction: () -> Unit,
     onOpenOrganizer: () -> Unit
 ) {
@@ -256,10 +260,17 @@ private fun BookShelfActionRow(
         else -> Color(0xFFB7B4B0)
     }
 
+    val rowHeight = if (compact) 34.dp else 54.dp
+    val dropdownWidth = if (compact) 28.dp else 58.dp
+    val horizontalPadding = if (compact) 8.dp else 18.dp
+    val labelStyle = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium
+
     if (uiState.isListsLoading || uiState.isSavingLists) {
         androidx.compose.material3.Button(
             onClick = {},
-            modifier = modifier.fillMaxWidth(),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(rowHeight),
             enabled = false,
             colors = KaiShelvesThemeDefaults.secondaryButtonColors()
         ) {
@@ -269,37 +280,39 @@ private fun BookShelfActionRow(
         Surface(
             modifier = modifier.fillMaxWidth(),
             color = buttonColor,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(if (compact) 12.dp else 18.dp),
             border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.2f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
+                    .height(rowHeight),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .clickable(onClick = onPrimaryShelfAction)
-                        .padding(horizontal = 18.dp),
+                        .padding(horizontal = horizontalPadding),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 10.dp)
                 ) {
                     if (isAddedToShelf) {
                         Icon(
                             imageVector = Icons.Filled.Check,
                             contentDescription = null,
                             tint = checkTint,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(if (compact) 13.dp else 18.dp)
                         )
                     }
 
                     Text(
                         text = buttonLabel,
                         color = OldIvory,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        style = labelStyle,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -312,8 +325,8 @@ private fun BookShelfActionRow(
 
                 Box(
                     modifier = Modifier
-                        .width(58.dp)
-                        .height(54.dp)
+                        .width(dropdownWidth)
+                        .height(rowHeight)
                         .clickable(onClick = onOpenOrganizer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -321,7 +334,7 @@ private fun BookShelfActionRow(
                         imageVector = Icons.Filled.ArrowDropDown,
                         contentDescription = stringResource(R.string.open_book_organizer),
                         tint = OldIvory,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(if (compact) 18.dp else 24.dp)
                     )
                 }
             }

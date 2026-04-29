@@ -28,20 +28,20 @@ fun GothicBackground(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(0.18f),
+                .alpha(0.24f),
             contentScale = ContentScale.Crop
         )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(NightBlack.copy(alpha = 0.70f))
+                .background(NightBlack.copy(alpha = 0.62f))
         )
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(NightBlack.copy(alpha = 0.16f))
+                .background(NightBlack.copy(alpha = 0.12f))
         )
 
         content()

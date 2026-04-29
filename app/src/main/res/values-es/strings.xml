@@ -130,6 +130,13 @@
     <string name="groups">Grupos</string>
     <string name="reading_challenges">Desafíos de lectura</string>
     <string name="selected_for_you">Seleccionados para ti</string>
+    <string name="for_you_subtitle">Recomendaciones basadas en los libros que guardas en tus listas.</string>
+    <string name="for_you_disabled_title">Las sugerencias personalizadas están desactivadas</string>
+    <string name="for_you_disabled_body">Ve a Perfil > Privacidad > Control de datos personales y activa las sugerencias personalizadas para ver recomendaciones aquí.</string>
+    <string name="for_you_open_privacy">Abrir perfil</string>
+    <string name="for_you_empty_title">Aún no hay recomendaciones</string>
+    <string name="for_you_empty_body">Añade libros a tus listas para que Kai Shelves pueda sugerir géneros, autores, épocas y temáticas similares.</string>
+    <string name="for_you_error_title">No se pudo preparar tu selección</string>
     <string name="help">Ayuda</string>
     <string name="implementation_in_progress">Esta vista está en proceso de implementarse.</string>
     <string name="reading_statistics">Estadísticas de lectura</string>

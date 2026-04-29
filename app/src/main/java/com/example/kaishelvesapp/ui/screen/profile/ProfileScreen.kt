@@ -1181,9 +1181,6 @@ private fun ProfilePrivacyContent(
             }
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        ProfileInfoLine(stringResource(R.string.profile_privacy_local_notice))
     }
 }
 

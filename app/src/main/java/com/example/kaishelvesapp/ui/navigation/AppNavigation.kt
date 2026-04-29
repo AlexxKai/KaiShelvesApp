@@ -32,6 +32,7 @@ import com.example.kaishelvesapp.ui.screen.friends.FriendProfileScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
 import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
+import com.example.kaishelvesapp.ui.screen.foryou.ForYouScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
@@ -44,7 +45,6 @@ import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.screen.settings.SettingsPrivacyScreen
 import com.example.kaishelvesapp.ui.screen.settings.AdminUsernamesScreen
-import com.example.kaishelvesapp.ui.screen.placeholder.PlaceholderScreen
 import com.example.kaishelvesapp.ui.viewmodel.AdminUsernamesViewModel
 import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
@@ -56,6 +56,7 @@ import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.ForYouViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
@@ -110,6 +111,7 @@ fun AppNavigation(
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
+    val forYouViewModel: ForYouViewModel = viewModel()
     val userListsViewModel: UserListsViewModel = viewModel()
     val userListDetailViewModel: UserListDetailViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
@@ -730,10 +732,10 @@ fun AppNavigation(
         }
 
         composable(Routes.FOR_YOU) {
-            PlaceholderScreen(
-                title = "Seleccionados para ti",
+            ForYouScreen(
+                viewModel = forYouViewModel,
                 subtitle = "Aquí prepararemos recomendaciones y selecciones personalizadas.",
-                currentSection = KaiSection.FOR_YOU,
+                personalizedSuggestionsEnabled = authState.user?.privacySettings?.personalizedSuggestions == true,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -750,6 +752,10 @@ fun AppNavigation(
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onOpenBook = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
                 },
                 onSectionSelected = { navigateSection(it) }
             )
