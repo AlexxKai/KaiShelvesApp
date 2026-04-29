@@ -9,6 +9,8 @@ import com.example.kaishelvesapp.data.repository.AuthRepository
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
 import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
 import com.example.kaishelvesapp.data.repository.LoginProviderState
+import com.example.kaishelvesapp.ui.language.LanguageManager
+import com.google.firebase.auth.FirebaseAuthException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -129,14 +131,14 @@ class AuthViewModel(
                         isLoading = false,
                         user = updatedUser,
                         profilePhotoUri = updatedUser.photoUrl,
-                        successMessage = "Foto de perfil actualizada correctamente"
+                        successMessage = authText(AuthMessage.ProfilePhotoUpdated)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         profilePhotoUri = currentUser.photoUrl,
-                        errorMessage = error.message ?: "No se pudo actualizar la foto de perfil"
+                        errorMessage = authErrorText(error, AuthMessage.ProfilePhotoUpdateFailed)
                     )
                 }
         }
@@ -155,7 +157,7 @@ class AuthViewModel(
 
     fun showError(message: String) {
         _uiState.value = _uiState.value.copy(
-            errorMessage = message,
+            errorMessage = message.ifBlank { authText(AuthMessage.GoogleSignInFailed) },
             successMessage = null,
             isLoading = false
         )
@@ -212,7 +214,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo cargar el perfil"
+                        errorMessage = authErrorText(error, AuthMessage.ProfileLoadFailed)
                     )
                 }
         }
@@ -224,7 +226,7 @@ class AuthViewModel(
 
         if (identifier.isBlank() || password.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa correo o usuario y contrasena"
+                errorMessage = authText(AuthMessage.LoginEmptyFields)
             )
             return
         }
@@ -245,7 +247,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al iniciar sesion"
+                        errorMessage = authErrorText(error, AuthMessage.LoginFailed)
                     )
                 }
         }
@@ -254,7 +256,7 @@ class AuthViewModel(
     fun loginWithGoogle(idToken: String) {
         if (idToken.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "No se pudo validar la cuenta de Google"
+                errorMessage = authText(AuthMessage.GoogleValidationFailed)
             )
             return
         }
@@ -275,7 +277,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al iniciar sesion con Google"
+                        errorMessage = authErrorText(error, AuthMessage.GoogleSignInFailed)
                     )
                 }
         }
@@ -288,14 +290,14 @@ class AuthViewModel(
 
         if (username.isBlank() || email.isBlank() || password.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa usuario, email y contrasena"
+                errorMessage = authText(AuthMessage.RegisterEmptyFields)
             )
             return
         }
 
         if (password.length < 6) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "La contrasena debe tener al menos 6 caracteres"
+                errorMessage = authText(AuthMessage.PasswordTooShort)
             )
             return
         }
@@ -316,7 +318,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "Error al registrar usuario"
+                        errorMessage = authErrorText(error, AuthMessage.RegisterFailed)
                     )
                 }
         }
@@ -327,7 +329,7 @@ class AuthViewModel(
 
         if (guestUsername.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Introduce un nombre de usuario para continuar sin cuenta"
+                errorMessage = authText(AuthMessage.GuestUsernameRequired)
             )
             return
         }
@@ -355,7 +357,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo iniciar el modo invitado"
+                        errorMessage = authErrorText(error, AuthMessage.GuestStartFailed)
                     )
                 }
         }
@@ -393,13 +395,13 @@ class AuthViewModel(
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         pendingGuestMergeDecision = null,
-                        successMessage = "Datos locales sincronizados con tu cuenta"
+                        successMessage = authText(AuthMessage.GuestMergeSuccess)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo completar la fusion de datos"
+                        errorMessage = authErrorText(error, AuthMessage.GuestMergeFailed)
                     )
                 }
         }
@@ -412,14 +414,14 @@ class AuthViewModel(
 
         if (username.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "El nombre de usuario no puede estar vacio"
+                errorMessage = authText(AuthMessage.UsernameRequired)
             )
             return
         }
 
         if (_uiState.value.user?.isGuest != true && email.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "El correo electronico no puede estar vacio"
+                errorMessage = authText(AuthMessage.EmailRequired)
             )
             return
         }
@@ -444,13 +446,13 @@ class AuthViewModel(
                         accessUsername = updatedUser.usuario,
                         profilePhotoUri = updatedUser.photoUrl,
                         isEditingProfile = true,
-                        successMessage = "Perfil actualizado correctamente"
+                        successMessage = authText(AuthMessage.ProfileUpdated)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo actualizar el perfil"
+                        errorMessage = authErrorText(error, AuthMessage.ProfileUpdateFailed)
                     )
                 }
         }
@@ -463,21 +465,21 @@ class AuthViewModel(
 
         if (email.isBlank() || password.isBlank() || confirmation.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa email, contraseña y confirmación"
+                errorMessage = authText(AuthMessage.PasswordLoginEmptyFields)
             )
             return
         }
 
         if (password != confirmation) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Las contraseñas no coinciden"
+                errorMessage = authText(AuthMessage.PasswordsDoNotMatch)
             )
             return
         }
 
         if (password.length < 6) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+                errorMessage = authText(AuthMessage.PasswordTooShort)
             )
             return
         }
@@ -506,16 +508,16 @@ class AuthViewModel(
                         hasPasswordLogin = true,
                         loginProviders = repository.getLoginProviders(),
                         successMessage = if (hadPasswordLogin) {
-                            "Contraseña actualizada correctamente"
+                            authText(AuthMessage.PasswordUpdated)
                         } else {
-                            "Inicio de sesión con email y contraseña asociado correctamente"
+                            authText(AuthMessage.PasswordLoginLinked)
                         }
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo actualizar el acceso con contraseña"
+                        errorMessage = authErrorText(error, AuthMessage.PasswordLoginUpdateFailed)
                     )
                 }
         }
@@ -531,21 +533,21 @@ class AuthViewModel(
 
         if (currentPassword.isBlank() || password.isBlank() || confirmation.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Completa contraseña actual, nueva contraseña y confirmación"
+                errorMessage = authText(AuthMessage.ChangePasswordEmptyFields)
             )
             return
         }
 
         if (password != confirmation) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "Las contraseñas no coinciden"
+                errorMessage = authText(AuthMessage.PasswordsDoNotMatch)
             )
             return
         }
 
         if (password.length < 6) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "La contraseña debe tener al menos 6 caracteres"
+                errorMessage = authText(AuthMessage.PasswordTooShort)
             )
             return
         }
@@ -572,13 +574,13 @@ class AuthViewModel(
                         accessPasswordConfirmation = "",
                         hasPasswordLogin = true,
                         loginProviders = repository.getLoginProviders(),
-                        successMessage = "Contraseña actualizada correctamente"
+                        successMessage = authText(AuthMessage.PasswordUpdated)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo actualizar la contraseña"
+                        errorMessage = authErrorText(error, AuthMessage.PasswordUpdateFailed)
                     )
                 }
         }
@@ -602,13 +604,13 @@ class AuthViewModel(
                         hasPasswordLogin = repository.hasPasswordLogin(),
                         hasGoogleLogin = repository.hasGoogleLogin(),
                         loginProviders = repository.getLoginProviders(),
-                        successMessage = "Inicio de sesión eliminado correctamente"
+                        successMessage = authText(AuthMessage.LoginProviderRemoved)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo quitar ese inicio de sesión"
+                        errorMessage = authErrorText(error, AuthMessage.LoginProviderRemoveFailed)
                     )
                 }
         }
@@ -617,7 +619,7 @@ class AuthViewModel(
     fun linkGoogleLogin(idToken: String) {
         if (idToken.isBlank()) {
             _uiState.value = _uiState.value.copy(
-                errorMessage = "No se pudo validar la cuenta de Google"
+                errorMessage = authText(AuthMessage.GoogleValidationFailed)
             )
             return
         }
@@ -640,13 +642,13 @@ class AuthViewModel(
                         hasPasswordLogin = repository.hasPasswordLogin(),
                         hasGoogleLogin = repository.hasGoogleLogin(),
                         loginProviders = repository.getLoginProviders(),
-                        successMessage = "Inicio de sesión con Google asociado correctamente"
+                        successMessage = authText(AuthMessage.GoogleLoginLinked)
                     )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = error.message ?: "No se pudo asociar Google como inicio de sesión"
+                        errorMessage = authErrorText(error, AuthMessage.GoogleLinkFailed)
                     )
                 }
         }
@@ -674,7 +676,7 @@ class AuthViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         user = previousUser,
-                        errorMessage = error.message ?: "No se pudo actualizar la privacidad"
+                        errorMessage = authErrorText(error, AuthMessage.PrivacyUpdateFailed)
                     )
                 }
         }
@@ -683,6 +685,61 @@ class AuthViewModel(
     fun logout() {
         repository.logout()
         _uiState.value = AuthUiState(isLoggedIn = false)
+    }
+
+    private fun authErrorText(error: Throwable, fallback: AuthMessage): String {
+        val firebaseCode = (error as? FirebaseAuthException)?.errorCode
+        val message = error.message.orEmpty()
+
+        val mappedMessage = when {
+            firebaseCode in invalidCredentialCodes ||
+                message.contains("password is invalid", ignoreCase = true) ||
+                message.contains("no user record", ignoreCase = true) -> {
+                AuthMessage.InvalidCredentials
+            }
+
+            firebaseCode == "ERROR_INVALID_EMAIL" ||
+                message.contains("email address is badly formatted", ignoreCase = true) -> {
+                AuthMessage.InvalidEmail
+            }
+
+            firebaseCode == "ERROR_EMAIL_ALREADY_IN_USE" ||
+                message.contains("email address is already in use", ignoreCase = true) -> {
+                AuthMessage.EmailAlreadyInUse
+            }
+
+            firebaseCode == "ERROR_WEAK_PASSWORD" ||
+                message.contains("password should be at least", ignoreCase = true) -> {
+                AuthMessage.PasswordTooShort
+            }
+
+            firebaseCode == "ERROR_REQUIRES_RECENT_LOGIN" ||
+                message.contains("requires recent authentication", ignoreCase = true) -> {
+                AuthMessage.RecentLoginRequired
+            }
+
+            message.contains("already linked", ignoreCase = true) ||
+                message.contains("already associated", ignoreCase = true) -> {
+                AuthMessage.LoginProviderAlreadyLinked
+            }
+
+            message.contains("network", ignoreCase = true) -> {
+                AuthMessage.NetworkError
+            }
+
+            else -> fallback
+        }
+
+        return authText(mappedMessage)
+    }
+
+    private fun authText(message: AuthMessage): String {
+        val isEnglish = LanguageManager.getCurrentLanguage() == "en"
+        return if (isEnglish) {
+            message.english
+        } else {
+            message.spanish
+        }
     }
 
     private suspend fun handleAuthOperationResult(result: AuthOperationResult) {
@@ -719,4 +776,161 @@ class AuthViewModel(
             }
         }
     }
+}
+
+private val invalidCredentialCodes = setOf(
+    "ERROR_INVALID_CREDENTIAL",
+    "ERROR_WRONG_PASSWORD",
+    "ERROR_USER_NOT_FOUND",
+    "ERROR_USER_DISABLED"
+)
+
+private enum class AuthMessage(
+    val spanish: String,
+    val english: String
+) {
+    ProfilePhotoUpdated(
+        spanish = "Foto de perfil actualizada correctamente",
+        english = "Profile photo updated successfully"
+    ),
+    ProfilePhotoUpdateFailed(
+        spanish = "No se pudo actualizar la foto de perfil",
+        english = "The profile photo could not be updated"
+    ),
+    ProfileLoadFailed(
+        spanish = "No se pudo cargar el perfil",
+        english = "The profile could not be loaded"
+    ),
+    LoginEmptyFields(
+        spanish = "Completa correo o usuario y contraseña",
+        english = "Please enter your email or username and password"
+    ),
+    LoginFailed(
+        spanish = "Error al iniciar sesión",
+        english = "Sign-in failed"
+    ),
+    InvalidCredentials(
+        spanish = "El correo, usuario o contraseña no son correctos",
+        english = "The email, username, or password is incorrect"
+    ),
+    InvalidEmail(
+        spanish = "El correo electrónico no tiene un formato válido",
+        english = "The email address is not valid"
+    ),
+    GoogleValidationFailed(
+        spanish = "No se pudo validar la cuenta de Google",
+        english = "The Google account could not be verified"
+    ),
+    GoogleSignInFailed(
+        spanish = "Error al iniciar sesión con Google",
+        english = "Google sign-in failed"
+    ),
+    RegisterEmptyFields(
+        spanish = "Completa usuario, email y contraseña",
+        english = "Please enter username, email, and password"
+    ),
+    RegisterFailed(
+        spanish = "Error al registrar usuario",
+        english = "User registration failed"
+    ),
+    EmailAlreadyInUse(
+        spanish = "Ese correo electrónico ya está en uso",
+        english = "That email address is already in use"
+    ),
+    PasswordTooShort(
+        spanish = "La contraseña debe tener al menos 6 caracteres",
+        english = "Password must be at least 6 characters long"
+    ),
+    GuestUsernameRequired(
+        spanish = "Introduce un nombre de usuario para continuar sin cuenta",
+        english = "Enter a username to continue without an account"
+    ),
+    GuestStartFailed(
+        spanish = "No se pudo iniciar el modo invitado",
+        english = "Guest mode could not be started"
+    ),
+    GuestMergeSuccess(
+        spanish = "Datos locales sincronizados con tu cuenta",
+        english = "Local data synced with your account"
+    ),
+    GuestMergeFailed(
+        spanish = "No se pudo completar la fusión de datos",
+        english = "The data merge could not be completed"
+    ),
+    UsernameRequired(
+        spanish = "El nombre de usuario no puede estar vacío",
+        english = "Username cannot be empty"
+    ),
+    EmailRequired(
+        spanish = "El correo electrónico no puede estar vacío",
+        english = "Email cannot be empty"
+    ),
+    ProfileUpdated(
+        spanish = "Perfil actualizado correctamente",
+        english = "Profile updated successfully"
+    ),
+    ProfileUpdateFailed(
+        spanish = "No se pudo actualizar el perfil",
+        english = "The profile could not be updated"
+    ),
+    PasswordLoginEmptyFields(
+        spanish = "Completa email, contraseña y confirmación",
+        english = "Please enter email, password, and confirmation"
+    ),
+    ChangePasswordEmptyFields(
+        spanish = "Completa contraseña actual, nueva contraseña y confirmación",
+        english = "Please enter current password, new password, and confirmation"
+    ),
+    PasswordsDoNotMatch(
+        spanish = "Las contraseñas no coinciden",
+        english = "Passwords do not match"
+    ),
+    PasswordUpdated(
+        spanish = "Contraseña actualizada correctamente",
+        english = "Password updated successfully"
+    ),
+    PasswordLoginLinked(
+        spanish = "Inicio de sesión con email y contraseña asociado correctamente",
+        english = "Email and password sign-in linked successfully"
+    ),
+    PasswordLoginUpdateFailed(
+        spanish = "No se pudo actualizar el acceso con contraseña",
+        english = "Password access could not be updated"
+    ),
+    PasswordUpdateFailed(
+        spanish = "No se pudo actualizar la contraseña",
+        english = "The password could not be updated"
+    ),
+    RecentLoginRequired(
+        spanish = "Vuelve a iniciar sesión para completar este cambio",
+        english = "Please sign in again to complete this change"
+    ),
+    LoginProviderRemoved(
+        spanish = "Inicio de sesión eliminado correctamente",
+        english = "Sign-in method removed successfully"
+    ),
+    LoginProviderRemoveFailed(
+        spanish = "No se pudo quitar ese inicio de sesión",
+        english = "That sign-in method could not be removed"
+    ),
+    LoginProviderAlreadyLinked(
+        spanish = "Ese inicio de sesión ya está asociado a una cuenta",
+        english = "That sign-in method is already linked to an account"
+    ),
+    GoogleLoginLinked(
+        spanish = "Inicio de sesión con Google asociado correctamente",
+        english = "Google sign-in linked successfully"
+    ),
+    GoogleLinkFailed(
+        spanish = "No se pudo asociar Google como inicio de sesión",
+        english = "Google could not be linked as a sign-in method"
+    ),
+    PrivacyUpdateFailed(
+        spanish = "No se pudo actualizar la privacidad",
+        english = "Privacy settings could not be updated"
+    ),
+    NetworkError(
+        spanish = "Revisa tu conexión e inténtalo de nuevo",
+        english = "Check your connection and try again"
+    )
 }

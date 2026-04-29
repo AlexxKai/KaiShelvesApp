@@ -135,6 +135,7 @@ fun ProfileScreen(
     var confirmBeforeLogout by remember { mutableStateOf(false) }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
+    var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
@@ -163,10 +164,23 @@ fun ProfileScreen(
             passwordConfirmation = uiState.accessPasswordConfirmation,
             isLoading = uiState.isLoading,
             hasPasswordLogin = uiState.hasPasswordLogin,
-            onEmailChange = viewModel::onAccessEmailChange,
-            onPasswordChange = viewModel::onAccessPasswordChange,
-            onPasswordConfirmationChange = viewModel::onAccessPasswordConfirmationChange,
-            onDismiss = { showLoginOptionsDialog = false },
+            message = passwordLoginDialogMessage,
+            onEmailChange = {
+                passwordLoginDialogMessage = null
+                viewModel.onAccessEmailChange(it)
+            },
+            onPasswordChange = {
+                passwordLoginDialogMessage = null
+                viewModel.onAccessPasswordChange(it)
+            },
+            onPasswordConfirmationChange = {
+                passwordLoginDialogMessage = null
+                viewModel.onAccessPasswordConfirmationChange(it)
+            },
+            onDismiss = {
+                passwordLoginDialogMessage = null
+                showLoginOptionsDialog = false
+            },
             onConfirm = viewModel::savePasswordLogin
         )
     }
@@ -179,11 +193,16 @@ fun ProfileScreen(
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
         uiState.errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+            if (showLoginOptionsDialog) {
+                passwordLoginDialogMessage = it
+            } else {
+                snackbarHostState.showSnackbar(it)
+            }
             viewModel.clearMessages()
         }
 
         uiState.successMessage?.let {
+            passwordLoginDialogMessage = null
             showLoginOptionsDialog = false
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessages()
@@ -764,6 +783,7 @@ private fun PasswordLoginDialog(
     passwordConfirmation: String,
     isLoading: Boolean,
     hasPasswordLogin: Boolean,
+    message: String?,
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onPasswordConfirmationChange: (String) -> Unit,
@@ -842,6 +862,16 @@ private fun PasswordLoginDialog(
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation()
                 )
+
+                message?.let {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
