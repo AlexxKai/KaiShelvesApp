@@ -255,7 +255,7 @@ private fun SuggestionCard(
                 Spacer(modifier = Modifier.height(3.dp))
 
                 Text(
-                    text = suggestion.user.email.ifBlank { stringResource(R.string.no_email_available) },
+                    text = suggestion.user.email,
                     style = MaterialTheme.typography.bodyMedium,
                     color = DeepWalnut.copy(alpha = 0.8f),
                     maxLines = 1,

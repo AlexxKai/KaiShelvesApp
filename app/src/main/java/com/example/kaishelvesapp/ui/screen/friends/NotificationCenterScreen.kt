@@ -315,7 +315,7 @@ private fun FriendRequestCard(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = request.email.ifBlank { stringResource(R.string.no_email_available) },
+                    text = request.email,
                     style = MaterialTheme.typography.bodyMedium,
                     color = DeepWalnut.copy(alpha = 0.8f),
                     maxLines = 1,
