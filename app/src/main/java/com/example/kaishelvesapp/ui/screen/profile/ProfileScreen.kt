@@ -1028,7 +1028,13 @@ private fun ProfilePrivacyContent(
 
     ProfileSectionBlock(title = stringResource(R.string.profile_privacy_visibility)) {
         ProfileToggleRow(
-            title = stringResource(R.string.profile_visibility_enabled),
+            title = stringResource(
+                if (privacySettings.profileVisible) {
+                    R.string.profile_visibility_enabled
+                } else {
+                    R.string.profile_visibility_disabled
+                }
+            ),
             body = stringResource(R.string.profile_visibility_enabled_body),
             checked = privacySettings.profileVisible,
             onCheckedChange = {

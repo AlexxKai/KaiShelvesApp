@@ -345,8 +345,9 @@
     <string name="profile_session_protection_enabled_body">Keep extra attention on access changes and sensitive account actions.</string>
     <string name="profile_sensitive_action_confirmation">Confirm sensitive changes</string>
     <string name="profile_sensitive_action_confirmation_body">Ask for confirmation before account, visibility or personal data changes.</string>
-    <string name="profile_visibility_enabled">Visible profile</string>
-    <string name="profile_visibility_enabled_body">Allow your public profile to appear in social areas of the app.</string>
+    <string name="profile_visibility_enabled">Public profile</string>
+    <string name="profile_visibility_disabled">Private profile</string>
+    <string name="profile_visibility_enabled_body">When enabled, other readers can open your full profile. When disabled, they will only see a private profile notice.</string>
     <string name="profile_email_visibility">Show email</string>
     <string name="profile_email_visibility_body">Keep your email hidden from other readers unless you explicitly enable it.</string>
     <string name="profile_reading_activity_visibility">Reading activity</string>
@@ -362,6 +363,8 @@
     <string name="profile_personalized_suggestions">Personalized suggestions</string>
     <string name="profile_personalized_suggestions_body">Use your reading preferences to improve recommendations inside Kai Shelves.</string>
     <string name="profile_privacy_local_notice">These controls are centralized here now. Some options are prepared locally and can be connected to persistence as the related features are refined.</string>
+    <string name="private_profile_title">Private profile</string>
+    <string name="private_profile_message">This profile is private. Send a friend request to connect with this reader.</string>
     <string name="login_screen_title">Kai Shelves</string>
     <string name="login_error_empty_fields">Please enter email or username and password</string>
     <string name="register_error_empty_fields">Please enter username, email and password</string>

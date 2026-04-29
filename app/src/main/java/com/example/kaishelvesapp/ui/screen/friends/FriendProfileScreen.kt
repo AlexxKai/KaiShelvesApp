@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PersonAddAlt1
@@ -337,34 +338,38 @@ private fun FriendProfileContent(
         )
         Spacer(modifier = Modifier.height(18.dp))
 
-        FriendShelvesCarouselSection(
-            title = stringResource(R.string.books_count, profile.booksReadCount),
-            shelves = profile.predefinedShelves,
-            friendUid = profile.user.uid,
-            friendName = profile.user.usuario.ifBlank { profile.user.email },
-            onOpenFriendLists = onOpenFriendLists,
-            onOpenBook = onOpenBook
-        )
-        Spacer(modifier = Modifier.height(18.dp))
+        if (profile.isPrivateProfile) {
+            PrivateProfileSection()
+        } else {
+            FriendShelvesCarouselSection(
+                title = stringResource(R.string.books_count, profile.booksReadCount),
+                shelves = profile.predefinedShelves,
+                friendUid = profile.user.uid,
+                friendName = profile.user.usuario.ifBlank { profile.user.email },
+                onOpenFriendLists = onOpenFriendLists,
+                onOpenBook = onOpenBook
+            )
+            Spacer(modifier = Modifier.height(18.dp))
 
-        FriendsPreviewSection(
-            friends = profile.friendPreviews,
-            friendsCount = profile.friendsCount,
-            onOpenFriendProfile = onOpenFriendProfile
-        )
-        Spacer(modifier = Modifier.height(18.dp))
-        GroupsSection(profile.user, profile.groupsCount)
-        Spacer(modifier = Modifier.height(18.dp))
-        UpdatesSection(
-            profile = profile,
-            commentsByActivityId = commentsByActivityId,
-            loadingCommentIds = loadingCommentIds,
-            socialActionIds = socialActionIds,
-            onToggleLike = onToggleLike,
-            onLoadComments = onLoadComments,
-            onAddComment = onAddComment,
-            onOpenBook = onOpenBook
-        )
+            FriendsPreviewSection(
+                friends = profile.friendPreviews,
+                friendsCount = profile.friendsCount,
+                onOpenFriendProfile = onOpenFriendProfile
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            GroupsSection(profile.user, profile.groupsCount)
+            Spacer(modifier = Modifier.height(18.dp))
+            UpdatesSection(
+                profile = profile,
+                commentsByActivityId = commentsByActivityId,
+                loadingCommentIds = loadingCommentIds,
+                socialActionIds = socialActionIds,
+                onToggleLike = onToggleLike,
+                onLoadComments = onLoadComments,
+                onAddComment = onAddComment,
+                onOpenBook = onOpenBook
+            )
+        }
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
@@ -848,6 +853,35 @@ private fun GroupsSection(
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory,
                 textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun PrivateProfileSection() {
+    ProfileSectionCard(title = stringResource(R.string.private_profile_title)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Lock,
+                contentDescription = null,
+                tint = TarnishedGold,
+                modifier = Modifier.size(48.dp)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = stringResource(R.string.private_profile_message),
+                style = MaterialTheme.typography.bodyLarge,
+                color = OldIvory,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

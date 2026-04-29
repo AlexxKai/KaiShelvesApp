@@ -658,7 +658,10 @@ fun AppNavigation(
         composable(Routes.FRIEND_SUGGESTIONS) {
             FriendSuggestionsScreen(
                 viewModel = friendSuggestionsViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onOpenFriendProfile = { friendUid ->
+                    navController.navigate(friendProfileRoute(friendUid))
+                }
             )
         }
 

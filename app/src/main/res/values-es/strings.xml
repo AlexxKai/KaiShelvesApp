@@ -345,8 +345,9 @@
     <string name="profile_session_protection_enabled_body">Mantiene atención extra sobre cambios de acceso y acciones sensibles de la cuenta.</string>
     <string name="profile_sensitive_action_confirmation">Confirmar cambios sensibles</string>
     <string name="profile_sensitive_action_confirmation_body">Pide confirmación antes de cambios de cuenta, visibilidad o datos personales.</string>
-    <string name="profile_visibility_enabled">Perfil visible</string>
-    <string name="profile_visibility_enabled_body">Permite que tu perfil público aparezca en zonas sociales de la aplicación.</string>
+    <string name="profile_visibility_enabled">Perfil p&#250;blico</string>
+    <string name="profile_visibility_disabled">Perfil privado</string>
+    <string name="profile_visibility_enabled_body">Al activarlo, otros lectores podr&#225;n abrir tu perfil completo. Al desactivarlo, solo ver&#225;n un aviso de perfil privado.</string>
     <string name="profile_email_visibility">Mostrar correo electrónico</string>
     <string name="profile_email_visibility_body">Mantiene tu correo oculto para otros lectores salvo que lo actives expresamente.</string>
     <string name="profile_reading_activity_visibility">Actividad de lectura</string>
@@ -362,6 +363,8 @@
     <string name="profile_personalized_suggestions">Sugerencias personalizadas</string>
     <string name="profile_personalized_suggestions_body">Usa tus preferencias de lectura para mejorar las recomendaciones dentro de Kai Shelves.</string>
     <string name="profile_privacy_local_notice">Estos controles quedan centralizados aquí. Algunas opciones están preparadas localmente y se podrán conectar a persistencia cuando se afinen sus funciones.</string>
+    <string name="private_profile_title">Perfil privado</string>
+    <string name="private_profile_message">Este perfil es privado. Env&#237;a una solicitud de amistad para conectar con este lector.</string>
 
     <string name="login_screen_title">Kai Shelves</string>
     <string name="login_error_empty_fields">Completa correo o usuario y contraseña</string>

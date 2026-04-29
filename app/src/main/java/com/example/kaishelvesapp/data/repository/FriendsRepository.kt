@@ -113,6 +113,7 @@ data class FriendProfileData(
     val user: Usuario,
     val isFriend: Boolean,
     val isRequestSent: Boolean,
+    val isPrivateProfile: Boolean = false,
     val booksReadCount: Int,
     val friendsCount: Int,
     val readingBooks: List<Libro>,
@@ -384,7 +385,7 @@ class FriendsRepository(
                     .await()
                     .let { snapshotToUser(it, candidateUid) }
 
-                if (user != null && user.privacySettings.profileVisible && user.privacySettings.friendRequestPermissions) {
+                if (user != null && user.privacySettings.friendRequestPermissions) {
                     candidatesById[candidateUid] = FriendSuggestion(
                         user = user.visibleTo(uid),
                         source = SuggestionSource.FRIEND_OF_FRIEND
@@ -401,7 +402,6 @@ class FriendsRepository(
                         candidateUid != uid &&
                         candidateUid !in currentFriends &&
                         candidateUid !in sentRequestIds &&
-                        user.privacySettings.profileVisible &&
                         user.privacySettings.friendRequestPermissions
                     ) {
                         candidatesById[candidateUid] = FriendSuggestion(
@@ -443,7 +443,7 @@ class FriendsRepository(
             }
 
             val targetProfile = getUserProfile(targetUser.uid) ?: targetUser
-            if (!targetProfile.privacySettings.profileVisible || !targetProfile.privacySettings.friendRequestPermissions) {
+            if (!targetProfile.privacySettings.friendRequestPermissions) {
                 return Result.failure(Exception("Este usuario no acepta solicitudes de amistad ahora mismo"))
             }
 
@@ -690,14 +690,32 @@ class FriendsRepository(
                 .get()
                 .await()
                 .exists()
-            if (friendUid != uid && !isFriend && !resolvedFriend.privacySettings.profileVisible) {
-                return Result.failure(Exception("Este perfil no esta visible ahora mismo"))
-            }
             val isRequestSent = sentRequestsCollection(uid)
                 .document(friendUid)
                 .get()
                 .await()
                 .exists()
+            val isPrivateProfile = friendUid != uid && !isFriend && !resolvedFriend.privacySettings.profileVisible
+
+            if (isPrivateProfile) {
+                return Result.success(
+                    FriendProfileData(
+                        user = resolvedFriend.visibleTo(uid),
+                        isFriend = isFriend,
+                        isRequestSent = isRequestSent,
+                        isPrivateProfile = true,
+                        booksReadCount = 0,
+                        friendsCount = 0,
+                        readingBooks = emptyList(),
+                        wantToReadBooks = emptyList(),
+                        readBooks = emptyList(),
+                        predefinedShelves = emptyList(),
+                        friendPreviews = emptyList(),
+                        groupsCount = 0,
+                        updates = emptyList()
+                    )
+                )
+            }
 
             val canShowReadingActivity = resolvedFriend.privacySettings.readingActivityVisible || friendUid == uid
             val canShowFriends = resolvedFriend.privacySettings.friendsVisible || friendUid == uid
@@ -752,9 +770,6 @@ class FriendsRepository(
                         fallback = snapshotToUser(document, previewUid),
                         uid = previewUid
                     )
-                }
-                .filter { preview ->
-                    preview.uid == uid || preview.privacySettings.profileVisible
                 }
 
             val friendPreviews = visibleFriendProfiles.take(5)
@@ -911,6 +926,7 @@ class FriendsRepository(
                     user = resolvedFriend.visibleTo(uid),
                     isFriend = isFriend,
                     isRequestSent = isRequestSent,
+                    isPrivateProfile = false,
                     booksReadCount = booksRead.size,
                     friendsCount = visibleFriendProfiles.size,
                     readingBooks = readingBooks.take(6),
