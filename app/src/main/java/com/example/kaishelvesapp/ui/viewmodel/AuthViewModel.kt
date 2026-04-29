@@ -708,6 +708,12 @@ class AuthViewModel(
                 AuthMessage.EmailAlreadyInUse
             }
 
+            message.contains("nombre de usuario ya esta en uso", ignoreCase = true) ||
+                message.contains("nombre de usuario ya está en uso", ignoreCase = true) ||
+                message.contains("username is already in use", ignoreCase = true) -> {
+                AuthMessage.UsernameAlreadyInUse
+            }
+
             firebaseCode == "ERROR_WEAK_PASSWORD" ||
                 message.contains("password should be at least", ignoreCase = true) -> {
                 AuthMessage.PasswordTooShort
@@ -836,6 +842,10 @@ private enum class AuthMessage(
     EmailAlreadyInUse(
         spanish = "Ese correo electrónico ya está en uso",
         english = "That email address is already in use"
+    ),
+    UsernameAlreadyInUse(
+        spanish = "Ese nombre de usuario ya está en uso",
+        english = "That username is already in use"
     ),
     PasswordTooShort(
         spanish = "La contraseña debe tener al menos 6 caracteres",
