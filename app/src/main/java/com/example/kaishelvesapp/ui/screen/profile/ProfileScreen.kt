@@ -1048,31 +1048,6 @@ private fun ProfilePrivacyContent(
     privacySettings: UserPrivacySettings,
     onPrivacySettingsChange: (UserPrivacySettings) -> Unit
 ) {
-    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_session_protection)) {
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_session_protection_enabled),
-            body = stringResource(R.string.profile_session_protection_enabled_body),
-            checked = privacySettings.sessionProtectionEnabled,
-            onCheckedChange = {
-                onPrivacySettingsChange(privacySettings.copy(sessionProtectionEnabled = it))
-            }
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = TarnishedGold.copy(alpha = 0.18f)
-        )
-
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_sensitive_action_confirmation),
-            body = stringResource(R.string.profile_sensitive_action_confirmation_body),
-            checked = privacySettings.sensitiveActionConfirmation,
-            onCheckedChange = {
-                onPrivacySettingsChange(privacySettings.copy(sensitiveActionConfirmation = it))
-            }
-        )
-    }
-
     ProfileSectionBlock(title = stringResource(R.string.profile_privacy_visibility)) {
         ProfileToggleRow(
             title = stringResource(
@@ -1157,21 +1132,7 @@ private fun ProfilePrivacyContent(
         )
     }
 
-    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_personal_data_control)) {
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_personal_data_control),
-            body = stringResource(R.string.profile_personal_data_control_body),
-            checked = privacySettings.personalDataControl,
-            onCheckedChange = {
-                onPrivacySettingsChange(privacySettings.copy(personalDataControl = it))
-            }
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = TarnishedGold.copy(alpha = 0.18f)
-        )
-
+    ProfileSectionBlock(title = stringResource(R.string.profile_privacy_personalization)) {
         ProfileToggleRow(
             title = stringResource(R.string.profile_personalized_suggestions),
             body = stringResource(R.string.profile_personalized_suggestions_body),
@@ -1180,7 +1141,6 @@ private fun ProfilePrivacyContent(
                 onPrivacySettingsChange(privacySettings.copy(personalizedSuggestions = it))
             }
         )
-
     }
 }
 

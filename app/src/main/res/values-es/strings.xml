@@ -346,14 +346,9 @@
     <string name="profile_keep_session_open_body">Conserva la preferencia de acceso actual mientras usas la aplicación.</string>
     <string name="profile_confirm_before_logout">Confirmar antes de cerrar sesión</string>
     <string name="profile_confirm_before_logout_body">Añade una preferencia local de confirmación para salir de la cuenta.</string>
-    <string name="profile_privacy_session_protection">Protección de sesión</string>
     <string name="profile_privacy_visibility">Visibilidad</string>
     <string name="profile_privacy_permissions">Permisos</string>
-    <string name="profile_privacy_personal_data_control">Control de datos personales</string>
-    <string name="profile_session_protection_enabled">Proteger sesión activa</string>
-    <string name="profile_session_protection_enabled_body">Mantiene atención extra sobre cambios de acceso y acciones sensibles de la cuenta.</string>
-    <string name="profile_sensitive_action_confirmation">Confirmar cambios sensibles</string>
-    <string name="profile_sensitive_action_confirmation_body">Pide confirmación antes de cambios de cuenta, visibilidad o datos personales.</string>
+    <string name="profile_privacy_personalization">Personalización</string>
     <string name="profile_visibility_enabled">Perfil p&#250;blico</string>
     <string name="profile_visibility_disabled">Perfil privado</string>
     <string name="profile_visibility_enabled_body">Al activarlo, otros lectores podr&#225;n abrir tu perfil completo. Al desactivarlo, solo ver&#225;n un aviso de perfil privado.</string>
@@ -367,8 +362,6 @@
     <string name="profile_friend_request_permissions_body">Permite que otros lectores soliciten contacto con este perfil.</string>
     <string name="profile_social_interaction_permissions">Interacciones sociales</string>
     <string name="profile_social_interaction_permissions_body">Permite reacciones y comentarios en tu actividad de lectura visible.</string>
-    <string name="profile_personal_data_control">Uso reducido de datos</string>
-    <string name="profile_personal_data_control_body">Prefiere un tratamiento más estricto de los datos personales en perfil y funciones sociales.</string>
     <string name="profile_personalized_suggestions">Sugerencias personalizadas</string>
     <string name="profile_personalized_suggestions_body">Usa tus preferencias de lectura para mejorar las recomendaciones dentro de Kai Shelves.</string>
     <string name="profile_privacy_local_notice">Estos controles quedan centralizados aquí. Algunas opciones están preparadas localmente y se podrán conectar a persistencia cuando se afinen sus funciones.</string>
