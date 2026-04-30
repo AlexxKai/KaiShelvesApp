@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material.icons.outlined.Close
@@ -148,6 +149,14 @@ private enum class DeviceLibraryLayoutMode {
     Carousel
 }
 
+private enum class DeviceLibrarySortOption {
+    Title,
+    Author,
+    Recent,
+    Folder,
+    RecentList
+}
+
 @Composable
 fun DeviceLibraryScreen(
     userName: String?,
@@ -171,10 +180,43 @@ fun DeviceLibraryScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     var layoutMode by remember { mutableStateOf(DeviceLibraryLayoutMode.List) }
+    var sortOption by remember { mutableStateOf(DeviceLibrarySortOption.Title) }
+    var sortDescending by remember { mutableStateOf(false) }
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
     val recentSearches = remember { mutableStateListOf("alma", "cuerpo", "la chica", "inv", "mil no", "pav", "ese ins") }
+    val fileMetadata by produceState<Map<String, DeviceBookDisplayMetadata>>(
+        initialValue = emptyMap(),
+        uiState.filteredFiles
+    ) {
+        value = withContext(Dispatchers.IO) {
+            uiState.filteredFiles
+                .filter { isEpub(it) }
+                .associate { file ->
+                    file.uri.toString() to (extractEpubDisplayMetadata(context, file.uri) ?: DeviceBookDisplayMetadata())
+                }
+        }
+    }
+    val sortedFiles = remember(uiState.filteredFiles, fileMetadata, sortOption, sortDescending) {
+        val sorted = when (sortOption) {
+            DeviceLibrarySortOption.Title -> uiState.filteredFiles.sortedBy { file ->
+                fileMetadata[file.uri.toString()]?.title?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT)
+                    ?: file.name.substringBeforeLast('.').lowercase(Locale.ROOT)
+            }
+            DeviceLibrarySortOption.Author -> uiState.filteredFiles.sortedBy { file ->
+                fileMetadata[file.uri.toString()]?.author?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT)
+                    ?: file.name.substringBeforeLast('.').lowercase(Locale.ROOT)
+            }
+            DeviceLibrarySortOption.Recent -> uiState.filteredFiles.sortedBy { it.modifiedAtMillis ?: 0L }
+            DeviceLibrarySortOption.Folder -> uiState.filteredFiles.sortedWith(
+                compareBy<DeviceLibraryFile> { it.location.lowercase(Locale.ROOT) }
+                    .thenBy { it.name.substringBeforeLast('.').lowercase(Locale.ROOT) }
+            )
+            DeviceLibrarySortOption.RecentList -> uiState.filteredFiles.sortedBy { it.uri.toString() }
+        }
+        if (sortDescending) sorted.asReversed() else sorted
+    }
 
     fun commitSearch(value: String) {
         val cleanValue = value.trim()
@@ -244,7 +286,7 @@ fun DeviceLibraryScreen(
                         notificationCount = pendingRequestCount,
                         onOpenNotifications = onOpenNotifications,
                         hasFolder = uiState.selectedFolderUri != null,
-                        fileCount = uiState.filteredFiles.size,
+                        fileCount = sortedFiles.size,
                         isLoading = uiState.isLoading,
                         showSearchPanel = showSearchPanel,
                         onShowSearchPanel = { showSearchPanel = true },
@@ -288,7 +330,7 @@ fun DeviceLibraryScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),
-                    files = uiState.filteredFiles,
+                    files = sortedFiles,
                     isLoading = uiState.isLoading,
                     errorMessage = uiState.errorMessage,
                     layoutMode = layoutMode,
@@ -312,7 +354,11 @@ fun DeviceLibraryScreen(
             if (showFilterPanel) {
                 DeviceLibraryFilterOverlay(
                     layoutMode = layoutMode,
+                    sortOption = sortOption,
+                    sortDescending = sortDescending,
                     onLayoutModeChange = { layoutMode = it },
+                    onSortOptionChange = { sortOption = it },
+                    onToggleSortDirection = { sortDescending = !sortDescending },
                     onDismiss = { showFilterPanel = false }
                 )
             }
@@ -772,7 +818,11 @@ private fun DeviceLibrarySearchPanel(
 @Composable
 private fun DeviceLibraryFilterOverlay(
     layoutMode: DeviceLibraryLayoutMode,
+    sortOption: DeviceLibrarySortOption,
+    sortDescending: Boolean,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
+    onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
+    onToggleSortDirection: () -> Unit,
     onDismiss: () -> Unit
 ) {
     Box(
@@ -784,7 +834,11 @@ private fun DeviceLibraryFilterOverlay(
     ) {
         DeviceLibraryFilterPanel(
             layoutMode = layoutMode,
+            sortOption = sortOption,
+            sortDescending = sortDescending,
             onLayoutModeChange = onLayoutModeChange,
+            onSortOptionChange = onSortOptionChange,
+            onToggleSortDirection = onToggleSortDirection,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp)
@@ -797,7 +851,11 @@ private fun DeviceLibraryFilterOverlay(
 @Composable
 private fun DeviceLibraryFilterPanel(
     layoutMode: DeviceLibraryLayoutMode,
+    sortOption: DeviceLibrarySortOption,
+    sortDescending: Boolean,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
+    onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
+    onToggleSortDirection: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -818,12 +876,58 @@ private fun DeviceLibraryFilterPanel(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Ordenado por", style = MaterialTheme.typography.bodyMedium, color = OldIvory)
-                    FilterOptionRow("Título del libro", selected = true, radio = true)
-                    FilterOptionRow("Autor", selected = false, radio = true)
-                    FilterOptionRow("Hora de\nimportación", selected = false, radio = true)
-                    FilterOptionRow("Carpetas", selected = false, radio = true)
-                    FilterOptionRow("Lista reciente", selected = false, radio = true)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Ordenado por",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory
+                        )
+                        IconButton(
+                            onClick = onToggleSortDirection,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.SwapVert,
+                                contentDescription = if (sortDescending) "Orden descendente" else "Orden ascendente",
+                                tint = TarnishedGold,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    FilterOptionRow(
+                        "Título del libro",
+                        selected = sortOption == DeviceLibrarySortOption.Title,
+                        radio = true,
+                        onClick = { onSortOptionChange(DeviceLibrarySortOption.Title) }
+                    )
+                    FilterOptionRow(
+                        "Autor",
+                        selected = sortOption == DeviceLibrarySortOption.Author,
+                        radio = true,
+                        onClick = { onSortOptionChange(DeviceLibrarySortOption.Author) }
+                    )
+                    FilterOptionRow(
+                        "Reciente",
+                        selected = sortOption == DeviceLibrarySortOption.Recent,
+                        radio = true,
+                        onClick = { onSortOptionChange(DeviceLibrarySortOption.Recent) }
+                    )
+                    FilterOptionRow(
+                        "Carpetas",
+                        selected = sortOption == DeviceLibrarySortOption.Folder,
+                        radio = true,
+                        onClick = { onSortOptionChange(DeviceLibrarySortOption.Folder) }
+                    )
+                    FilterOptionRow(
+                        "Lista reciente",
+                        selected = sortOption == DeviceLibrarySortOption.RecentList,
+                        radio = true,
+                        onClick = { onSortOptionChange(DeviceLibrarySortOption.RecentList) }
+                    )
                 }
 
                 Column(
@@ -907,12 +1011,14 @@ private fun DeviceLibraryFilterPanel(
 private fun FilterOptionRow(
     label: String,
     selected: Boolean,
-    radio: Boolean
+    radio: Boolean,
+    onClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(30.dp),
+            .height(30.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (radio) {
