@@ -91,10 +91,12 @@ import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
+import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.screen.friends.FriendProfileContent
+import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -116,6 +118,7 @@ fun ProfileScreen(
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
+    onGoToRegister: () -> Unit,
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
@@ -140,6 +143,8 @@ fun ProfileScreen(
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
     var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
+    val isGuest = uiState.user?.isGuest == true
+    val guestUiRestrictions = LocalGuestUiRestrictions.current
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
@@ -196,8 +201,14 @@ fun ProfileScreen(
 
     LaunchedEffect(selectedProfileTab, uiState.user?.uid) {
         val currentUid = uiState.user?.uid.orEmpty()
-        if (selectedProfileTab == ProfileTab.MyProfile && currentUid.isNotBlank()) {
+        if (!isGuest && selectedProfileTab == ProfileTab.MyProfile && currentUid.isNotBlank()) {
             myProfileViewModel.loadProfile(currentUid)
+        }
+    }
+
+    LaunchedEffect(isGuest, selectedProfileTab) {
+        if (isGuest && selectedProfileTab.isGuestRestricted) {
+            selectedProfileTab = ProfileTab.Identity
         }
     }
 
@@ -414,7 +425,7 @@ fun ProfileScreen(
                                                 singleLine = true
                                             )
 
-                                            if (!uiState.hasGoogleLogin) {
+                                            if (!uiState.hasGoogleLogin && !isGuest) {
                                                 Spacer(modifier = Modifier.height(16.dp))
 
                                                 OutlinedTextField(
@@ -425,6 +436,18 @@ fun ProfileScreen(
                                                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
                                                     singleLine = true
                                                 )
+                                            }
+
+                                            if (isGuest) {
+                                                Spacer(modifier = Modifier.height(20.dp))
+
+                                                Button(
+                                                    onClick = onGoToRegister,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                                                ) {
+                                                    Text(stringResource(R.string.create_account_and_sync))
+                                                }
                                             }
 
                                             if (hasPrimaryPasswordLogin) {
@@ -442,7 +465,7 @@ fun ProfileScreen(
                                                 )
                                             }
 
-                                            if (uiState.user?.isGuest != true) {
+                                            if (!isGuest) {
                                                 Spacer(modifier = Modifier.height(20.dp))
 
                                                 LoginProvidersSection(
@@ -511,7 +534,14 @@ fun ProfileScreen(
 
                             ProfileTabSelector(
                                 selectedTab = selectedProfileTab,
-                                onSelectTab = { selectedProfileTab = it },
+                                guestRestricted = isGuest,
+                                onSelectTab = { tab ->
+                                    if (isGuest && tab.isGuestRestricted) {
+                                        guestUiRestrictions.onBlockedSectionClick?.invoke(KaiSection.PROFILE)
+                                    } else {
+                                        selectedProfileTab = tab
+                                    }
+                                },
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
                                     .padding(horizontal = 26.dp)
@@ -530,12 +560,16 @@ private enum class ProfileTab {
     MyProfile,
     Identity,
     Settings,
-    Privacy
+    Privacy;
+
+    val isGuestRestricted: Boolean
+        get() = this == MyProfile || this == Privacy
 }
 
 @Composable
 private fun ProfileTabSelector(
     selectedTab: ProfileTab,
+    guestRestricted: Boolean,
     onSelectTab: (ProfileTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -549,24 +583,28 @@ private fun ProfileTabSelector(
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_my_profile),
             selected = selectedTab == ProfileTab.MyProfile,
+            restricted = guestRestricted,
             onClick = { onSelectTab(ProfileTab.MyProfile) },
             modifier = Modifier.weight(1f)
         )
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_identity),
             selected = selectedTab == ProfileTab.Identity,
+            restricted = false,
             onClick = { onSelectTab(ProfileTab.Identity) },
             modifier = Modifier.weight(1f)
         )
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_settings),
             selected = selectedTab == ProfileTab.Settings,
+            restricted = false,
             onClick = { onSelectTab(ProfileTab.Settings) },
             modifier = Modifier.weight(1f)
         )
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_privacy),
             selected = selectedTab == ProfileTab.Privacy,
+            restricted = guestRestricted,
             onClick = { onSelectTab(ProfileTab.Privacy) },
             modifier = Modifier.weight(1f)
         )
@@ -577,6 +615,7 @@ private fun ProfileTabSelector(
 private fun ProfileTabButton(
     text: String,
     selected: Boolean,
+    restricted: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -595,8 +634,12 @@ private fun ProfileTabButton(
             border = BorderStroke(1.dp, TarnishedGold),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = Color.Transparent,
-                contentColor = if (selected) OldIvory else TarnishedGold
+                containerColor = if (restricted) BloodWine.copy(alpha = 0.28f) else Color.Transparent,
+                contentColor = when {
+                    restricted -> OldIvory.copy(alpha = 0.56f)
+                    selected -> OldIvory
+                    else -> TarnishedGold
+                }
             )
         ) {
             BoxWithConstraints(

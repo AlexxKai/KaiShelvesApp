@@ -480,6 +480,9 @@ fun AppNavigation(
                 onGoToSettingsPrivacy = {
                     navController.navigate(Routes.SETTINGS_PRIVACY)
                 },
+                onGoToRegister = {
+                    navController.navigate(Routes.REGISTER)
+                },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
