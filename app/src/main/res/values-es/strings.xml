@@ -347,6 +347,8 @@
     <string name="profile_keep_session_open_body">Conserva la preferencia de acceso actual mientras usas la aplicación.</string>
     <string name="profile_confirm_before_logout">Confirmar antes de cerrar sesión</string>
     <string name="profile_confirm_before_logout_body">Añade una preferencia local de confirmación para salir de la cuenta.</string>
+    <string name="profile_search_intro_animation">Animación de entrada en Búsqueda</string>
+    <string name="profile_search_intro_animation_body">Muestra la animación inicial antes de los cards de géneros en Búsqueda.</string>
     <string name="profile_privacy_visibility">Visibilidad</string>
     <string name="profile_privacy_permissions">Permisos</string>
     <string name="profile_privacy_personalization">Personalización</string>

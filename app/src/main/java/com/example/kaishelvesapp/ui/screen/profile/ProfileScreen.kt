@@ -484,6 +484,12 @@ fun ProfileScreen(
                                                 onKeepSessionOpenChange = { keepSessionOpen = it },
                                                 confirmBeforeLogout = confirmBeforeLogout,
                                                 onConfirmBeforeLogoutChange = { confirmBeforeLogout = it },
+                                                searchIntroAnimationEnabled = privacySettings.searchIntroAnimationEnabled != false,
+                                                onSearchIntroAnimationEnabledChange = {
+                                                    viewModel.updatePrivacySettings(
+                                                        privacySettings.copy(searchIntroAnimationEnabled = it)
+                                                    )
+                                                },
                                                 isGuest = uiState.user?.isGuest == true,
                                                 onGoToRegister = onGoToRegister,
                                                 onLogout = onLogout
@@ -1058,6 +1064,8 @@ private fun ProfileSettingsContent(
     onKeepSessionOpenChange: (Boolean) -> Unit,
     confirmBeforeLogout: Boolean,
     onConfirmBeforeLogoutChange: (Boolean) -> Unit,
+    searchIntroAnimationEnabled: Boolean,
+    onSearchIntroAnimationEnabledChange: (Boolean) -> Unit,
     isGuest: Boolean,
     onGoToRegister: () -> Unit,
     onLogout: () -> Unit
@@ -1110,6 +1118,18 @@ private fun ProfileSettingsContent(
             body = stringResource(R.string.profile_confirm_before_logout_body),
             checked = confirmBeforeLogout,
             onCheckedChange = onConfirmBeforeLogoutChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileToggleRow(
+            title = stringResource(R.string.profile_search_intro_animation),
+            body = stringResource(R.string.profile_search_intro_animation_body),
+            checked = searchIntroAnimationEnabled,
+            onCheckedChange = onSearchIntroAnimationEnabledChange
         )
     }
 

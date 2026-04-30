@@ -301,6 +301,7 @@ fun AppNavigation(
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
                 },
+                searchIntroAnimationEnabled = authState.user?.privacySettings?.searchIntroAnimationEnabled != false,
                 onSectionSelected = { navigateSection(it) }
             )
         }

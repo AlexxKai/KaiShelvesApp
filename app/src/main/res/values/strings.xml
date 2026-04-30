@@ -347,6 +347,8 @@
     <string name="profile_keep_session_open_body">Preserve the current access preference while you use the app.</string>
     <string name="profile_confirm_before_logout">Confirm before signing out</string>
     <string name="profile_confirm_before_logout_body">Adds a local confirmation preference for account exits.</string>
+    <string name="profile_search_intro_animation">Search intro animation</string>
+    <string name="profile_search_intro_animation_body">Show the opening animation before the genre cards in Search.</string>
     <string name="profile_privacy_visibility">Visibility</string>
     <string name="profile_privacy_permissions">Permissions</string>
     <string name="profile_privacy_personalization">Personalization</string>

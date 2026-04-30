@@ -97,11 +97,14 @@ fun LibraryScreen(
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
+    searchIntroAnimationEnabled: Boolean = true,
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var showLibraryIntro by rememberSaveable { mutableStateOf(true) }
+    var showLibraryIntro by rememberSaveable(searchIntroAnimationEnabled) {
+        mutableStateOf(searchIntroAnimationEnabled)
+    }
     val welcomeText = stringResource(R.string.library_guest_subtitle)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     ModalNavigationDrawer(

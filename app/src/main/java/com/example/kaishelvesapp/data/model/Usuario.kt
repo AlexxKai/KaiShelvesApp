@@ -7,7 +7,8 @@ data class UserPrivacySettings(
     val friendsVisible: Boolean = true,
     val friendRequestPermissions: Boolean = true,
     val socialInteractionPermissions: Boolean = true,
-    val personalizedSuggestions: Boolean = true
+    val personalizedSuggestions: Boolean = true,
+    val searchIntroAnimationEnabled: Boolean? = true
 )
 
 data class Usuario(
