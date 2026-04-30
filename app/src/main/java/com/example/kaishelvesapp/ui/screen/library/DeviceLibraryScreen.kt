@@ -25,12 +25,14 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -112,6 +114,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -166,7 +169,21 @@ fun DeviceLibraryScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     var layoutMode by remember { mutableStateOf(DeviceLibraryLayoutMode.List) }
+    var showSearchPanel by remember { mutableStateOf(false) }
+    var showFilterPanel by remember { mutableStateOf(false) }
+    var topBarHeight by remember { mutableStateOf(0.dp) }
+    val recentSearches = remember { mutableStateListOf("alma", "cuerpo", "la chica", "inv", "mil no", "pav", "ese ins") }
+
+    fun commitSearch(value: String) {
+        val cleanValue = value.trim()
+        if (cleanValue.isNotBlank()) {
+            recentSearches.remove(cleanValue)
+            recentSearches.add(0, cleanValue)
+            while (recentSearches.size > 7) recentSearches.removeAt(recentSearches.lastIndex)
+        }
+    }
     val folderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -218,60 +235,87 @@ fun DeviceLibraryScreen(
             )
         }
     ) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                DeviceLibraryTopBar(
-                    onOpenMenu = { scope.launch { drawerState.open() } },
-                    notificationCount = pendingRequestCount,
-                    onOpenNotifications = onOpenNotifications,
-                    hasFolder = uiState.selectedFolderUri != null,
-                    fileCount = uiState.filteredFiles.size,
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    DeviceLibraryTopBar(
+                        onOpenMenu = { scope.launch { drawerState.open() } },
+                        notificationCount = pendingRequestCount,
+                        onOpenNotifications = onOpenNotifications,
+                        hasFolder = uiState.selectedFolderUri != null,
+                        fileCount = uiState.filteredFiles.size,
+                        isLoading = uiState.isLoading,
+                        showSearchPanel = showSearchPanel,
+                        onShowSearchPanel = { showSearchPanel = true },
+                        onDismissSearchPanel = { showSearchPanel = false },
+                        onToggleFilterPanel = { showFilterPanel = !showFilterPanel },
+                        onDismissFilterPanel = { showFilterPanel = false },
+                        onQueryChange = viewModel::onSearchQueryChange,
+                        onChooseFolder = { folderLauncher.launch(null) },
+                        onRefresh = viewModel::refresh,
+                        onHeightChanged = { heightPx ->
+                            topBarHeight = with(density) { heightPx.toDp() }
+                        }
+                    )
+                },
+                bottomBar = {
+                    KaiBottomBar(
+                        current = KaiSection.LIBRARY,
+                        onSelect = onSectionSelected
+                    )
+                },
+                floatingActionButton = {
+                    FloatingActionButton(
+                        onClick = {
+                            Toast.makeText(
+                                context,
+                                "Lectura actual: proximamente",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        containerColor = Color(0xFF3A3A3A),
+                        contentColor = OldIvory
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = "Ir al libro actual"
+                        )
+                    }
+                }
+            ) { innerPadding ->
+                DeviceLibraryContent(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    files = uiState.filteredFiles,
                     isLoading = uiState.isLoading,
+                    errorMessage = uiState.errorMessage,
+                    layoutMode = layoutMode,
+                    onOpenFile = ::openFile
+                )
+            }
+
+            if (showSearchPanel && !showFilterPanel) {
+                DeviceLibrarySearchOverlay(
+                    topPadding = topBarHeight,
                     query = uiState.searchQuery,
                     files = uiState.files,
+                    recentSearches = recentSearches,
+                    onQueryChange = viewModel::onSearchQueryChange,
+                    onCommitSearch = { commitSearch(it) },
+                    onRemoveRecentSearch = { recentSearches.remove(it) },
+                    onDismiss = { showSearchPanel = false }
+                )
+            }
+
+            if (showFilterPanel) {
+                DeviceLibraryFilterOverlay(
                     layoutMode = layoutMode,
                     onLayoutModeChange = { layoutMode = it },
-                    onQueryChange = viewModel::onSearchQueryChange,
-                    onChooseFolder = { folderLauncher.launch(null) },
-                    onRefresh = viewModel::refresh
+                    onDismiss = { showFilterPanel = false }
                 )
-            },
-            bottomBar = {
-                KaiBottomBar(
-                    current = KaiSection.LIBRARY,
-                    onSelect = onSectionSelected
-                )
-            },
-            floatingActionButton = {
-                FloatingActionButton(
-                    onClick = {
-                        Toast.makeText(
-                            context,
-                            "Lectura actual: proximamente",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    containerColor = Color(0xFF3A3A3A),
-                    contentColor = OldIvory
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                        contentDescription = "Ir al libro actual"
-                    )
-                }
             }
-        ) { innerPadding ->
-            DeviceLibraryContent(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                files = uiState.filteredFiles,
-                isLoading = uiState.isLoading,
-                errorMessage = uiState.errorMessage,
-                layoutMode = layoutMode,
-                onOpenFile = ::openFile
-            )
         }
     }
 }
@@ -284,31 +328,22 @@ private fun DeviceLibraryTopBar(
     hasFolder: Boolean,
     fileCount: Int,
     isLoading: Boolean,
-    query: String,
-    files: List<DeviceLibraryFile>,
-    layoutMode: DeviceLibraryLayoutMode,
-    onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
+    showSearchPanel: Boolean,
+    onShowSearchPanel: () -> Unit,
+    onDismissSearchPanel: () -> Unit,
+    onToggleFilterPanel: () -> Unit,
+    onDismissFilterPanel: () -> Unit,
     onQueryChange: (String) -> Unit,
     onChooseFolder: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
-    var showSearchPanel by remember { mutableStateOf(false) }
-    var showFilterPanel by remember { mutableStateOf(false) }
-    val recentSearches = remember { mutableStateListOf("alma", "cuerpo", "la chica", "inv", "mil no", "pav", "ese ins") }
-
-    fun commitSearch(value: String) {
-        val cleanValue = value.trim()
-        if (cleanValue.isNotBlank()) {
-            recentSearches.remove(cleanValue)
-            recentSearches.add(0, cleanValue)
-            while (recentSearches.size > 7) recentSearches.removeAt(recentSearches.lastIndex)
-        }
-    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { onHeightChanged(it.height) }
             .statusBarsPadding()
             .background(
                 brush = Brush.verticalGradient(
@@ -379,8 +414,8 @@ private fun DeviceLibraryTopBar(
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         showLibraryMenu = !showLibraryMenu
-                        showSearchPanel = false
-                        showFilterPanel = false
+                        onDismissSearchPanel()
+                        onDismissFilterPanel()
                     }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -408,9 +443,9 @@ private fun DeviceLibraryTopBar(
             ) {
                 IconButton(
                     onClick = {
-                        showSearchPanel = true
+                        onShowSearchPanel()
                         showLibraryMenu = false
-                        showFilterPanel = false
+                        onDismissFilterPanel()
                     }
                 ) {
                     Icon(
@@ -422,9 +457,9 @@ private fun DeviceLibraryTopBar(
 
                 IconButton(
                     onClick = {
-                        showFilterPanel = !showFilterPanel
-                        showSearchPanel = false
+                        onDismissSearchPanel()
                         showLibraryMenu = false
+                        onToggleFilterPanel()
                     }
                 ) {
                     Icon(
@@ -479,19 +514,6 @@ private fun DeviceLibraryTopBar(
 
         when {
             showLibraryMenu -> LibrarySelectorMenu(fileCount = fileCount)
-            showSearchPanel -> DeviceLibrarySearchPanel(
-                query = query,
-                files = files,
-                recentSearches = recentSearches,
-                onQueryChange = onQueryChange,
-                onCommitSearch = { commitSearch(it) },
-                onRemoveRecentSearch = { recentSearches.remove(it) },
-                onClose = { showSearchPanel = false }
-            )
-            showFilterPanel -> DeviceLibraryFilterPanel(
-                layoutMode = layoutMode,
-                onLayoutModeChange = onLayoutModeChange
-            )
         }
     }
 }
@@ -582,6 +604,40 @@ private fun LibrarySelectorMenu(fileCount: Int) {
 }
 
 @Composable
+private fun DeviceLibrarySearchOverlay(
+    topPadding: androidx.compose.ui.unit.Dp,
+    query: String,
+    files: List<DeviceLibraryFile>,
+    recentSearches: List<String>,
+    onQueryChange: (String) -> Unit,
+    onCommitSearch: (String) -> Unit,
+    onRemoveRecentSearch: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = topPadding)
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        DeviceLibrarySearchPanel(
+            query = query,
+            files = files,
+            recentSearches = recentSearches,
+            onQueryChange = onQueryChange,
+            onCommitSearch = onCommitSearch,
+            onRemoveRecentSearch = onRemoveRecentSearch,
+            onClose = onDismiss,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .clickable(onClick = { })
+        )
+    }
+}
+
+@Composable
 private fun DeviceLibrarySearchPanel(
     query: String,
     files: List<DeviceLibraryFile>,
@@ -589,7 +645,8 @@ private fun DeviceLibrarySearchPanel(
     onQueryChange: (String) -> Unit,
     onCommitSearch: (String) -> Unit,
     onRemoveRecentSearch: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val suggestions = remember(query, files) {
         val cleanQuery = query.trim()
@@ -611,9 +668,7 @@ private fun DeviceLibrarySearchPanel(
     val visibleItems = if (showingRecentSearches) recentSearches else suggestions
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp),
+        modifier = modifier,
         shape = RoundedCornerShape(0.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xF0242424))
     ) {
@@ -669,7 +724,8 @@ private fun DeviceLibrarySearchPanel(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                        .height(48.dp)
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -714,17 +770,41 @@ private fun DeviceLibrarySearchPanel(
 }
 
 @Composable
+private fun DeviceLibraryFilterOverlay(
+    layoutMode: DeviceLibraryLayoutMode,
+    onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.58f))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center
+    ) {
+        DeviceLibraryFilterPanel(
+            layoutMode = layoutMode,
+            onLayoutModeChange = onLayoutModeChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp)
+                .widthIn(max = 520.dp)
+                .clickable(onClick = { })
+        )
+    }
+}
+
+@Composable
 private fun DeviceLibraryFilterPanel(
     layoutMode: DeviceLibraryLayoutMode,
-    onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit
+    onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xF0141414)),
-        border = BorderStroke(1.dp, OldIvory.copy(alpha = 0.12f))
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xF01A1717)),
+        border = BorderStroke(1.dp, OldIvory.copy(alpha = 0.18f))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -1242,10 +1322,20 @@ private fun ShelfListRow(
     progress: Int,
     onClick: () -> Unit
 ) {
-    Row(
+    val context = LocalContext.current
+    val bookMetadata by produceState<DeviceBookDisplayMetadata?>(initialValue = null, file.uri) {
+        value = withContext(Dispatchers.IO) {
+            if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
+        }
+    }
+    val title = bookMetadata?.title?.takeIf { it.isNotBlank() }
+        ?: file.name.substringBeforeLast('.')
+    val author = bookMetadata?.author.orEmpty()
+    val summary = bookMetadata?.description.orEmpty()
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(178.dp)
             .clickable(onClick = onClick)
             .background(
                 brush = Brush.horizontalGradient(
@@ -1256,57 +1346,130 @@ private fun ShelfListRow(
                     )
                 )
             )
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        FilePagePreview(
-            file = file,
-            modifier = Modifier
-                .width(112.dp)
-                .aspectRatio(0.68f)
-        )
-
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            Text(
-                text = file.name.substringBeforeLast('.'),
-                style = MaterialTheme.typography.titleMedium,
-                color = OldIvory,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = file.location.substringAfterLast('/'),
-                style = MaterialTheme.typography.bodySmall,
-                color = OldIvory.copy(alpha = 0.68f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            ReadingProgressBar(progress = progress)
-            Text(
-                text = "${progress}%",
-                modifier = Modifier.align(Alignment.End),
-                style = MaterialTheme.typography.bodySmall,
-                color = OldIvory.copy(alpha = 0.78f)
-            )
-            Text(
-                text = file.location,
-                style = MaterialTheme.typography.bodySmall,
-                color = OldIvory.copy(alpha = 0.56f),
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+        val compact = maxWidth < 380.dp
+        val rowHeight = when {
+            compact -> 158.dp
+            maxWidth < 600.dp -> 170.dp
+            else -> 186.dp
         }
+        val verticalPadding = if (compact) 10.dp else 12.dp
+        val coverWidth = when {
+            compact -> 86.dp
+            maxWidth < 600.dp -> 96.dp
+            else -> 108.dp
+        }
+        val contentGap = if (compact) 12.dp else 16.dp
+        val summaryLines = if (compact) 2 else 3
 
-        Icon(
-            imageVector = Icons.Filled.MoreVert,
-            contentDescription = null,
-            tint = OldIvory.copy(alpha = 0.74f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(rowHeight)
+                .padding(start = 10.dp, top = verticalPadding, end = 6.dp, bottom = verticalPadding),
+            verticalAlignment = Alignment.Top
+        ) {
+            FilePagePreview(
+                file = file,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(coverWidth)
+            )
+
+            Spacer(modifier = Modifier.width(contentGap))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(top = 1.dp, bottom = 1.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        style = if (compact) {
+                            MaterialTheme.typography.titleMedium
+                        } else {
+                            MaterialTheme.typography.titleLarge
+                        },
+                        color = OldIvory,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = if (compact) 1 else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    IconButton(
+                        onClick = { },
+                        modifier = Modifier.size(if (compact) 28.dp else 32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.more_option),
+                            tint = OldIvory.copy(alpha = 0.74f),
+                            modifier = Modifier.size(if (compact) 20.dp else 22.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
+
+                Text(
+                    text = author,
+                    style = if (compact) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
+                    color = OldIvory.copy(alpha = 0.74f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ReadingProgressBar(
+                        progress = progress,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(if (compact) 8.dp else 10.dp))
+
+                    Text(
+                        text = "${progress}%",
+                        style = if (compact) {
+                            MaterialTheme.typography.bodySmall
+                        } else {
+                            MaterialTheme.typography.bodyMedium
+                        },
+                        color = OldIvory.copy(alpha = 0.78f),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(if (compact) 8.dp else 10.dp))
+
+                Text(
+                    text = summary,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = if (compact) {
+                        MaterialTheme.typography.bodySmall
+                    } else {
+                        MaterialTheme.typography.bodyMedium
+                    },
+                    color = OldIvory.copy(alpha = 0.72f),
+                    maxLines = summaryLines,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
@@ -1381,9 +1544,12 @@ private fun CarouselCover(
 }
 
 @Composable
-private fun ReadingProgressBar(progress: Int) {
+private fun ReadingProgressBar(
+    progress: Int,
+    modifier: Modifier = Modifier
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(2.dp)
             .background(OldIvory.copy(alpha = 0.26f))
@@ -1586,6 +1752,12 @@ private fun readableFileType(file: DeviceLibraryFile): String {
         .ifBlank { file.mimeType.orEmpty() }
 }
 
+private data class DeviceBookDisplayMetadata(
+    val title: String = "",
+    val author: String = "",
+    val description: String = ""
+)
+
 private fun renderPdfFirstPage(context: Context, uri: Uri): Bitmap? {
     return runCatching {
         context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
@@ -1621,6 +1793,18 @@ private fun extractEpubCover(context: Context, uri: Uri): Bitmap? {
         readZipEntry(context, uri, coverPath)?.let { bytes ->
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         }
+    }.getOrNull()
+}
+
+private fun extractEpubDisplayMetadata(context: Context, uri: Uri): DeviceBookDisplayMetadata? {
+    return runCatching {
+        val rootFilePath = readZipEntry(context, uri, "META-INF/container.xml")
+            ?.decodeToString()
+            ?.let(::parseRootFilePath)
+            ?: return@runCatching null
+        val opf = readZipEntry(context, uri, rootFilePath)?.decodeToString()
+            ?: return@runCatching null
+        parseEpubDisplayMetadata(opf)
     }.getOrNull()
 }
 
@@ -1690,6 +1874,48 @@ private fun parseCoverHref(opfXml: String): String? {
     }
 
     return coverId?.let(manifestItems::get) ?: fallbackCover
+}
+
+private fun parseEpubDisplayMetadata(opfXml: String): DeviceBookDisplayMetadata {
+    val parser = XmlPullParserFactory.newInstance().newPullParser()
+    parser.setInput(opfXml.reader())
+    var title = ""
+    var author = ""
+    var description = ""
+    var readingTag: String? = null
+    var event = parser.eventType
+
+    while (event != XmlPullParser.END_DOCUMENT) {
+        when (event) {
+            XmlPullParser.START_TAG -> {
+                val name = parser.name.substringAfter(':')
+                if (name == "title" || name == "creator" || name == "description") {
+                    readingTag = name
+                }
+            }
+            XmlPullParser.TEXT -> {
+                val text = parser.text.orEmpty().trim()
+                if (text.isNotBlank()) {
+                    when (readingTag) {
+                        "title" -> if (title.isBlank()) title = text
+                        "creator" -> if (author.isBlank()) author = text
+                        "description" -> if (description.isBlank()) description = text
+                    }
+                }
+            }
+            XmlPullParser.END_TAG -> readingTag = null
+        }
+        event = parser.next()
+    }
+
+    return DeviceBookDisplayMetadata(
+        title = title,
+        author = author,
+        description = description
+            .replace(Regex("<[^>]+>"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    )
 }
 
 private fun resolveZipPath(rootFilePath: String, href: String): String {
