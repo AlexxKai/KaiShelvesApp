@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -65,7 +65,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -81,9 +83,11 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.repository.LoginProviderState
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
+import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -92,11 +96,13 @@ import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
+import com.example.kaishelvesapp.ui.screen.friends.FriendProfileContent
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
+import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -104,9 +110,9 @@ import kotlin.math.max
 fun ProfileScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: AuthViewModel,
+    myProfileViewModel: FriendProfileViewModel,
     userName: String? = null,
     profileImageUrl: String? = null,
-    onBack: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -116,9 +122,13 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
+    onOpenFriendProfile: (String) -> Unit = {},
+    onOpenFriendLists: (String, String) -> Unit = { _, _ -> },
+    onOpenBook: (Libro) -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val myProfileState by myProfileViewModel.uiState.collectAsStateWithLifecycle()
     val hasProfileChanges =
         uiState.username.trim() != uiState.user?.usuario.orEmpty().trim() ||
             uiState.email.trim() != uiState.user?.email.orEmpty().trim()
@@ -129,7 +139,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     var expandedLanguage by remember { mutableStateOf(false) }
-    var selectedProfileTab by remember { mutableStateOf(ProfileTab.Identity) }
+    var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
     var accountNotificationsEnabled by remember { mutableStateOf(true) }
     var keepSessionOpen by remember { mutableStateOf(true) }
     var confirmBeforeLogout by remember { mutableStateOf(false) }
@@ -191,6 +201,13 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(selectedProfileTab, uiState.user?.uid) {
+        val currentUid = uiState.user?.uid.orEmpty()
+        if (selectedProfileTab == ProfileTab.MyProfile && currentUid.isNotBlank()) {
+            myProfileViewModel.loadProfile(currentUid)
+        }
+    }
+
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
         uiState.errorMessage?.let {
             if (showLoginOptionsDialog) {
@@ -249,7 +266,8 @@ fun ProfileScreen(
                     onScanResult = onScanResult,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     notificationCount = pendingRequestCount,
-                    onOpenNotifications = onOpenNotifications
+                    onOpenNotifications = onOpenNotifications,
+                    showSearchBar = false
                 )
             },
             bottomBar = {
@@ -259,16 +277,18 @@ fun ProfileScreen(
                 )
             }
         ) { innerPadding ->
-            Column(
+            GothicBackground(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(innerPadding)
-                    .padding(16.dp)
+            ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
                 when {
                     uiState.isLoading && uiState.user == null -> {
                         Column(
@@ -289,26 +309,17 @@ fun ProfileScreen(
                                     .fillMaxWidth()
                                     .padding(top = 51.dp),
                                 shape = RoundedCornerShape(28.dp),
-                                colors = CardDefaults.cardColors(containerColor = Obsidian),
-                                border = BorderStroke(1.dp, TarnishedGold)
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(24.dp)
+                                    modifier = Modifier.padding(horizontal = 0.dp, vertical = 20.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        IconButton(onClick = onBack) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                                contentDescription = stringResource(R.string.back),
-                                                tint = TarnishedGold
-                                            )
-                                        }
-
-                                        if (selectedProfileTab == ProfileTab.Identity) {
+                                    if (selectedProfileTab == ProfileTab.Identity) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             IconButton(
                                                 onClick = viewModel::saveProfileChanges,
                                                 enabled = hasProfileChanges && !uiState.isLoading
@@ -331,11 +342,62 @@ fun ProfileScreen(
                                                 }
                                             }
                                         }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
                                     }
 
-                                    Spacer(modifier = Modifier.height(12.dp))
-
                                     when (selectedProfileTab) {
+                                        ProfileTab.MyProfile -> {
+                                            when {
+                                                myProfileState.isLoading -> {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 48.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        CircularProgressIndicator(color = TarnishedGold)
+                                                    }
+                                                }
+
+                                                myProfileState.profile != null -> {
+                                                    FriendProfileContent(
+                                                        profile = myProfileState.profile!!,
+                                                        isRemovingFriend = myProfileState.isRemovingFriend,
+                                                        isSendingRequest = myProfileState.isSendingRequest,
+                                                        onRemoveFriend = {},
+                                                        onSendFriendRequest = {},
+                                                        onOpenFriendLists = onOpenFriendLists,
+                                                        onOpenFriendProfile = onOpenFriendProfile,
+                                                        onOpenBook = onOpenBook,
+                                                        commentsByActivityId = myProfileState.commentsByActivityId,
+                                                        loadingCommentIds = myProfileState.loadingCommentIds,
+                                                        socialActionIds = myProfileState.socialActionIds,
+                                                        onToggleLike = myProfileViewModel::toggleLike,
+                                                        onLoadComments = myProfileViewModel::loadComments,
+                                                        onAddComment = myProfileViewModel::addComment,
+                                                        showFriendActions = false,
+                                                        isScrollable = false,
+                                                        contentHorizontalPadding = 2.dp,
+                                                        transparentCards = true
+                                                    )
+                                                }
+
+                                                else -> {
+                                                    Text(
+                                                        text = myProfileState.errorMessage
+                                                            ?: stringResource(R.string.friend_profile_load_error),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 32.dp),
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        color = OldIvory,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
+                                        }
+
                                         ProfileTab.Identity -> {
                                             ProfileAvatarSection(
                                                 displayName = uiState.username.ifBlank {
@@ -438,6 +500,29 @@ fun ProfileScreen(
                                 }
                             }
 
+                            Canvas(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .padding(top = 51.dp)
+                                    .height(18.dp)
+                            ) {
+                                val cornerRadius = 18.dp.toPx()
+                                val strokeWidth = 1.dp.toPx()
+                                val topBorderPath = Path().apply {
+                                    moveTo(0f, cornerRadius)
+                                    quadraticTo(0f, 0f, cornerRadius, 0f)
+                                    lineTo(size.width - cornerRadius, 0f)
+                                    quadraticTo(size.width, 0f, size.width, cornerRadius)
+                                }
+
+                                drawPath(
+                                    path = topBorderPath,
+                                    color = TarnishedGold.copy(alpha = 0.86f),
+                                    style = Stroke(width = strokeWidth)
+                                )
+                            }
+
                             ProfileTabSelector(
                                 selectedTab = selectedProfileTab,
                                 onSelectTab = { selectedProfileTab = it },
@@ -450,11 +535,13 @@ fun ProfileScreen(
                     }
                 }
             }
+            }
         }
     }
 }
 
 private enum class ProfileTab {
+    MyProfile,
     Identity,
     Settings,
     Privacy
@@ -473,6 +560,12 @@ private fun ProfileTabSelector(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
+        ProfileTabButton(
+            text = stringResource(R.string.profile_tab_my_profile),
+            selected = selectedTab == ProfileTab.MyProfile,
+            onClick = { onSelectTab(ProfileTab.MyProfile) },
+            modifier = Modifier.weight(1f)
+        )
         ProfileTabButton(
             text = stringResource(R.string.profile_tab_identity),
             selected = selectedTab == ProfileTab.Identity,
@@ -516,7 +609,7 @@ private fun ProfileTabButton(
             border = BorderStroke(1.dp, TarnishedGold),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = if (selected) Obsidian else Obsidian.copy(alpha = 0.86f),
+                containerColor = Color.Transparent,
                 contentColor = if (selected) OldIvory else TarnishedGold
             )
         ) {
@@ -549,7 +642,7 @@ private fun ProfileTabButton(
                     .fillMaxWidth()
                     .height(2.dp)
                     .padding(horizontal = 1.dp)
-                    .background(Obsidian)
+                    .background(Color.Transparent)
             )
         }
     }

@@ -86,7 +86,8 @@ fun KaiPrimaryTopBar(
     onScanResult: (String) -> Unit,
     onOpenMenu: () -> Unit,
     notificationCount: Int = 0,
-    onOpenNotifications: (() -> Unit)? = null
+    onOpenNotifications: (() -> Unit)? = null,
+    showSearchBar: Boolean = true
 ) {
     val context = LocalContext.current
     val scanOptions = remember {
@@ -212,55 +213,57 @@ fun KaiPrimaryTopBar(
             }
         }
 
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            placeholder = {
-                Text(stringResource(R.string.search_by_title_author_isbn))
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(20.dp),
-            leadingIcon = {
-                IconButton(onClick = onSearch) {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = stringResource(R.string.search),
-                        tint = TarnishedGold
-                    )
-                }
-            },
-            trailingIcon = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onSearchQueryChange("") }) {
+        if (showSearchBar) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                placeholder = {
+                    Text(stringResource(R.string.search_by_title_author_isbn))
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(20.dp),
+                leadingIcon = {
+                    IconButton(onClick = onSearch) {
+                        Icon(
+                            imageVector = Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search),
+                            tint = TarnishedGold
+                        )
+                    }
+                },
+                trailingIcon = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchQueryChange("") }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.clear_search),
+                                    tint = TarnishedGold
+                                )
+                            }
+                        }
+
+                        IconButton(onClick = ::launchScanner) {
                             Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = stringResource(R.string.clear_search),
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = stringResource(R.string.scan_isbn),
                                 tint = TarnishedGold
                             )
                         }
                     }
-
-                    IconButton(onClick = ::launchScanner) {
-                        Icon(
-                            imageVector = Icons.Filled.CameraAlt,
-                            contentDescription = stringResource(R.string.scan_isbn),
-                            tint = TarnishedGold
-                        )
-                    }
-                }
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = { onSearch() }
-            ),
-            colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
-        )
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { onSearch() }
+                ),
+                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+            )
+        }
     }
 }
 

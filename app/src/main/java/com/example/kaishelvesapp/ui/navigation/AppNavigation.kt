@@ -469,9 +469,9 @@ fun AppNavigation(
         composable(Routes.PROFILE) {
             ProfileScreen(
                 viewModel = authViewModel,
+                myProfileViewModel = friendProfileViewModel,
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
-                onBack = { navController.popBackStack() },
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -486,6 +486,16 @@ fun AppNavigation(
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onOpenFriendProfile = { friendUid ->
+                    navController.navigate(friendProfileRoute(friendUid))
+                },
+                onOpenFriendLists = { uid, name ->
+                    navController.navigate(friendListsRoute(uid, name))
+                },
+                onOpenBook = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
                 },
                 onSectionSelected = { navigateSection(it) }
             )

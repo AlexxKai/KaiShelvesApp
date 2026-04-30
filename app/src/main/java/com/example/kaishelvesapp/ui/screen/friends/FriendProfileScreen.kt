@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -64,7 +65,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
@@ -78,6 +81,7 @@ import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.FriendProfileData
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.ActivitySocialActions
+import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.components.KaiSection
@@ -130,18 +134,10 @@ fun FriendProfileScreen(
                 onSelect = onSectionSelected
             )
         }
-    ) { innerPadding ->
-        Box(
+        ) { innerPadding ->
+        GothicBackground(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            DeepWalnut,
-                            Obsidian
-                        )
-                    )
-                )
                 .padding(innerPadding)
         ) {
             when {
@@ -304,7 +300,7 @@ private fun FriendProfileTopBar(
 }
 
 @Composable
-private fun FriendProfileContent(
+fun FriendProfileContent(
     profile: FriendProfileData,
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
@@ -318,28 +314,44 @@ private fun FriendProfileContent(
     socialActionIds: Set<String>,
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    modifier: Modifier = Modifier,
+    showFriendActions: Boolean = true,
+    isScrollable: Boolean = true,
+    contentHorizontalPadding: Dp = 16.dp,
+    transparentCards: Boolean = true
 ) {
-    Column(
-        modifier = Modifier
+    val contentModifier = if (isScrollable) {
+        modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+    } else {
+        modifier.fillMaxWidth()
+    }
+
+    Column(
+        modifier = contentModifier
+            .padding(horizontal = contentHorizontalPadding, vertical = 14.dp)
     ) {
-        FriendProfileHero(profile = profile)
-        Spacer(modifier = Modifier.height(18.dp))
-        FriendProfileMenuRow(
-            isFriend = profile.isFriend,
-            isRequestSent = profile.isRequestSent,
-            isRemovingFriend = isRemovingFriend,
-            isSendingRequest = isSendingRequest,
-            onRemoveFriend = onRemoveFriend,
-            onSendFriendRequest = onSendFriendRequest
+        FriendProfileHero(
+            profile = profile,
+            transparentBackground = transparentCards
         )
+        if (showFriendActions) {
+            Spacer(modifier = Modifier.height(18.dp))
+            FriendProfileMenuRow(
+                isFriend = profile.isFriend,
+                isRequestSent = profile.isRequestSent,
+                isRemovingFriend = isRemovingFriend,
+                isSendingRequest = isSendingRequest,
+                onRemoveFriend = onRemoveFriend,
+                onSendFriendRequest = onSendFriendRequest
+            )
+        }
         Spacer(modifier = Modifier.height(18.dp))
 
         if (profile.isPrivateProfile) {
-            PrivateProfileSection()
+            PrivateProfileSection(transparentBackground = transparentCards)
         } else {
             FriendShelvesCarouselSection(
                 title = stringResource(R.string.books_count, profile.booksReadCount),
@@ -347,17 +359,23 @@ private fun FriendProfileContent(
                 friendUid = profile.user.uid,
                 friendName = profile.user.usuario.ifBlank { profile.user.email },
                 onOpenFriendLists = onOpenFriendLists,
-                onOpenBook = onOpenBook
+                onOpenBook = onOpenBook,
+                transparentBackground = transparentCards
             )
             Spacer(modifier = Modifier.height(18.dp))
 
             FriendsPreviewSection(
                 friends = profile.friendPreviews,
                 friendsCount = profile.friendsCount,
-                onOpenFriendProfile = onOpenFriendProfile
+                onOpenFriendProfile = onOpenFriendProfile,
+                transparentBackground = transparentCards
             )
             Spacer(modifier = Modifier.height(18.dp))
-            GroupsSection(profile.user, profile.groupsCount)
+            GroupsSection(
+                user = profile.user,
+                groupsCount = profile.groupsCount,
+                transparentBackground = transparentCards
+            )
             Spacer(modifier = Modifier.height(18.dp))
             UpdatesSection(
                 profile = profile,
@@ -367,7 +385,8 @@ private fun FriendProfileContent(
                 onToggleLike = onToggleLike,
                 onLoadComments = onLoadComments,
                 onAddComment = onAddComment,
-                onOpenBook = onOpenBook
+                onOpenBook = onOpenBook,
+                transparentBackground = transparentCards
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -375,7 +394,10 @@ private fun FriendProfileContent(
 }
 
 @Composable
-private fun FriendProfileHero(profile: FriendProfileData) {
+private fun FriendProfileHero(
+    profile: FriendProfileData,
+    transparentBackground: Boolean = false
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -385,13 +407,19 @@ private fun FriendProfileHero(profile: FriendProfileData) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            BloodWine.copy(alpha = 0.16f),
-                            Obsidian.copy(alpha = 0.96f)
+                .then(
+                    if (transparentBackground) {
+                        Modifier.background(Color.Transparent)
+                    } else {
+                        Modifier.background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    BloodWine.copy(alpha = 0.16f),
+                                    Obsidian.copy(alpha = 0.96f)
+                                )
+                            )
                         )
-                    )
+                    }
                 )
                 .padding(horizontal = 20.dp, vertical = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -498,33 +526,17 @@ private fun FriendProfileMenuRow(
                 text = if (isFriend) {
                     stringResource(R.string.friends)
                 } else if (isRequestSent) {
-                    stringResource(R.string.request_sent)
+                    stringResource(R.string.friend_request_pending)
                 } else {
                     stringResource(R.string.add_friend_short)
                 },
                 style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF66D6D6)
+                color = if (isRequestSent) {
+                    OldIvory.copy(alpha = 0.72f)
+                } else {
+                    Color(0xFF66D6D6)
+                }
             )
-        }
-
-        if (!isFriend) {
-            Spacer(modifier = Modifier.width(18.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.BookmarkBorder,
-                    contentDescription = null,
-                    tint = OldIvory,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.follow),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(0xFF66D6D6)
-                )
-            }
         }
 
         Spacer(modifier = Modifier.width(18.dp))
@@ -610,11 +622,15 @@ private fun FriendShelvesCarouselSection(
     friendUid: String,
     friendName: String,
     onOpenFriendLists: (String, String) -> Unit,
-    onOpenBook: (Libro) -> Unit
+    onOpenBook: (Libro) -> Unit,
+    transparentBackground: Boolean = false
 ) {
     val visibleShelves = shelves.filter { it.bookCount > 0 || it.books.isNotEmpty() }
 
-    ProfileSectionCard(title = title) {
+    ProfileSectionCard(
+        title = title,
+        transparentBackground = transparentBackground
+    ) {
         if (visibleShelves.isEmpty()) {
             Text(
                 text = stringResource(R.string.no_books_in_friend_shelves),
@@ -767,14 +783,16 @@ private fun SeeMoreShelfTile(
 private fun FriendsPreviewSection(
     friends: List<Usuario>,
     friendsCount: Int,
-    onOpenFriendProfile: (String) -> Unit
+    onOpenFriendProfile: (String) -> Unit,
+    transparentBackground: Boolean = false
 ) {
     ProfileSectionCard(
         title = if (friendsCount == 1) {
             stringResource(R.string.one_friend)
         } else {
             stringResource(R.string.friends_count, friendsCount)
-        }
+        },
+        transparentBackground = transparentBackground
     ) {
         if (friends.isEmpty()) {
             Text(
@@ -819,10 +837,12 @@ private fun FriendsPreviewSection(
 @Composable
 private fun GroupsSection(
     user: Usuario,
-    groupsCount: Int
+    groupsCount: Int,
+    transparentBackground: Boolean = false
 ) {
     ProfileSectionCard(
-        title = stringResource(R.string.groups_count, groupsCount)
+        title = stringResource(R.string.groups_count, groupsCount),
+        transparentBackground = transparentBackground
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -859,8 +879,13 @@ private fun GroupsSection(
 }
 
 @Composable
-private fun PrivateProfileSection() {
-    ProfileSectionCard(title = stringResource(R.string.private_profile_title)) {
+private fun PrivateProfileSection(
+    transparentBackground: Boolean = false
+) {
+    ProfileSectionCard(
+        title = stringResource(R.string.private_profile_title),
+        transparentBackground = transparentBackground
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -896,10 +921,12 @@ private fun UpdatesSection(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
-    onOpenBook: (Libro) -> Unit
+    onOpenBook: (Libro) -> Unit,
+    transparentBackground: Boolean = false
 ) {
     ProfileSectionCard(
-        title = stringResource(R.string.updates_title)
+        title = stringResource(R.string.updates_title),
+        transparentBackground = transparentBackground
     ) {
         if (profile.updates.isEmpty()) {
             Text(
@@ -941,21 +968,33 @@ private fun UpdateItem(
     onAddComment: (String, String) -> Unit,
     onOpenBook: (Libro) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        KaiUserAvatar(
-            displayName = item.user.usuario.ifBlank { item.user.email },
-            imageUrl = item.user.photoUrl
-        )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val compact = maxWidth < 300.dp
+        val avatarSize = if (compact) 46.dp else 52.dp
+        val horizontalGap = if (compact) 10.dp else 12.dp
+        val titleStyle = if (compact) {
+            MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 21.sp)
+        } else {
+            MaterialTheme.typography.titleMedium
+        }
 
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
         ) {
-            val title = when (item.type) {
+            KaiUserAvatar(
+                displayName = item.user.usuario.ifBlank { item.user.email },
+                imageUrl = item.user.photoUrl,
+                modifier = Modifier.size(avatarSize),
+                size = avatarSize
+            )
+
+            Spacer(modifier = Modifier.width(horizontalGap))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                val title = when (item.type) {
                     FriendActivityType.FRIENDSHIP -> stringResource(
                         R.string.friendship_update_text,
                         item.user.usuario.ifBlank { stringResource(R.string.unknown_username) },
@@ -975,55 +1014,56 @@ private fun UpdateItem(
                     )
                 }
 
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = OldIvory
-            )
+                Text(
+                    text = title,
+                    style = titleStyle,
+                    color = OldIvory
+                )
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = stringResource(R.string.recently_label),
-                style = MaterialTheme.typography.bodySmall,
-                color = OldIvory.copy(alpha = 0.72f)
-            )
+                Text(
+                    text = stringResource(R.string.recently_label),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OldIvory.copy(alpha = 0.72f)
+                )
 
-            val book = item.book ?: item.readBook?.let {
-                Libro(
-                    id = it.id,
-                    isbn = it.isbn,
-                    titulo = it.titulo,
-                    autor = it.autor,
-                    editorial = it.editorial,
-                    genero = it.genero,
-                    fechaPublicacion = it.fechaPublicacion,
-                    paginas = it.paginas,
-                    imagen = it.imagen,
-                    pdf = it.pdf
+                val book = item.book ?: item.readBook?.let {
+                    Libro(
+                        id = it.id,
+                        isbn = it.isbn,
+                        titulo = it.titulo,
+                        autor = it.autor,
+                        editorial = it.editorial,
+                        genero = it.genero,
+                        fechaPublicacion = it.fechaPublicacion,
+                        paginas = it.paginas,
+                        imagen = it.imagen,
+                        pdf = it.pdf
+                    )
+                }
+
+                if (book != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ActivityBookCard(
+                        book = book,
+                        onOpenBook = onOpenBook
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                ActivitySocialActions(
+                    item = item,
+                    postTitle = title,
+                    postTimestamp = stringResource(R.string.recently_label),
+                    comments = comments,
+                    isLoadingComments = isLoadingComments,
+                    isSaving = isSocialActionRunning,
+                    onToggleLike = onToggleLike,
+                    onLoadComments = onLoadComments,
+                    onAddComment = onAddComment
                 )
             }
-
-            if (book != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-                ActivityBookCard(
-                    book = book,
-                    onOpenBook = onOpenBook
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            ActivitySocialActions(
-                item = item,
-                postTitle = title,
-                postTimestamp = stringResource(R.string.recently_label),
-                comments = comments,
-                isLoadingComments = isLoadingComments,
-                isSaving = isSocialActionRunning,
-                onToggleLike = onToggleLike,
-                onLoadComments = onLoadComments,
-                onAddComment = onAddComment
-            )
         }
     }
 }
@@ -1033,36 +1073,57 @@ private fun ActivityBookCard(
     book: Libro,
     onOpenBook: (Libro) -> Unit
 ) {
-    Row(
-        modifier = Modifier.clickable { onOpenBook(book) },
-        verticalAlignment = Alignment.Top
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenBook(book) }
     ) {
-        BookCover(
-            imageUrl = book.imagen,
-            title = book.titulo,
-            modifier = Modifier
-                .width(86.dp)
-                .height(126.dp)
-        )
+        val compact = maxWidth < 230.dp
+        val coverWidth = if (compact) 74.dp else 86.dp
+        val coverHeight = if (compact) 108.dp else 126.dp
+        val gap = if (compact) 10.dp else 14.dp
+        val titleStyle = if (compact) {
+            MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp, lineHeight = 21.sp)
+        } else {
+            MaterialTheme.typography.titleLarge.copy(lineHeight = 27.sp)
+        }
+        val authorStyle = if (compact) {
+            MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 18.sp)
+        } else {
+            MaterialTheme.typography.bodyLarge
+        }
 
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(
-            modifier = Modifier.weight(1f)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
         ) {
-            Text(
-                text = book.titulo.ifBlank { stringResource(R.string.unknown_title) },
-                style = MaterialTheme.typography.titleLarge,
-                color = OldIvory
+            BookCover(
+                imageUrl = book.imagen,
+                title = book.titulo,
+                modifier = Modifier
+                    .width(coverWidth)
+                    .height(coverHeight)
             )
 
-            if (book.autor.isNotBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.width(gap))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(
-                    text = stringResource(R.string.book_by_author, book.autor),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF66D6D6)
+                    text = book.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                    style = titleStyle,
+                    color = OldIvory
                 )
+
+                if (book.autor.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.book_by_author, book.autor),
+                        style = authorStyle,
+                        color = Color(0xFF66D6D6)
+                    )
+                }
             }
         }
     }
@@ -1071,40 +1132,57 @@ private fun ActivityBookCard(
 @Composable
 private fun ProfileSectionCard(
     title: String,
+    transparentBackground: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.22f))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Obsidian.copy(alpha = 0.95f))
-                .padding(horizontal = 16.dp, vertical = 18.dp)
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val compact = maxWidth < 330.dp
+        val horizontalPadding = if (compact) 12.dp else 16.dp
+        val titleStyle = if (compact) {
+            MaterialTheme.typography.headlineSmall
+        } else {
+            MaterialTheme.typography.headlineMedium
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.22f))
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = OldIvory,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Box(
+            Column(
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .width(160.dp)
-                    .height(2.dp)
-                    .background(TarnishedGold.copy(alpha = 0.28f), RoundedCornerShape(999.dp))
-            )
+                    .fillMaxWidth()
+                    .background(
+                        if (transparentBackground) {
+                            Color.Transparent
+                        } else {
+                            Obsidian.copy(alpha = 0.95f)
+                        }
+                    )
+                    .padding(horizontal = horizontalPadding, vertical = 18.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = titleStyle,
+                    color = OldIvory,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            content()
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .width(160.dp)
+                        .height(2.dp)
+                        .background(TarnishedGold.copy(alpha = 0.28f), RoundedCornerShape(999.dp))
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                content()
+            }
         }
     }
 }

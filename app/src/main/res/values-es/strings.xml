@@ -304,6 +304,7 @@
     <string name="edit_profile">Editar perfil</string>
     <string name="change_profile_photo">Cambiar foto de perfil</string>
     <string name="save_profile_changes">Guardar cambios</string>
+    <string name="profile_tab_my_profile">Mi perfil</string>
     <string name="profile_tab_identity">Datos</string>
     <string name="profile_tab_settings">Ajustes</string>
     <string name="profile_tab_privacy">Privacidad</string>
