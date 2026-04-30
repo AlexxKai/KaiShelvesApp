@@ -78,7 +78,10 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -375,6 +378,7 @@ private fun DeviceLibraryTopBar(
     onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
+    var showTopBarOptions by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -450,6 +454,7 @@ private fun DeviceLibraryTopBar(
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         showLibraryMenu = !showLibraryMenu
+                        showTopBarOptions = false
                         onDismissSearchPanel()
                         onDismissFilterPanel()
                     }
@@ -481,6 +486,7 @@ private fun DeviceLibraryTopBar(
                     onClick = {
                         onShowSearchPanel()
                         showLibraryMenu = false
+                        showTopBarOptions = false
                         onDismissFilterPanel()
                     }
                 ) {
@@ -495,6 +501,7 @@ private fun DeviceLibraryTopBar(
                     onClick = {
                         onDismissSearchPanel()
                         showLibraryMenu = false
+                        showTopBarOptions = false
                         onToggleFilterPanel()
                     }
                 ) {
@@ -538,11 +545,25 @@ private fun DeviceLibraryTopBar(
                     )
                 }
 
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.more_option),
-                        tint = OldIvory
+                Box {
+                    IconButton(
+                        onClick = {
+                            showTopBarOptions = true
+                            showLibraryMenu = false
+                            onDismissSearchPanel()
+                            onDismissFilterPanel()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.more_option),
+                            tint = OldIvory
+                        )
+                    }
+
+                    DeviceLibraryTopBarOptionsMenu(
+                        expanded = showTopBarOptions,
+                        onDismiss = { showTopBarOptions = false }
                     )
                 }
             }
@@ -551,6 +572,43 @@ private fun DeviceLibraryTopBar(
         when {
             showLibraryMenu -> LibrarySelectorMenu(fileCount = fileCount)
         }
+    }
+}
+
+@Composable
+private fun DeviceLibraryTopBarOptionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(min = 300.dp, max = 390.dp),
+        shape = RoundedCornerShape(2.dp),
+        containerColor = Color(0xFF262626),
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp
+    ) {
+        DeviceLibraryBookOptionItem(
+            text = "Importar libros",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Cubierta por defecto",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Reconstruir portadas de libros",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Abre un libro al azar",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Seleccionar todo",
+            onClick = onDismiss
+        )
     }
 }
 
@@ -1428,6 +1486,7 @@ private fun ShelfListRow(
         ?: file.name.substringBeforeLast('.')
     val author = bookMetadata?.author.orEmpty()
     val summary = bookMetadata?.description.orEmpty()
+    var showBookOptions by remember(file.uri) { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -1498,15 +1557,22 @@ private fun ShelfListRow(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    IconButton(
-                        onClick = { },
-                        modifier = Modifier.size(if (compact) 28.dp else 32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = stringResource(R.string.more_option),
-                            tint = OldIvory.copy(alpha = 0.74f),
-                            modifier = Modifier.size(if (compact) 20.dp else 22.dp)
+                    Box {
+                        IconButton(
+                            onClick = { showBookOptions = true },
+                            modifier = Modifier.size(if (compact) 28.dp else 32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = stringResource(R.string.more_option),
+                                tint = OldIvory.copy(alpha = 0.74f),
+                                modifier = Modifier.size(if (compact) 20.dp else 22.dp)
+                            )
+                        }
+
+                        DeviceLibraryBookOptionsMenu(
+                            expanded = showBookOptions,
+                            onDismiss = { showBookOptions = false }
                         )
                     }
                 }
@@ -1567,6 +1633,70 @@ private fun ShelfListRow(
             }
         }
     }
+}
+
+@Composable
+private fun DeviceLibraryBookOptionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(min = 300.dp, max = 390.dp),
+        shape = RoundedCornerShape(2.dp),
+        containerColor = Color(0xFF262626),
+        tonalElevation = 0.dp,
+        shadowElevation = 8.dp
+    ) {
+        DeviceLibraryBookOptionItem(
+            text = "Pin en la parte superior",
+            onClick = onDismiss
+        )
+
+        HorizontalDivider(color = OldIvory.copy(alpha = 0.16f))
+
+        DeviceLibraryBookOptionItem(
+            text = "Información del libro",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Descargar Portada de Libro",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Crear acceso directo en escritorio",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Enviar archivo",
+            onClick = onDismiss
+        )
+        DeviceLibraryBookOptionItem(
+            text = "Quitar de mi biblioteca",
+            onClick = onDismiss
+        )
+    }
+}
+
+@Composable
+private fun DeviceLibraryBookOptionItem(
+    text: String,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium,
+                color = OldIvory,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        onClick = onClick,
+        modifier = Modifier.height(58.dp)
+    )
 }
 
 @Composable
