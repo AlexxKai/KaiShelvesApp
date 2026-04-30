@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -295,120 +296,131 @@ fun KaiNavigationDrawerContent(
         drawerContainerColor = DeepWalnut,
         drawerContentColor = OldIvory
     ) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 12.dp, vertical = 16.dp)
         ) {
-            KaiDrawerHeaderCard(
-                subtitle = subtitle,
-                userName = userName,
-                profileImageUrl = profileImageUrl,
-                expanded = expanded,
-                onGoToProfile = onGoToProfile
-            )
+            val compactHeight = maxHeight < 680.dp
 
-            KaiDrawerItem(
-                label = stringResource(R.string.library),
-                selected = currentSection == KaiSection.LIBRARY,
-                leadingIcon = { Icon(Icons.Filled.LocalLibrary, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.LIBRARY) }
-            )
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (compactHeight) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    KaiDrawerHeaderCard(
+                        subtitle = subtitle,
+                        userName = userName,
+                        profileImageUrl = profileImageUrl,
+                        expanded = expanded,
+                        onGoToProfile = onGoToProfile
+                    )
 
-            KaiDrawerItem(
-                label = stringResource(R.string.reading_statistics),
-                selected = currentSection == KaiSection.STATS,
-                leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.STATS) }
-            )
+                    KaiDrawerItem(
+                        label = stringResource(R.string.library),
+                        selected = currentSection == KaiSection.LIBRARY,
+                        leadingIcon = { Icon(Icons.Filled.LocalLibrary, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.LIBRARY) }
+                    )
 
-            KaiDrawerItem(
-                label = stringResource(R.string.friends),
-                selected = currentSection == KaiSection.FRIENDS,
-                disabled = effectiveDisabledSections.contains(KaiSection.FRIENDS),
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Groups,
-                        contentDescription = null,
-                        tint = if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
-                            TarnishedGold.copy(alpha = 0.55f)
-                        } else {
-                            TarnishedGold
+                    KaiDrawerItem(
+                        label = stringResource(R.string.reading_statistics),
+                        selected = currentSection == KaiSection.STATS,
+                        leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.STATS) }
+                    )
+
+                    KaiDrawerItem(
+                        label = stringResource(R.string.friends),
+                        selected = currentSection == KaiSection.FRIENDS,
+                        disabled = effectiveDisabledSections.contains(KaiSection.FRIENDS),
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Groups,
+                                contentDescription = null,
+                                tint = if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
+                                    TarnishedGold.copy(alpha = 0.55f)
+                                } else {
+                                    TarnishedGold
+                                }
+                            )
+                        },
+                        onClick = {
+                            if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
+                                effectiveDisabledClick?.invoke(KaiSection.FRIENDS)
+                            } else {
+                                onSectionSelected(KaiSection.FRIENDS)
+                            }
                         }
                     )
-                },
-                onClick = {
-                    if (effectiveDisabledSections.contains(KaiSection.FRIENDS)) {
-                        effectiveDisabledClick?.invoke(KaiSection.FRIENDS)
-                    } else {
-                        onSectionSelected(KaiSection.FRIENDS)
-                    }
-                }
-            )
 
-            KaiDrawerItem(
-                label = stringResource(R.string.groups),
-                selected = currentSection == KaiSection.GROUPS,
-                disabled = effectiveDisabledSections.contains(KaiSection.GROUPS),
-                leadingIcon = {
-                    Icon(
-                        Icons.Filled.Handshake,
-                        contentDescription = null,
-                        tint = if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
-                            TarnishedGold.copy(alpha = 0.55f)
-                        } else {
-                            TarnishedGold
+                    KaiDrawerItem(
+                        label = stringResource(R.string.groups),
+                        selected = currentSection == KaiSection.GROUPS,
+                        disabled = effectiveDisabledSections.contains(KaiSection.GROUPS),
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Handshake,
+                                contentDescription = null,
+                                tint = if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
+                                    TarnishedGold.copy(alpha = 0.55f)
+                                } else {
+                                    TarnishedGold
+                                }
+                            )
+                        },
+                        onClick = {
+                            if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
+                                effectiveDisabledClick?.invoke(KaiSection.GROUPS)
+                            } else {
+                                onSectionSelected(KaiSection.GROUPS)
+                            }
                         }
                     )
-                },
-                onClick = {
-                    if (effectiveDisabledSections.contains(KaiSection.GROUPS)) {
-                        effectiveDisabledClick?.invoke(KaiSection.GROUPS)
-                    } else {
-                        onSectionSelected(KaiSection.GROUPS)
-                    }
-                }
-            )
 
-            KaiDrawerItem(
-                label = stringResource(R.string.reading_challenges),
-                selected = currentSection == KaiSection.CHALLENGES,
-                leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.CHALLENGES) }
-            )
-
-            KaiDrawerItem(
-                label = stringResource(R.string.selected_for_you),
-                selected = currentSection == KaiSection.FOR_YOU,
-                leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.FOR_YOU) }
-            )
-
-            KaiDrawerItem(
-                label = stringResource(R.string.help),
-                selected = currentSection == KaiSection.HELP,
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = TarnishedGold) },
-                onClick = { onSectionSelected(KaiSection.HELP) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            KaiDrawerItem(
-                label = stringResource(R.string.logout),
-                selected = false,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.PowerSettingsNew,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
+                    KaiDrawerItem(
+                        label = stringResource(R.string.reading_challenges),
+                        selected = currentSection == KaiSection.CHALLENGES,
+                        leadingIcon = { Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.CHALLENGES) }
                     )
-                },
-                labelColor = MaterialTheme.colorScheme.error,
-                onClick = onLogout
-            )
+
+                    KaiDrawerItem(
+                        label = stringResource(R.string.selected_for_you),
+                        selected = currentSection == KaiSection.FOR_YOU,
+                        leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.FOR_YOU) }
+                    )
+
+                    KaiDrawerItem(
+                        label = stringResource(R.string.help),
+                        selected = currentSection == KaiSection.HELP,
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.HELP) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(if (compactHeight) 10.dp else 22.dp))
+
+                KaiDrawerItem(
+                    label = stringResource(R.string.logout),
+                    selected = false,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Filled.PowerSettingsNew,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    labelColor = MaterialTheme.colorScheme.error,
+                    onClick = onLogout
+                )
+            }
         }
     }
 }
@@ -520,10 +532,11 @@ private fun KaiDrawerItem(
     onClick: () -> Unit
 ) {
     NavigationDrawerItem(
+        modifier = Modifier.height(46.dp),
         label = {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = labelColor
             )
         },
