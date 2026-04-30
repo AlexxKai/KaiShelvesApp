@@ -62,8 +62,6 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.NotificationsNone
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
@@ -276,11 +274,7 @@ fun DeviceLibraryScreen(
                 topBar = {
                     DeviceLibraryTopBar(
                         onOpenMenu = { scope.launch { drawerState.open() } },
-                        notificationCount = pendingRequestCount,
-                        onOpenNotifications = onOpenNotifications,
-                        hasFolder = uiState.selectedFolderUri != null,
                         fileCount = sortedFiles.size,
-                        isLoading = uiState.isLoading,
                         showSearchPanel = showSearchPanel,
                         onShowSearchPanel = { showSearchPanel = true },
                         onDismissSearchPanel = { showSearchPanel = false },
@@ -288,7 +282,6 @@ fun DeviceLibraryScreen(
                         onDismissFilterPanel = { showFilterPanel = false },
                         onQueryChange = viewModel::onSearchQueryChange,
                         onChooseFolder = { folderLauncher.launch(null) },
-                        onRefresh = viewModel::refresh,
                         onHeightChanged = { heightPx ->
                             topBarHeight = with(density) { heightPx.toDp() }
                         }
@@ -362,11 +355,7 @@ fun DeviceLibraryScreen(
 @Composable
 private fun DeviceLibraryTopBar(
     onOpenMenu: () -> Unit,
-    notificationCount: Int,
-    onOpenNotifications: () -> Unit,
-    hasFolder: Boolean,
     fileCount: Int,
-    isLoading: Boolean,
     showSearchPanel: Boolean,
     onShowSearchPanel: () -> Unit,
     onDismissSearchPanel: () -> Unit,
@@ -374,7 +363,6 @@ private fun DeviceLibraryTopBar(
     onDismissFilterPanel: () -> Unit,
     onQueryChange: (String) -> Unit,
     onChooseFolder: () -> Unit,
-    onRefresh: () -> Unit,
     onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
@@ -415,42 +403,21 @@ private fun DeviceLibraryTopBar(
                 color = TarnishedGold
             )
 
-            Box(contentAlignment = Alignment.TopEnd) {
-                IconButton(onClick = onOpenNotifications) {
-                    Icon(
-                        imageVector = Icons.Filled.NotificationsNone,
-                        contentDescription = stringResource(R.string.open_notifications_center),
-                        tint = TarnishedGold
-                    )
-                }
-
-                if (notificationCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 6.dp, top = 6.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(BloodWine)
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = notificationCount.coerceAtMost(99).toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = OldIvory
-                        )
-                    }
-                }
-            }
+            DeviceLibraryFolderButton(
+                fileCount = fileCount,
+                onClick = onChooseFolder
+            )
         }
 
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp)
+                .padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         showLibraryMenu = !showLibraryMenu
@@ -458,13 +425,13 @@ private fun DeviceLibraryTopBar(
                         onDismissSearchPanel()
                         onDismissFilterPanel()
                     }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Todos los libros",
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = OldIvory,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -477,100 +444,95 @@ private fun DeviceLibraryTopBar(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(
+                onClick = {
+                    onShowSearchPanel()
+                    showLibraryMenu = false
+                    showTopBarOptions = false
+                    onDismissFilterPanel()
+                },
+                modifier = Modifier.size(40.dp)
             ) {
-                IconButton(
-                    onClick = {
-                        onShowSearchPanel()
-                        showLibraryMenu = false
-                        showTopBarOptions = false
-                        onDismissFilterPanel()
-                    }
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = stringResource(R.string.search),
-                        tint = OldIvory
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = stringResource(R.string.search),
+                    tint = OldIvory
+                )
+            }
 
+            IconButton(
+                onClick = {
+                    onDismissSearchPanel()
+                    showLibraryMenu = false
+                    showTopBarOptions = false
+                    onToggleFilterPanel()
+                },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.FilterAlt,
+                    contentDescription = "Filtro",
+                    tint = OldIvory
+                )
+            }
+
+            Box {
                 IconButton(
                     onClick = {
+                        showTopBarOptions = true
+                        showLibraryMenu = false
                         onDismissSearchPanel()
-                        showLibraryMenu = false
-                        showTopBarOptions = false
-                        onToggleFilterPanel()
-                    }
+                        onDismissFilterPanel()
+                    },
+                    modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.FilterAlt,
-                        contentDescription = "Filtro",
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.more_option),
                         tint = OldIvory
                     )
                 }
 
-                IconButton(onClick = onChooseFolder) {
-                    Box(
-                        modifier = Modifier.size(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Folder,
-                            contentDescription = stringResource(R.string.device_library_choose_folder),
-                            tint = TarnishedGold,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Text(
-                            text = fileCount.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Obsidian,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .widthIn(max = 24.dp),
-                            textAlign = TextAlign.Center,
-                            overflow = TextOverflow.Clip
-                        )
-                    }
-                }
-
-                IconButton(onClick = onRefresh, enabled = !isLoading && hasFolder) {
-                    Icon(
-                        imageVector = Icons.Filled.Refresh,
-                        contentDescription = stringResource(R.string.refresh),
-                        tint = if (!isLoading && hasFolder) TarnishedGold else TarnishedGold.copy(alpha = 0.42f)
-                    )
-                }
-
-                Box {
-                    IconButton(
-                        onClick = {
-                            showTopBarOptions = true
-                            showLibraryMenu = false
-                            onDismissSearchPanel()
-                            onDismissFilterPanel()
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = stringResource(R.string.more_option),
-                            tint = OldIvory
-                        )
-                    }
-
-                    DeviceLibraryTopBarOptionsMenu(
-                        expanded = showTopBarOptions,
-                        onDismiss = { showTopBarOptions = false }
-                    )
-                }
+                DeviceLibraryTopBarOptionsMenu(
+                    expanded = showTopBarOptions,
+                    onDismiss = { showTopBarOptions = false }
+                )
             }
         }
 
         when {
             showLibraryMenu -> LibrarySelectorMenu(fileCount = fileCount)
+        }
+    }
+}
+
+@Composable
+private fun DeviceLibraryFolderButton(
+    fileCount: Int,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick) {
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Folder,
+                contentDescription = stringResource(R.string.device_library_choose_folder),
+                tint = TarnishedGold,
+                modifier = Modifier.fillMaxSize()
+            )
+            Text(
+                text = fileCount.coerceAtMost(999).toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Obsidian,
+                maxLines = 1,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .widthIn(max = 26.dp),
+                textAlign = TextAlign.Center,
+                overflow = TextOverflow.Clip
+            )
         }
     }
 }
