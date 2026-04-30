@@ -12,11 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 
 data class DeviceLibraryUiState(
     val selectedFolderUri: String? = null,
     val files: List<DeviceLibraryFile> = emptyList(),
     val searchQuery: String = "",
+    val recentSearches: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 ) {
@@ -46,6 +48,27 @@ class DeviceLibraryViewModel(
 
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    fun commitSearch(query: String) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return
+
+        val updatedSearches = buildList {
+            add(cleanQuery)
+            _uiState.value.recentSearches
+                .filterNot { it.equals(cleanQuery, ignoreCase = true) }
+                .forEach(::add)
+        }.take(MAX_RECENT_SEARCHES)
+
+        persistRecentSearches(updatedSearches)
+        _uiState.update { it.copy(recentSearches = updatedSearches) }
+    }
+
+    fun removeRecentSearch(query: String) {
+        val updatedSearches = _uiState.value.recentSearches.filterNot { it == query }
+        persistRecentSearches(updatedSearches)
+        _uiState.update { it.copy(recentSearches = updatedSearches) }
     }
 
     fun useFolder(uri: Uri) {
@@ -96,11 +119,35 @@ class DeviceLibraryViewModel(
     private fun loadInitialState(): DeviceLibraryUiState {
         val folderUri = preferences.getString(KEY_FOLDER_URI, null)
         return DeviceLibraryUiState(
-            selectedFolderUri = folderUri
+            selectedFolderUri = folderUri,
+            recentSearches = loadRecentSearches()
         )
+    }
+
+    private fun loadRecentSearches(): List<String> {
+        val rawSearches = preferences.getString(KEY_RECENT_SEARCHES, null) ?: return emptyList()
+        return runCatching {
+            val jsonArray = JSONArray(rawSearches)
+            buildList {
+                for (index in 0 until jsonArray.length()) {
+                    val search = jsonArray.optString(index).trim()
+                    if (search.isNotBlank()) add(search)
+                }
+            }.distinct().take(MAX_RECENT_SEARCHES)
+        }.getOrDefault(emptyList())
+    }
+
+    private fun persistRecentSearches(searches: List<String>) {
+        val jsonArray = JSONArray()
+        searches.take(MAX_RECENT_SEARCHES).forEach { jsonArray.put(it) }
+        preferences.edit()
+            .putString(KEY_RECENT_SEARCHES, jsonArray.toString())
+            .apply()
     }
 
     private companion object {
         const val KEY_FOLDER_URI = "folder_uri"
+        const val KEY_RECENT_SEARCHES = "recent_searches"
+        const val MAX_RECENT_SEARCHES = 8
     }
 }

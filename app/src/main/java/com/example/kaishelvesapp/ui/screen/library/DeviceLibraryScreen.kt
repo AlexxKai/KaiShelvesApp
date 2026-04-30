@@ -92,7 +92,6 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -185,7 +184,6 @@ fun DeviceLibraryScreen(
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
-    val recentSearches = remember { mutableStateListOf("alma", "cuerpo", "la chica", "inv", "mil no", "pav", "ese ins") }
     val fileMetadata by produceState<Map<String, DeviceBookDisplayMetadata>>(
         initialValue = emptyMap(),
         uiState.filteredFiles
@@ -218,14 +216,6 @@ fun DeviceLibraryScreen(
         if (sortDescending) sorted.asReversed() else sorted
     }
 
-    fun commitSearch(value: String) {
-        val cleanValue = value.trim()
-        if (cleanValue.isNotBlank()) {
-            recentSearches.remove(cleanValue)
-            recentSearches.add(0, cleanValue)
-            while (recentSearches.size > 7) recentSearches.removeAt(recentSearches.lastIndex)
-        }
-    }
     val folderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -343,10 +333,10 @@ fun DeviceLibraryScreen(
                     topPadding = topBarHeight,
                     query = uiState.searchQuery,
                     files = uiState.files,
-                    recentSearches = recentSearches,
+                    recentSearches = uiState.recentSearches,
                     onQueryChange = viewModel::onSearchQueryChange,
-                    onCommitSearch = { commitSearch(it) },
-                    onRemoveRecentSearch = { recentSearches.remove(it) },
+                    onCommitSearch = viewModel::commitSearch,
+                    onRemoveRecentSearch = viewModel::removeRecentSearch,
                     onDismiss = { showSearchPanel = false }
                 )
             }
