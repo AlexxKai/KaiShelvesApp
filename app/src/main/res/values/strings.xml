@@ -298,8 +298,6 @@
     <string name="language">Language</string>
     <string name="spanish">Spanish</string>
     <string name="english">English</string>
-    <string name="app_language">App language</string>
-
     <string name="profile_subtitle">Check and edit your identity within the archive.</string>
     <string name="edit_profile">Edit profile</string>
     <string name="change_profile_photo">Change profile photo</string>
@@ -337,16 +335,7 @@
     <string name="profile_change_password">Change password</string>
     <string name="profile_link_login_action">Link email access</string>
     <string name="profile_settings_language">Language</string>
-    <string name="profile_settings_notifications">Notifications</string>
     <string name="profile_settings_session_preferences">Session preferences</string>
-    <string name="profile_settings_account_behavior">Account behavior</string>
-    <string name="profile_notifications_enabled">Account notifications</string>
-    <string name="profile_notifications_enabled_body">Keep alerts for requests and account activity enabled on this device.</string>
-    <string name="profile_open_notifications">Open notifications (%1$d)</string>
-    <string name="profile_keep_session_open">Keep session open</string>
-    <string name="profile_keep_session_open_body">Preserve the current access preference while you use the app.</string>
-    <string name="profile_confirm_before_logout">Confirm before signing out</string>
-    <string name="profile_confirm_before_logout_body">Adds a local confirmation preference for account exits.</string>
     <string name="profile_search_intro_animation">Search intro animation</string>
     <string name="profile_search_intro_animation_body">Show the opening animation before the genre cards in Search.</string>
     <string name="profile_privacy_visibility">Visibility</string>

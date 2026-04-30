@@ -35,8 +35,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -118,7 +116,6 @@ fun ProfileScreen(
     onSearch: () -> Unit,
     onScanResult: (String) -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
-    onGoToRegister: () -> Unit,
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
@@ -138,11 +135,7 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val activity = context.findActivity()
-    var expandedLanguage by remember { mutableStateOf(false) }
     var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
-    var accountNotificationsEnabled by remember { mutableStateOf(true) }
-    var keepSessionOpen by remember { mutableStateOf(true) }
-    var confirmBeforeLogout by remember { mutableStateOf(false) }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
     var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
@@ -468,30 +461,17 @@ fun ProfileScreen(
 
                                         ProfileTab.Settings -> {
                                             ProfileSettingsContent(
-                                                expandedLanguage = expandedLanguage,
-                                                onExpandedChange = { expandedLanguage = it },
                                                 onSelectLanguage = { language ->
-                                                    expandedLanguage = false
                                                     activity?.let {
                                                         LanguageManager.setLanguage(it, language)
                                                     }
                                                 },
-                                                notificationsEnabled = accountNotificationsEnabled,
-                                                onNotificationsEnabledChange = { accountNotificationsEnabled = it },
-                                                pendingRequestCount = pendingRequestCount,
-                                                onOpenNotifications = onOpenNotifications,
-                                                keepSessionOpen = keepSessionOpen,
-                                                onKeepSessionOpenChange = { keepSessionOpen = it },
-                                                confirmBeforeLogout = confirmBeforeLogout,
-                                                onConfirmBeforeLogoutChange = { confirmBeforeLogout = it },
                                                 searchIntroAnimationEnabled = privacySettings.searchIntroAnimationEnabled != false,
                                                 onSearchIntroAnimationEnabledChange = {
                                                     viewModel.updatePrivacySettings(
                                                         privacySettings.copy(searchIntroAnimationEnabled = it)
                                                     )
                                                 },
-                                                isGuest = uiState.user?.isGuest == true,
-                                                onGoToRegister = onGoToRegister,
                                                 onLogout = onLogout
                                             )
                                         }
@@ -1053,78 +1033,18 @@ private fun PasswordLoginDialog(
 
 @Composable
 private fun ProfileSettingsContent(
-    expandedLanguage: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onSelectLanguage: (String) -> Unit,
-    notificationsEnabled: Boolean,
-    onNotificationsEnabledChange: (Boolean) -> Unit,
-    pendingRequestCount: Int,
-    onOpenNotifications: () -> Unit,
-    keepSessionOpen: Boolean,
-    onKeepSessionOpenChange: (Boolean) -> Unit,
-    confirmBeforeLogout: Boolean,
-    onConfirmBeforeLogoutChange: (Boolean) -> Unit,
     searchIntroAnimationEnabled: Boolean,
     onSearchIntroAnimationEnabledChange: (Boolean) -> Unit,
-    isGuest: Boolean,
-    onGoToRegister: () -> Unit,
     onLogout: () -> Unit
 ) {
     ProfileSectionBlock(title = stringResource(R.string.profile_settings_language)) {
         LanguageSection(
-            expandedLanguage = expandedLanguage,
-            onExpandedChange = onExpandedChange,
             onSelectLanguage = onSelectLanguage
         )
     }
 
-    ProfileSectionBlock(title = stringResource(R.string.profile_settings_notifications)) {
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_notifications_enabled),
-            body = stringResource(R.string.profile_notifications_enabled_body),
-            checked = notificationsEnabled,
-            onCheckedChange = onNotificationsEnabledChange
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedButton(
-            onClick = onOpenNotifications,
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, TarnishedGold)
-        ) {
-            Text(
-                text = stringResource(R.string.profile_open_notifications, pendingRequestCount),
-                color = TarnishedGold
-            )
-        }
-    }
-
     ProfileSectionBlock(title = stringResource(R.string.profile_settings_session_preferences)) {
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_keep_session_open),
-            body = stringResource(R.string.profile_keep_session_open_body),
-            checked = keepSessionOpen,
-            onCheckedChange = onKeepSessionOpenChange
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = TarnishedGold.copy(alpha = 0.18f)
-        )
-
-        ProfileToggleRow(
-            title = stringResource(R.string.profile_confirm_before_logout),
-            body = stringResource(R.string.profile_confirm_before_logout_body),
-            checked = confirmBeforeLogout,
-            onCheckedChange = onConfirmBeforeLogoutChange
-        )
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 12.dp),
-            color = TarnishedGold.copy(alpha = 0.18f)
-        )
-
         ProfileToggleRow(
             title = stringResource(R.string.profile_search_intro_animation),
             body = stringResource(R.string.profile_search_intro_animation_body),
@@ -1133,26 +1053,12 @@ private fun ProfileSettingsContent(
         )
     }
 
-    ProfileSectionBlock(title = stringResource(R.string.profile_settings_account_behavior)) {
-        if (isGuest) {
-            Button(
-                onClick = onGoToRegister,
-                modifier = Modifier.fillMaxWidth(),
-                colors = KaiShelvesThemeDefaults.primaryButtonColors()
-            ) {
-                Text(stringResource(R.string.create_account_and_sync))
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth(),
-            colors = KaiShelvesThemeDefaults.primaryButtonColors()
-        ) {
-            Text(stringResource(R.string.logout))
-        }
+    Button(
+        onClick = onLogout,
+        modifier = Modifier.fillMaxWidth(),
+        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+    ) {
+        Text(stringResource(R.string.logout))
     }
 }
 
@@ -1555,59 +1461,67 @@ private fun ProfilePhotoCropDialog(
 
 @Composable
 private fun LanguageSection(
-    expandedLanguage: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
     onSelectLanguage: (String) -> Unit
 ) {
-    Text(
-        text = stringResource(R.string.app_language),
-        style = MaterialTheme.typography.labelLarge,
-        color = TarnishedGold
-    )
+    val currentLanguage = LanguageManager.getCurrentLanguage()
 
-    Spacer(modifier = Modifier.height(8.dp))
-
-    Box(
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        OutlinedButton(
-            onClick = { onExpandedChange(true) },
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, TarnishedGold)
+        LanguageOptionButton(
+            text = stringResource(R.string.spanish),
+            selected = currentLanguage == "es",
+            onClick = { onSelectLanguage("es") },
+            modifier = Modifier.weight(1f)
+        )
+
+        LanguageOptionButton(
+            text = stringResource(R.string.english),
+            selected = currentLanguage == "en",
+            onClick = { onSelectLanguage("en") },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun LanguageOptionButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(18.dp)
+
+    if (selected) {
+        Button(
+            onClick = onClick,
+            modifier = modifier.height(48.dp),
+            shape = shape,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TarnishedGold,
+                contentColor = Obsidian
+            )
         ) {
             Text(
-                text = when (LanguageManager.getCurrentLanguage()) {
-                    "en" -> stringResource(R.string.english)
-                    else -> stringResource(R.string.spanish)
-                },
-                color = TarnishedGold
+                text = text,
+                style = MaterialTheme.typography.titleMedium
             )
         }
-
-        DropdownMenu(
-            expanded = expandedLanguage,
-            onDismissRequest = { onExpandedChange(false) },
-            containerColor = Obsidian,
-            modifier = Modifier.fillMaxWidth(0.85f)
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(R.string.spanish),
-                        color = OldIvory
-                    )
-                },
-                onClick = { onSelectLanguage("es") }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.height(48.dp),
+            shape = shape,
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.72f)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = OldIvory
             )
-
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(R.string.english),
-                        color = OldIvory
-                    )
-                },
-                onClick = { onSelectLanguage("en") }
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium
             )
         }
     }

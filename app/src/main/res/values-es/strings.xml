@@ -298,8 +298,6 @@
     <string name="language">Idioma</string>
     <string name="spanish">Español</string>
     <string name="english">Ingles</string>
-    <string name="app_language">Idioma de la aplicacion</string>
-
     <string name="profile_subtitle">Consulta y edita tu identidad dentro del archivo.</string>
     <string name="edit_profile">Editar perfil</string>
     <string name="change_profile_photo">Cambiar foto de perfil</string>
@@ -337,16 +335,7 @@
     <string name="profile_change_password">Cambiar contraseña</string>
     <string name="profile_link_login_action">Asociar acceso con email</string>
     <string name="profile_settings_language">Idioma</string>
-    <string name="profile_settings_notifications">Notificaciones</string>
     <string name="profile_settings_session_preferences">Preferencias de sesión</string>
-    <string name="profile_settings_account_behavior">Comportamiento de la cuenta</string>
-    <string name="profile_notifications_enabled">Notificaciones de la cuenta</string>
-    <string name="profile_notifications_enabled_body">Mantiene activas las alertas de solicitudes y actividad de cuenta en este dispositivo.</string>
-    <string name="profile_open_notifications">Abrir notificaciones (%1$d)</string>
-    <string name="profile_keep_session_open">Mantener sesión abierta</string>
-    <string name="profile_keep_session_open_body">Conserva la preferencia de acceso actual mientras usas la aplicación.</string>
-    <string name="profile_confirm_before_logout">Confirmar antes de cerrar sesión</string>
-    <string name="profile_confirm_before_logout_body">Añade una preferencia local de confirmación para salir de la cuenta.</string>
     <string name="profile_search_intro_animation">Animación de entrada en Búsqueda</string>
     <string name="profile_search_intro_animation_body">Muestra la animación inicial antes de los cards de géneros en Búsqueda.</string>
     <string name="profile_privacy_visibility">Visibilidad</string>
