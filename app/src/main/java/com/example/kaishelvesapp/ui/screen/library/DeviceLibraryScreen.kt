@@ -11,6 +11,8 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.text.format.Formatter
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -121,7 +123,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -155,6 +159,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import java.io.File
+import java.net.URL
 
 private enum class DeviceLibraryLayoutMode {
     List,
@@ -198,6 +204,7 @@ fun DeviceLibraryScreen(
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
     var showImportBooksDialog by remember { mutableStateOf(false) }
+    var showDefaultCoverScreen by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
     val fileMetadata by produceState<Map<String, DeviceBookDisplayMetadata>>(
         initialValue = emptyMap(),
@@ -297,6 +304,7 @@ fun DeviceLibraryScreen(
                         onQueryChange = viewModel::onSearchQueryChange,
                         onChooseFolder = { folderLauncher.launch(null) },
                         onImportBooks = { showImportBooksDialog = true },
+                        onDefaultCover = { showDefaultCoverScreen = true },
                         onHeightChanged = { heightPx ->
                             topBarHeight = with(density) { heightPx.toDp() }
                         }
@@ -378,6 +386,12 @@ fun DeviceLibraryScreen(
                     }
                 )
             }
+
+            if (showDefaultCoverScreen) {
+                DefaultCoverScreen(
+                    onDismiss = { showDefaultCoverScreen = false }
+                )
+            }
         }
     }
 }
@@ -394,6 +408,7 @@ private fun DeviceLibraryTopBar(
     onQueryChange: (String) -> Unit,
     onChooseFolder: () -> Unit,
     onImportBooks: () -> Unit,
+    onDefaultCover: () -> Unit,
     onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
@@ -530,6 +545,10 @@ private fun DeviceLibraryTopBar(
                     onImportBooks = {
                         showTopBarOptions = false
                         onImportBooks()
+                    },
+                    onDefaultCover = {
+                        showTopBarOptions = false
+                        onDefaultCover()
                     }
                 )
             }
@@ -576,7 +595,8 @@ private fun DeviceLibraryFolderButton(
 private fun DeviceLibraryTopBarOptionsMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    onImportBooks: () -> Unit
+    onImportBooks: () -> Unit,
+    onDefaultCover: () -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -593,7 +613,7 @@ private fun DeviceLibraryTopBarOptionsMenu(
         )
         DeviceLibraryBookOptionItem(
             text = "Cubierta por defecto",
-            onClick = onDismiss
+            onClick = onDefaultCover
         )
         DeviceLibraryBookOptionItem(
             text = "Reconstruir portadas de libros",
@@ -607,6 +627,593 @@ private fun DeviceLibraryTopBarOptionsMenu(
             text = "Seleccionar todo",
             onClick = onDismiss
         )
+    }
+}
+
+private data class DefaultCoverOption(
+    val id: String,
+    val resourceId: Int? = null,
+    val file: File? = null,
+    val uri: Uri? = null,
+    val displayName: String? = null
+) {
+    val isUserAdded: Boolean
+        get() = resourceId == null
+
+    val isDownloaded: Boolean
+        get() = displayName.orEmpty().startsWith("download_", ignoreCase = true)
+}
+
+private val BuiltInDefaultCoverOptions: List<DefaultCoverOption> by lazy {
+    R.drawable::class.java.fields
+        .mapNotNull { field ->
+            val name = field.name
+            if (!isDefaultCoverResourceName(name)) return@mapNotNull null
+            DefaultCoverOption(id = name, resourceId = field.getInt(null))
+        }
+        .sortedBy { it.id.lowercase(Locale.ROOT) }
+}
+
+private var selectedDefaultCoverIdState by mutableStateOf<String?>(null)
+
+@Composable
+private fun DefaultCoverScreen(
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var selectedCoverId by remember { mutableStateOf(readDefaultCoverId(context)) }
+    var backgroundTreeUriText by remember { mutableStateOf(readDefaultCoverStorageTreeUri(context)) }
+    val backgroundTreeUri = remember(backgroundTreeUriText) { backgroundTreeUriText?.let(Uri::parse) }
+    var downloadedCovers by remember(backgroundTreeUriText) {
+        mutableStateOf(loadDownloadedDefaultCovers(context, backgroundTreeUri))
+    }
+    var showDownloadWindow by remember { mutableStateOf(false) }
+    var openDownloadAfterFolderSelection by remember { mutableStateOf(false) }
+    var coverToRename by remember { mutableStateOf<DefaultCoverOption?>(null) }
+    val displayedBackgroundPath = remember(backgroundTreeUriText) {
+        backgroundTreeUri?.let(::readableImportRootPath) ?: "/sdcard/backgrounds"
+    }
+    val backgroundFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+            backgroundTreeUriText = uri.toString()
+            saveDefaultCoverStorageTreeUri(context, uri)
+            downloadedCovers = loadDownloadedDefaultCovers(context, uri)
+            if (openDownloadAfterFolderSelection) {
+                openDownloadAfterFolderSelection = false
+                showDownloadWindow = true
+            }
+        }
+    }
+    val albumLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            scope.launch {
+                val savedCovers = withContext(Dispatchers.IO) {
+                    uris.mapNotNull { uri ->
+                        saveImageUriToDefaultCovers(context, uri, backgroundTreeUri)
+                    }
+                }
+                if (savedCovers.isNotEmpty()) {
+                    downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
+                    selectedCoverId = savedCovers.last().id
+                    saveDefaultCoverId(context, selectedCoverId)
+                }
+            }
+        }
+    }
+    val allCovers = remember(downloadedCovers) {
+        BuiltInDefaultCoverOptions + downloadedCovers
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .zIndex(20f)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .background(Color(0xFF171717))
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                        tint = OldIvory
+                    )
+                }
+                Text(
+                    text = "Cubierta por defecto",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = OldIvory,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 86.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(allCovers, key = { it.id }) { cover ->
+                    DefaultCoverTile(
+                        cover = cover,
+                        selected = cover.id == selectedCoverId,
+                        onClick = {
+                            selectedCoverId = cover.id
+                            saveDefaultCoverId(context, cover.id)
+                        },
+                        onRename = { coverToRename = cover },
+                        onDelete = {
+                            scope.launch {
+                                val deleted = withContext(Dispatchers.IO) {
+                                    deleteDefaultCover(context, cover)
+                                }
+                                if (deleted) {
+                                    if (selectedCoverId == cover.id) {
+                                        selectedCoverId = BuiltInDefaultCoverOptions.firstOrNull()?.id.orEmpty()
+                                        saveDefaultCoverId(context, selectedCoverId)
+                                    }
+                                    downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Color(0xFF1C1C1C))
+                .navigationBarsPadding()
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            TextButton(
+                onClick = {
+                    if (backgroundTreeUri == null) {
+                        openDownloadAfterFolderSelection = true
+                        backgroundFolderLauncher.launch(null)
+                    } else {
+                        showDownloadWindow = true
+                    }
+                },
+                modifier = Modifier.border(1.dp, OldIvory.copy(alpha = 0.72f), RoundedCornerShape(2.dp))
+            ) {
+                Text(text = "Descargar", color = OldIvory)
+            }
+            TextButton(
+                onClick = { albumLauncher.launch("image/*") },
+                modifier = Modifier.border(1.dp, OldIvory.copy(alpha = 0.72f), RoundedCornerShape(2.dp))
+            ) {
+                Text(text = "Álbum", color = OldIvory)
+            }
+            Text(
+                text = backgroundTreeUri?.let { displayedBackgroundPath } ?: "Seleccionar carpeta",
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(2.dp))
+                    .clickable { backgroundFolderLauncher.launch(null) }
+                    .padding(horizontal = 10.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                imageVector = Icons.Filled.Folder,
+                contentDescription = "Elegir carpeta de fondos",
+                tint = OldIvory,
+                modifier = Modifier
+                    .size(30.dp)
+                    .clickable { backgroundFolderLauncher.launch(null) }
+            )
+        }
+    }
+
+    if (showDownloadWindow) {
+        BackgroundImageSearchDialog(
+            backgroundTreeUri = backgroundTreeUri,
+            onDismiss = { showDownloadWindow = false },
+            onImageSaved = { savedCover ->
+                downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
+                selectedCoverId = savedCover.id
+                saveDefaultCoverId(context, selectedCoverId)
+                showDownloadWindow = false
+            }
+        )
+    }
+
+    coverToRename?.let { cover ->
+        RenameDefaultCoverDialog(
+            cover = cover,
+            onDismiss = { coverToRename = null },
+            onRename = { newName ->
+                scope.launch {
+                    val renamedCover = withContext(Dispatchers.IO) {
+                        renameDefaultCover(context, cover, newName)
+                    }
+                    if (renamedCover != null) {
+                        if (selectedCoverId == cover.id) {
+                            selectedCoverId = renamedCover.id
+                            saveDefaultCoverId(context, selectedCoverId)
+                        }
+                        downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
+                    }
+                    coverToRename = null
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun DefaultCoverTile(
+    cover: DefaultCoverOption,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.68f)
+            .clickable(onClick = onClick)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) Color(0xFF5AA7E8) else Color.Black
+            )
+    ) {
+        when {
+            cover.resourceId != null -> Image(
+                painter = painterResource(cover.resourceId),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            cover.file != null -> {
+                val bitmap by produceState<Bitmap?>(initialValue = null, cover.file) {
+                    value = withContext(Dispatchers.IO) {
+                        BitmapFactory.decodeFile(cover.file.absolutePath)
+                    }
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+            cover.uri != null -> {
+                val context = LocalContext.current
+                val bitmap by produceState<Bitmap?>(initialValue = null, cover.uri) {
+                    value = withContext(Dispatchers.IO) {
+                        runCatching {
+                            context.contentResolver.openInputStream(cover.uri)?.use(BitmapFactory::decodeStream)
+                        }.getOrNull()
+                    }
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+
+        if (cover.isDownloaded) {
+            Text(
+                text = cover.displayName.orEmpty().substringBeforeLast('.'),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.38f))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = OldIvory,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        if (cover.isUserAdded) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(3.dp)
+            ) {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.more_option),
+                        tint = OldIvory,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    containerColor = Color(0xFF262626)
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Renombrar",
+                                color = OldIvory,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onRename()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Borrar",
+                                color = OldIvory,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenameDefaultCoverDialog(
+    cover: DefaultCoverOption,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit
+) {
+    val currentName = cover.displayName
+        ?: cover.file?.name
+        ?: "cubierta"
+    var newName by remember(cover.id) { mutableStateOf(currentName.substringBeforeLast('.')) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1C))
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Renombrar",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = OldIvory
+                )
+                ImportDialogTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Cancelar", color = OldIvory)
+                    }
+                    TextButton(
+                        onClick = { onRename(newName) },
+                        enabled = newName.isNotBlank()
+                    ) {
+                        Text(text = "Aceptar", color = OldIvory)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundImageSearchDialog(
+    backgroundTreeUri: Uri?,
+    onDismiss: () -> Unit,
+    onImageSaved: (DefaultCoverOption) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
+    val selectedImagePreview by produceState<Bitmap?>(initialValue = null, selectedImageUrl) {
+        value = withContext(Dispatchers.IO) {
+            selectedImageUrl?.let { url ->
+                runCatching {
+                    URL(url).openStream().use(BitmapFactory::decodeStream)
+                }.getOrNull()
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(0.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                        .background(Color(0xFF171717))
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                            tint = OldIvory
+                        )
+                    }
+                    Text(
+                        text = "Imagen de fondo",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = OldIvory,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                AndroidView(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    factory = { viewContext ->
+                        WebView(viewContext).apply {
+                            webViewClient = WebViewClient()
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            setOnLongClickListener {
+                                val hit = hitTestResult
+                                val url = hit.extra
+                                if (
+                                    url != null &&
+                                    (hit.type == WebView.HitTestResult.IMAGE_TYPE ||
+                                        hit.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE)
+                                ) {
+                                    selectedImageUrl = url
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            loadUrl("https://www.google.com/search?tbm=isch&q=Imagen%20de%20fondo")
+                        }
+                    }
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFD9D9D9))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (selectedImagePreview != null) {
+                        Image(
+                            bitmap = selectedImagePreview!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(width = 62.dp, height = 46.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    Text(
+                        text = selectedImageUrl?.let { "Imagen seleccionada" }
+                            ?: "Consejo: Realice una pulsación larga para seleccionar una imagen",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF5F5F5F),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black)
+                        .navigationBarsPadding()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFF242424), RoundedCornerShape(6.dp))
+                    ) {
+                        Text(text = "Cancelar", color = OldIvory)
+                    }
+                    TextButton(
+                        enabled = selectedImageUrl != null && !isSaving,
+                        onClick = {
+                            val url = selectedImageUrl ?: return@TextButton
+                            isSaving = true
+                            scope.launch {
+                                val savedCover = withContext(Dispatchers.IO) {
+                                    downloadImageToDefaultCovers(context, url, backgroundTreeUri)
+                                }
+                                isSaving = false
+                                if (savedCover != null) {
+                                    onImageSaved(savedCover)
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "No se pudo guardar la imagen",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFF242424), RoundedCornerShape(6.dp))
+                    ) {
+                        Text(text = if (isSaving) "Guardando" else "Aceptar", color = OldIvory)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1299,6 +1906,265 @@ private fun importFileAccent(name: String): Color {
         else -> Color(0xFF6E7781)
     }
 }
+
+private fun isDefaultCoverResourceName(name: String): Boolean {
+    val excludedNames = setOf(
+        "bg_bookshelf",
+        "ic_launcher_background",
+        "ic_launcher_foreground",
+        "logo_kaishelves",
+        "logo_kaishelves2"
+    )
+    return name !in excludedNames &&
+        !name.startsWith("sesion_") &&
+        !name.startsWith("ic_")
+}
+
+private fun readDefaultCoverId(context: Context): String {
+    val fallbackCoverId = BuiltInDefaultCoverOptions.firstOrNull()?.id.orEmpty()
+    return context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
+        .getString(DEFAULT_COVER_KEY, fallbackCoverId)
+        ?: fallbackCoverId
+}
+
+private fun saveDefaultCoverId(context: Context, coverId: String) {
+    selectedDefaultCoverIdState = coverId
+    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(DEFAULT_COVER_KEY, coverId)
+        .apply()
+}
+
+private fun findDefaultCoverOption(context: Context, coverId: String): DefaultCoverOption? {
+    val fallbackCover = BuiltInDefaultCoverOptions.firstOrNull()
+    return BuiltInDefaultCoverOptions.firstOrNull { it.id == coverId }
+        ?: File(coverId).takeIf { it.exists() }?.let { file ->
+            DefaultCoverOption(id = file.absolutePath, file = file, displayName = file.name)
+        }
+        ?: coverId.takeIf { it.startsWith("content://") }?.let { uriText ->
+            val uri = Uri.parse(uriText)
+            if (canOpenContentUri(context, uri)) {
+                DefaultCoverOption(id = uriText, uri = uri)
+            } else {
+                fallbackCover?.also { saveDefaultCoverId(context, it.id) }
+            }
+        }
+        ?: fallbackCover
+}
+
+private fun canOpenContentUri(context: Context, uri: Uri): Boolean {
+    return runCatching {
+        context.contentResolver.openInputStream(uri)?.use { true } == true
+    }.getOrDefault(false)
+}
+
+private fun loadDownloadedDefaultCovers(context: Context, treeUri: Uri?): List<DefaultCoverOption> {
+    val internalCovers = defaultCoversDir(context)
+        .listFiles { file ->
+            file.isFile && file.extension.lowercase(Locale.ROOT) in imageExtensions
+        }
+        ?.sortedBy { it.name.lowercase(Locale.ROOT) }
+        ?.map { file -> DefaultCoverOption(id = file.absolutePath, file = file, displayName = file.name) }
+        .orEmpty()
+
+    val treeCovers = treeUri?.let { loadTreeDefaultCovers(context, it) }.orEmpty()
+    return (internalCovers + treeCovers).distinctBy { it.id }
+}
+
+private fun saveImageUriToDefaultCovers(context: Context, uri: Uri, treeUri: Uri?): DefaultCoverOption? {
+    return runCatching {
+        val extension = uri.lastPathSegment
+            ?.substringAfterLast('.', missingDelimiterValue = "jpg")
+            ?.lowercase(Locale.ROOT)
+            ?.takeIf { it in imageExtensions }
+            ?: "jpg"
+        val fileName = "album_${System.currentTimeMillis()}.$extension"
+        treeUri?.let { targetTree ->
+            return createImageInTree(context, targetTree, fileName, uri)
+        }
+        val target = File(defaultCoversDir(context), fileName)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        } ?: return null
+        DefaultCoverOption(id = target.absolutePath, file = target, displayName = target.name)
+    }.getOrNull()
+}
+
+private fun downloadImageToDefaultCovers(context: Context, imageUrl: String, treeUri: Uri?): DefaultCoverOption? {
+    return runCatching {
+        val extension = imageUrl.substringBefore('?')
+            .substringAfterLast('.', missingDelimiterValue = "jpg")
+            .lowercase(Locale.ROOT)
+            .takeIf { it in imageExtensions }
+            ?: "jpg"
+        val fileName = "download_${System.currentTimeMillis()}.$extension"
+        treeUri?.let { targetTree ->
+            val bytes = URL(imageUrl).openStream().use { it.readBytes() }
+            return createImageBytesInTree(context, targetTree, fileName, bytes)
+        }
+        val target = File(defaultCoversDir(context), fileName)
+        URL(imageUrl).openStream().use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        DefaultCoverOption(id = target.absolutePath, file = target, displayName = target.name)
+    }.getOrNull()
+}
+
+private fun loadTreeDefaultCovers(context: Context, treeUri: Uri): List<DefaultCoverOption> {
+    return runCatching {
+        val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootDocumentId)
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        buildList {
+            context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                while (cursor.moveToNext()) {
+                    val documentId = cursor.getString(idIndex)
+                    val name = cursor.getString(nameIndex).orEmpty()
+                    val mimeType = cursor.getString(mimeIndex).orEmpty()
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) continue
+                    if (name.substringAfterLast('.', "").lowercase(Locale.ROOT) !in imageExtensions) continue
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+                    add(DefaultCoverOption(id = uri.toString(), uri = uri, displayName = name))
+                }
+            }
+        }.sortedBy { option ->
+            option.uri?.lastPathSegment.orEmpty().lowercase(Locale.ROOT)
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun createImageInTree(
+    context: Context,
+    treeUri: Uri,
+    fileName: String,
+    sourceUri: Uri
+): DefaultCoverOption? {
+    val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+    val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocumentId)
+    val targetUri = DocumentsContract.createDocument(
+        context.contentResolver,
+        rootDocumentUri,
+        mimeTypeForImageName(fileName),
+        fileName
+    ) ?: return null
+    context.contentResolver.openInputStream(sourceUri)?.use { input ->
+        context.contentResolver.openOutputStream(targetUri)?.use { output ->
+            input.copyTo(output)
+        }
+    } ?: return null
+    return DefaultCoverOption(id = targetUri.toString(), uri = targetUri, displayName = fileName)
+}
+
+private fun createImageBytesInTree(
+    context: Context,
+    treeUri: Uri,
+    fileName: String,
+    bytes: ByteArray
+): DefaultCoverOption? {
+    val rootDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+    val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocumentId)
+    val targetUri = DocumentsContract.createDocument(
+        context.contentResolver,
+        rootDocumentUri,
+        mimeTypeForImageName(fileName),
+        fileName
+    ) ?: return null
+    context.contentResolver.openOutputStream(targetUri)?.use { output ->
+        output.write(bytes)
+    } ?: return null
+    return DefaultCoverOption(id = targetUri.toString(), uri = targetUri, displayName = fileName)
+}
+
+private fun renameDefaultCover(
+    context: Context,
+    cover: DefaultCoverOption,
+    rawName: String
+): DefaultCoverOption? {
+    val cleanBaseName = rawName.trim().ifBlank { return null }
+        .replace(Regex("""[\\/:*?"<>|]"""), "_")
+    val extension = cover.displayName
+        ?.substringAfterLast('.', "")
+        ?.takeIf { it.isNotBlank() }
+        ?: cover.file?.extension?.takeIf { it.isNotBlank() }
+        ?: "jpg"
+    val newDisplayName = if (cleanBaseName.endsWith(".$extension", ignoreCase = true)) {
+        cleanBaseName
+    } else {
+        "$cleanBaseName.$extension"
+    }
+
+    cover.file?.let { file ->
+        val target = File(file.parentFile ?: defaultCoversDir(context), newDisplayName)
+        return if (file.renameTo(target)) {
+            DefaultCoverOption(id = target.absolutePath, file = target, displayName = target.name)
+        } else {
+            null
+        }
+    }
+
+    cover.uri?.let { uri ->
+        val renamedUri = DocumentsContract.renameDocument(
+            context.contentResolver,
+            uri,
+            newDisplayName
+        ) ?: return null
+        return DefaultCoverOption(
+            id = renamedUri.toString(),
+            uri = renamedUri,
+            displayName = newDisplayName
+        )
+    }
+
+    return null
+}
+
+private fun deleteDefaultCover(context: Context, cover: DefaultCoverOption): Boolean {
+    cover.file?.let { file ->
+        return file.delete()
+    }
+    cover.uri?.let { uri ->
+        return runCatching {
+            DocumentsContract.deleteDocument(context.contentResolver, uri)
+        }.getOrDefault(false)
+    }
+    return false
+}
+
+private fun readDefaultCoverStorageTreeUri(context: Context): String? {
+    return context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
+        .getString(DEFAULT_COVER_STORAGE_TREE_KEY, null)
+}
+
+private fun saveDefaultCoverStorageTreeUri(context: Context, treeUri: Uri) {
+    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(DEFAULT_COVER_STORAGE_TREE_KEY, treeUri.toString())
+        .apply()
+}
+
+private fun mimeTypeForImageName(fileName: String): String {
+    return when (fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)) {
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        else -> "image/jpeg"
+    }
+}
+
+private fun defaultCoversDir(context: Context): File {
+    return File(context.filesDir, "backgrounds").apply { mkdirs() }
+}
+
+private const val DEFAULT_COVER_PREFS = "device_library_default_cover"
+private const val DEFAULT_COVER_KEY = "selected_cover"
+private const val DEFAULT_COVER_STORAGE_TREE_KEY = "storage_tree_uri"
+private val imageExtensions = setOf("jpg", "jpeg", "png", "webp")
 
 private fun Set<String>.toggleItem(item: String, checked: Boolean): Set<String> {
     return if (checked) this + item else this - item
@@ -2596,34 +3462,87 @@ private fun FilePagePreview(
 
 @Composable
 private fun FallbackBookPreview(file: DeviceLibraryFile) {
+    val context = LocalContext.current
+    val defaultCoverId = selectedDefaultCoverIdState ?: remember { readDefaultCoverId(context) }
+    val defaultCover = remember(defaultCoverId) { findDefaultCoverOption(context, defaultCoverId) }
+    val fileCoverBitmap by produceState<Bitmap?>(initialValue = null, defaultCover?.file) {
+        value = withContext(Dispatchers.IO) {
+            defaultCover?.file?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        }
+    }
+    val uriCoverBitmap by produceState<Bitmap?>(initialValue = null, defaultCover?.uri) {
+        value = withContext(Dispatchers.IO) {
+            defaultCover?.uri?.let { uri ->
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+                }.getOrNull()
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        OldIvory,
-                        Color(0xFFC8B89F)
-                    )
-                )
-            )
-            .padding(5.dp),
+            .background(OldIvory.copy(alpha = 0.92f)),
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.Start
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-            contentDescription = null,
-            tint = DeepWalnut,
-            modifier = Modifier.size(14.dp)
-        )
-        Text(
-            text = file.name.substringBeforeLast('.').take(18),
-            style = MaterialTheme.typography.labelSmall,
-            color = DeepWalnut,
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                defaultCover?.resourceId != null -> Image(
+                    painter = painterResource(defaultCover.resourceId),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                fileCoverBitmap != null -> Image(
+                    bitmap = fileCoverBitmap!!.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                uriCoverBitmap != null -> Image(
+                    bitmap = uriCoverBitmap!!.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                else -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    OldIvory,
+                                    Color(0xFFC8B89F)
+                                )
+                            )
+                        )
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(5.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.Start
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                    contentDescription = null,
+                    tint = DeepWalnut,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = file.name.substringBeforeLast('.').take(18),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DeepWalnut,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
