@@ -9,6 +9,7 @@ import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.provider.DocumentsContract
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -51,15 +53,20 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -89,6 +96,9 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -113,10 +123,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -184,6 +197,7 @@ fun DeviceLibraryScreen(
     var sortDescending by remember { mutableStateOf(false) }
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
+    var showImportBooksDialog by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
     val fileMetadata by produceState<Map<String, DeviceBookDisplayMetadata>>(
         initialValue = emptyMap(),
@@ -282,6 +296,7 @@ fun DeviceLibraryScreen(
                         onDismissFilterPanel = { showFilterPanel = false },
                         onQueryChange = viewModel::onSearchQueryChange,
                         onChooseFolder = { folderLauncher.launch(null) },
+                        onImportBooks = { showImportBooksDialog = true },
                         onHeightChanged = { heightPx ->
                             topBarHeight = with(density) { heightPx.toDp() }
                         }
@@ -348,6 +363,21 @@ fun DeviceLibraryScreen(
                     onDismiss = { showFilterPanel = false }
                 )
             }
+
+            if (showImportBooksDialog) {
+                ImportBooksDialog(
+                    initialTreeUri = uiState.selectedFolderUri?.let(Uri::parse),
+                    onDismiss = { showImportBooksDialog = false },
+                    onAccept = {
+                        showImportBooksDialog = false
+                        Toast.makeText(
+                            context,
+                            "Importación configurada",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                )
+            }
         }
     }
 }
@@ -363,6 +393,7 @@ private fun DeviceLibraryTopBar(
     onDismissFilterPanel: () -> Unit,
     onQueryChange: (String) -> Unit,
     onChooseFolder: () -> Unit,
+    onImportBooks: () -> Unit,
     onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
@@ -495,7 +526,11 @@ private fun DeviceLibraryTopBar(
 
                 DeviceLibraryTopBarOptionsMenu(
                     expanded = showTopBarOptions,
-                    onDismiss = { showTopBarOptions = false }
+                    onDismiss = { showTopBarOptions = false },
+                    onImportBooks = {
+                        showTopBarOptions = false
+                        onImportBooks()
+                    }
                 )
             }
         }
@@ -540,7 +575,8 @@ private fun DeviceLibraryFolderButton(
 @Composable
 private fun DeviceLibraryTopBarOptionsMenu(
     expanded: Boolean,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onImportBooks: () -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -553,7 +589,7 @@ private fun DeviceLibraryTopBarOptionsMenu(
     ) {
         DeviceLibraryBookOptionItem(
             text = "Importar libros",
-            onClick = onDismiss
+            onClick = onImportBooks
         )
         DeviceLibraryBookOptionItem(
             text = "Cubierta por defecto",
@@ -572,6 +608,700 @@ private fun DeviceLibraryTopBarOptionsMenu(
             onClick = onDismiss
         )
     }
+}
+
+@Composable
+private fun ImportBooksDialog(
+    initialTreeUri: Uri?,
+    onDismiss: () -> Unit,
+    onAccept: () -> Unit
+) {
+    val context = LocalContext.current
+    val fileTypeRows = remember {
+        listOf(
+            "EPUB" to "PDF/DJVU",
+            "FB2" to "MOBI/AZW3/PRC",
+            "CHM/UMD" to "DOCX/ODT/RTF",
+            "TXT/MD" to "HTML/MHTML",
+            "CBZ/CBR" to null
+        )
+    }
+    val categories = remember {
+        listOf(
+            "Categoría (opcional)",
+            "Sin categoría",
+            "Leyendo",
+            "Pendientes",
+            "Leídos",
+            "Favoritos"
+        )
+    }
+    var importTreeUri by remember(initialTreeUri) { mutableStateOf(initialTreeUri) }
+    var folderPath by remember(initialTreeUri) {
+        mutableStateOf(initialTreeUri?.let(::readableImportRootPath) ?: "/sdcard/Ac ebooks")
+    }
+    var showAdvancedOptions by remember { mutableStateOf(false) }
+    var showFolderBrowser by remember { mutableStateOf(false) }
+    var selectedFileTypes by remember {
+        mutableStateOf(fileTypeRows.flatMap { listOfNotNull(it.first, it.second) }.toSet())
+    }
+    var minimumSizeKb by remember { mutableStateOf("1") }
+    var favorite by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf(categories.first()) }
+    var showCategoryMenu by remember { mutableStateOf(false) }
+    val importFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            importTreeUri = uri
+            folderPath = readableImportRootPath(uri)
+            showFolderBrowser = true
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .widthIn(max = 390.dp),
+            shape = RoundedCornerShape(6.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1C)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Text(
+                    text = "Importar libros",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = OldIvory,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ImportDialogPathSelector(
+                        value = folderPath,
+                        onClick = {
+                            if (importTreeUri == null) {
+                                importFolderLauncher.launch(null)
+                            } else {
+                                showFolderBrowser = true
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    ImportDialogArrowButton(
+                        expanded = showAdvancedOptions,
+                        onClick = { showAdvancedOptions = !showAdvancedOptions },
+                        contentDescription = "Mostrar opciones de importación"
+                    )
+                }
+
+                if (showAdvancedOptions) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        fileTypeRows.forEach { (leftType, rightType) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ImportOptionCheckbox(
+                                    text = leftType,
+                                    checked = leftType in selectedFileTypes,
+                                    onCheckedChange = { checked ->
+                                        selectedFileTypes = selectedFileTypes.toggleItem(leftType, checked)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (rightType != null) {
+                                    ImportOptionCheckbox(
+                                        text = rightType,
+                                        checked = rightType in selectedFileTypes,
+                                        onCheckedChange = { checked ->
+                                            selectedFileTypes = selectedFileTypes.toggleItem(rightType, checked)
+                                        },
+                                        modifier = Modifier.weight(1.35f)
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.weight(1.35f))
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Tamaño del archivo >",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = OldIvory
+                            )
+                            ImportDialogTextField(
+                                value = minimumSizeKb,
+                                onValueChange = { newValue ->
+                                    minimumSizeKb = newValue.filter(Char::isDigit).ifBlank { "0" }
+                                },
+                                modifier = Modifier.width(56.dp),
+                                keyboardType = KeyboardType.Number
+                            )
+                            Text(
+                                text = "KB",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = OldIvory
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            ImportOptionCheckbox(
+                                text = "Favorito",
+                                checked = favorite,
+                                onCheckedChange = { favorite = it },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            Box(modifier = Modifier.weight(1.7f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ImportDialogTextField(
+                                        value = selectedCategory,
+                                        onValueChange = { selectedCategory = it },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    ImportDialogArrowButton(
+                                        expanded = showCategoryMenu,
+                                        onClick = { showCategoryMenu = !showCategoryMenu },
+                                        contentDescription = "Seleccionar categoría"
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showCategoryMenu,
+                                    onDismissRequest = { showCategoryMenu = false },
+                                    modifier = Modifier.widthIn(min = 190.dp),
+                                    containerColor = Color(0xFF262626)
+                                ) {
+                                    categories.forEach { category ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = category,
+                                                    color = OldIvory,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedCategory = category
+                                                showCategoryMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "CANCELAR", color = OldIvory)
+                    }
+                    TextButton(onClick = onAccept) {
+                        Text(text = "ACEPTAR", color = OldIvory)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFolderBrowser) {
+        val treeUri = importTreeUri
+        if (treeUri != null) {
+            ImportFolderBrowserDialog(
+                treeUri = treeUri,
+                initialPath = folderPath,
+                onChooseDifferentRoot = { importFolderLauncher.launch(null) },
+                onDismiss = { showFolderBrowser = false },
+                onFolderSelected = { path ->
+                    folderPath = path
+                    showFolderBrowser = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImportDialogPathSelector(
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .height(56.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .clickable(onClick = onClick)
+            .padding(top = 16.dp),
+        verticalArrangement = Arrangement.Bottom
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+        HorizontalDivider(color = Color(0xFF348CD6), thickness = 1.dp)
+    }
+}
+
+@Composable
+private fun ImportFolderBrowserDialog(
+    treeUri: Uri,
+    initialPath: String,
+    onChooseDifferentRoot: () -> Unit,
+    onDismiss: () -> Unit,
+    onFolderSelected: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val rootDocumentId = remember(treeUri) { DocumentsContract.getTreeDocumentId(treeUri) }
+    var currentDocumentId by remember(treeUri) { mutableStateOf(rootDocumentId) }
+    var currentPath by remember(treeUri, initialPath) { mutableStateOf(readableImportRootPath(treeUri)) }
+    val entriesState by produceState<Result<List<ImportBrowserEntry>>>(
+        initialValue = Result.success(emptyList()),
+        treeUri,
+        currentDocumentId
+    ) {
+        value = runCatching {
+            withContext(Dispatchers.IO) {
+                loadImportBrowserEntries(context, treeUri, currentDocumentId, currentPath)
+            }
+        }
+    }
+    val entries = entriesState.getOrDefault(emptyList())
+    val parentPath = currentPath.substringBeforeLast('/', missingDelimiterValue = currentPath)
+    val canGoBack = currentDocumentId != rootDocumentId
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.96f),
+            shape = RoundedCornerShape(0.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(Color(0xFF171717))
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = {
+                        if (canGoBack) {
+                            currentDocumentId = currentDocumentId.substringBeforeLast('/')
+                            currentPath = parentPath
+                        } else {
+                            onDismiss()
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = OldIvory
+                        )
+                    }
+                    Text(
+                        text = "Importar libros",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = OldIvory,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    IconButton(onClick = onChooseDifferentRoot) {
+                        Icon(
+                            imageVector = Icons.Filled.FolderOpen,
+                            contentDescription = "Elegir otra carpeta",
+                            tint = OldIvory
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .background(Color(0xFF202020))
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    currentPath.split('/')
+                        .filter { it.isNotBlank() }
+                        .forEachIndexed { index, segment ->
+                            Text(
+                                text = if (index == 0) "/$segment" else segment,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = OldIvory,
+                                maxLines = 1
+                            )
+                            if (index < currentPath.split('/').filter { it.isNotBlank() }.lastIndex) {
+                                Text(text = ">", color = OldIvory.copy(alpha = 0.45f))
+                            }
+                        }
+                }
+
+                if (entriesState.isFailure) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(18.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DeviceLibraryMessage(
+                            title = "No se pudo abrir la carpeta",
+                            body = entriesState.exceptionOrNull()?.localizedMessage.orEmpty()
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        items(entries) { entry ->
+                            ImportBrowserEntryRow(
+                                entry = entry,
+                                onClick = {
+                                    if (entry.isDirectory) {
+                                        currentDocumentId = entry.documentId
+                                        currentPath = entry.path
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1D1D1D))
+                        .navigationBarsPadding()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Ruta: $currentPath",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF2B2B2B), RoundedCornerShape(6.dp))
+                        ) {
+                            Text(text = "Cancelar", color = OldIvory)
+                        }
+                        TextButton(
+                            onClick = { onFolderSelected(currentPath) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(Color(0xFF2B2B2B), RoundedCornerShape(6.dp))
+                        ) {
+                            Text(text = "Aceptar", color = OldIvory)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportBrowserEntryRow(
+    entry: ImportBrowserEntry,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = entry.isDirectory, onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(50))
+                .background(if (entry.isDirectory) TarnishedGold else importFileAccent(entry.name)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (entry.isDirectory) Icons.Filled.Folder else Icons.AutoMirrored.Filled.Article,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = OldIvory,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!entry.isDirectory && entry.sizeBytes != null) {
+                Text(
+                    text = Formatter.formatShortFileSize(LocalContext.current, entry.sizeBytes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.58f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportDialogTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Text
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = OldIvory),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = ImeAction.Done
+        ),
+        colors = TextFieldDefaults.colors(
+            focusedTextColor = OldIvory,
+            unfocusedTextColor = OldIvory,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            cursorColor = Color(0xFF5AA7E8),
+            focusedIndicatorColor = Color(0xFF348CD6),
+            unfocusedIndicatorColor = Color(0xFF348CD6)
+        )
+    )
+}
+
+@Composable
+private fun ImportDialogArrowButton(
+    expanded: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(34.dp)
+            .border(
+                width = 2.dp,
+                color = OldIvory.copy(alpha = 0.78f),
+                shape = RoundedCornerShape(50)
+            )
+    ) {
+        Icon(
+            imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = contentDescription,
+            tint = OldIvory,
+            modifier = Modifier.size(28.dp)
+        )
+    }
+}
+
+@Composable
+private fun ImportOptionCheckbox(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = Color(0xFFA8B8E8),
+                uncheckedColor = OldIvory.copy(alpha = 0.78f),
+                checkmarkColor = Color.White
+            )
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private data class ImportBrowserEntry(
+    val name: String,
+    val path: String,
+    val documentId: String,
+    val isDirectory: Boolean,
+    val sizeBytes: Long?
+)
+
+private fun loadImportBrowserEntries(
+    context: Context,
+    treeUri: Uri,
+    documentId: String,
+    currentPath: String
+): List<ImportBrowserEntry> {
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+    val projection = arrayOf(
+        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+        DocumentsContract.Document.COLUMN_MIME_TYPE,
+        DocumentsContract.Document.COLUMN_SIZE
+    )
+
+    return buildList {
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+            val nameIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val mimeIndex = cursor.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            val sizeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+
+            while (cursor.moveToNext()) {
+                val childDocumentId = cursor.getString(idIndex)
+                val name = cursor.getString(nameIndex).orEmpty()
+                val mimeType = cursor.getString(mimeIndex).orEmpty()
+                val isDirectory = mimeType == DocumentsContract.Document.MIME_TYPE_DIR
+                if (name.isBlank() || (!isDirectory && !isImportVisibleFile(name))) continue
+
+                add(
+                    ImportBrowserEntry(
+                        name = name,
+                        path = "${currentPath.trimEnd('/')}/$name",
+                        documentId = childDocumentId,
+                        isDirectory = isDirectory,
+                        sizeBytes = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else null
+                    )
+                )
+            }
+        }
+    }.sortedWith(
+        compareByDescending<ImportBrowserEntry> { it.isDirectory }
+            .thenBy { it.name.lowercase(Locale.ROOT) }
+    )
+}
+
+private fun readableImportRootPath(treeUri: Uri): String {
+    val documentId = DocumentsContract.getTreeDocumentId(treeUri)
+    val relativePath = documentId
+        .substringAfter(':', missingDelimiterValue = documentId)
+        .trim('/')
+    return if (relativePath.isBlank() || relativePath == "primary") {
+        "/sdcard"
+    } else {
+        "/sdcard/$relativePath"
+    }
+}
+
+private fun isImportVisibleFile(name: String): Boolean {
+    val lowerName = name.lowercase(Locale.ROOT)
+    return listOf(
+        ".epub",
+        ".pdf",
+        ".djvu",
+        ".fb2",
+        ".mobi",
+        ".azw3",
+        ".prc",
+        ".chm",
+        ".umd",
+        ".docx",
+        ".odt",
+        ".rtf",
+        ".txt",
+        ".md",
+        ".html",
+        ".mhtml",
+        ".cbz",
+        ".cbr"
+    ).any(lowerName::endsWith)
+}
+
+private fun importFileAccent(name: String): Color {
+    val lowerName = name.lowercase(Locale.ROOT)
+    return when {
+        lowerName.endsWith(".pdf") -> Color(0xFFE83B16)
+        lowerName.endsWith(".epub") -> Color(0xFF16AEEB)
+        lowerName.endsWith(".fb2") -> Color(0xFF6D8DFF)
+        lowerName.endsWith(".cbz") || lowerName.endsWith(".cbr") -> Color(0xFF8A5CF6)
+        else -> Color(0xFF6E7781)
+    }
+}
+
+private fun Set<String>.toggleItem(item: String, checked: Boolean): Set<String> {
+    return if (checked) this + item else this - item
 }
 
 @Composable
