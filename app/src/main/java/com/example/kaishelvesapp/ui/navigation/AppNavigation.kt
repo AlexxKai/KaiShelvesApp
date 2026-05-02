@@ -18,11 +18,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.kaishelvesapp.data.help.HelpScreenContext
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
 import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
+import com.example.kaishelvesapp.ui.components.HelpChatOverlay
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
@@ -33,6 +36,7 @@ import com.example.kaishelvesapp.ui.screen.friends.FriendListsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
 import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
 import com.example.kaishelvesapp.ui.screen.foryou.ForYouScreen
+import com.example.kaishelvesapp.ui.screen.help.HelpScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
@@ -57,6 +61,7 @@ import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ForYouViewModel
+import com.example.kaishelvesapp.ui.viewmodel.HelpChatViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
@@ -110,6 +115,7 @@ fun AppNavigation(
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
+    val helpChatViewModel: HelpChatViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val forYouViewModel: ForYouViewModel = viewModel()
     val userListsViewModel: UserListsViewModel = viewModel()
@@ -118,6 +124,7 @@ fun AppNavigation(
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
     val friendRequestsState by friendRequestsViewModel.uiState.collectAsStateWithLifecycle()
+    val helpChatState by helpChatViewModel.uiState.collectAsStateWithLifecycle()
     val isGuestUser = authState.user?.isGuest == true
     val guestRestrictedSections = remember(isGuestUser) {
         if (isGuestUser) {
@@ -130,6 +137,8 @@ fun AppNavigation(
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
 
     val startDestination = if (authState.isLoggedIn) Routes.DISCOVER else Routes.LOGIN
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route ?: startDestination
 
     fun authenticatedStartRoute(isGuest: Boolean): String {
         return if (isGuest) Routes.DISCOVER else Routes.HOME
@@ -151,6 +160,19 @@ fun AppNavigation(
             navController.navigate(targetRoute) {
                 popUpTo(0) { inclusive = true }
             }
+        }
+    }
+
+    LaunchedEffect(currentRoute, helpChatState.isActive, catalogState.selectedBook?.titulo) {
+        helpChatViewModel.updateScreenContext(
+            buildHelpScreenContext(
+                route = currentRoute,
+                selectedBookTitle = catalogState.selectedBook?.titulo
+            )
+        )
+
+        if (helpChatState.isActive && currentRoute != Routes.HELP) {
+            helpChatViewModel.minimizeChat()
         }
     }
 
@@ -773,10 +795,7 @@ fun AppNavigation(
         }
 
         composable(Routes.HELP) {
-            PlaceholderScreen(
-                title = "Ayuda",
-                subtitle = "Aquí reuniremos asistencia, preguntas frecuentes y soporte.",
-                currentSection = KaiSection.HELP,
+            HelpScreen(
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -793,6 +812,9 @@ fun AppNavigation(
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onStartChat = {
+                    helpChatViewModel.startChat()
                 },
                 onSectionSelected = { navigateSection(it) }
             )
@@ -815,6 +837,137 @@ fun AppNavigation(
                     )
                 }
             }
+
+            HelpChatOverlay(
+                state = helpChatState,
+                onExpand = { helpChatViewModel.expandChat() },
+                onMinimize = { helpChatViewModel.minimizeChat() },
+                onClose = { helpChatViewModel.closeChat() },
+                onInputChange = { helpChatViewModel.onInputChange(it) },
+                onSend = { helpChatViewModel.sendMessage() }
+            )
         }
+    }
+}
+
+private fun buildHelpScreenContext(
+    route: String,
+    selectedBookTitle: String?
+): HelpScreenContext {
+    return when (route) {
+        Routes.HOME -> HelpScreenContext(
+            route = route,
+            screenName = "Inicio",
+            description = "Actividad principal del usuario, accesos a red lectora y libros recientes.",
+            availableActions = listOf("Abrir notificaciones", "Buscar libros", "Ir al perfil", "Abrir el menu lateral")
+        )
+        Routes.SEARCH -> HelpScreenContext(
+            route = route,
+            screenName = "Busqueda",
+            description = "Entrada visual para explorar generos y lanzar busquedas en el catalogo.",
+            availableActions = listOf("Buscar por titulo o autor", "Escanear ISBN", "Elegir genero", "Abrir un resultado")
+        )
+        Routes.DISCOVER -> HelpScreenContext(
+            route = route,
+            screenName = "Descubrir",
+            description = "Catalogo de libros y resultados de busqueda.",
+            availableActions = listOf("Filtrar por genero", "Buscar en la barra superior", "Escanear ISBN", "Abrir detalle de libro")
+        )
+        Routes.DETAIL -> HelpScreenContext(
+            route = route,
+            screenName = "Detalle de libro",
+            description = "Ficha del libro seleccionado${selectedBookTitle?.let { ": $it" }.orEmpty()}.",
+            availableActions = listOf("Volver", "Marcar como leido", "Ir a listas", "Revisar informacion del libro")
+        )
+        Routes.READING_LIST, Routes.LISTS -> HelpScreenContext(
+            route = route,
+            screenName = "Mis libros",
+            description = "Gestion de lecturas, libros guardados y listas personales.",
+            availableActions = listOf("Abrir una lista", "Buscar libros", "Escanear ISBN", "Revisar libros guardados")
+        )
+        Routes.LIST_DETAIL -> HelpScreenContext(
+            route = route,
+            screenName = "Detalle de lista",
+            description = "Contenido de una lista personal de libros.",
+            availableActions = listOf("Volver", "Abrir un libro", "Revisar los libros de la lista")
+        )
+        Routes.READING_STATS -> HelpScreenContext(
+            route = route,
+            screenName = "Estadisticas",
+            description = "Resumen de progreso lector y actividad de lectura.",
+            availableActions = listOf("Revisar progreso", "Buscar nuevo libro", "Cambiar de seccion desde el menu")
+        )
+        Routes.LIBRARY -> HelpScreenContext(
+            route = route,
+            screenName = "Biblioteca del dispositivo",
+            description = "Gestion de biblioteca local y archivos disponibles en el telefono.",
+            availableActions = listOf("Buscar libros", "Escanear ISBN", "Gestionar portadas", "Abrir menu lateral")
+        )
+        Routes.PROFILE -> HelpScreenContext(
+            route = route,
+            screenName = "Perfil",
+            description = "Datos del usuario, privacidad, actividad y conexiones.",
+            availableActions = listOf("Abrir privacidad", "Ver amigos", "Abrir libros", "Cerrar sesion desde el menu")
+        )
+        Routes.SETTINGS_PRIVACY -> HelpScreenContext(
+            route = route,
+            screenName = "Privacidad y ajustes",
+            description = "Configuracion de privacidad y opciones de la cuenta.",
+            availableActions = listOf("Cambiar preferencias", "Volver al perfil", "Abrir panel de administrador si corresponde")
+        )
+        Routes.FRIENDS -> HelpScreenContext(
+            route = route,
+            screenName = "Amigos",
+            description = "Red social lectora, amistades, sugerencias y actividad de otros usuarios.",
+            availableActions = listOf("Abrir sugerencias", "Abrir perfil de amigo", "Revisar notificaciones", "Buscar libros")
+        )
+        Routes.FRIEND_PROFILE -> HelpScreenContext(
+            route = route,
+            screenName = "Perfil de amigo",
+            description = "Perfil publico de otro lector y su actividad visible.",
+            availableActions = listOf("Volver", "Abrir listas del amigo", "Abrir libros visibles")
+        )
+        Routes.FRIEND_LISTS, Routes.FRIEND_LIST_DETAIL -> HelpScreenContext(
+            route = route,
+            screenName = "Listas de amigo",
+            description = "Listas compartidas o visibles de otro lector.",
+            availableActions = listOf("Volver", "Abrir lista", "Abrir libro")
+        )
+        Routes.NOTIFICATION_CENTER -> HelpScreenContext(
+            route = route,
+            screenName = "Notificaciones",
+            description = "Centro de solicitudes y avisos de la app.",
+            availableActions = listOf("Aceptar solicitud", "Rechazar solicitud", "Volver")
+        )
+        Routes.GROUPS -> HelpScreenContext(
+            route = route,
+            screenName = "Grupos",
+            description = "Seccion preparada para grupos de lectura.",
+            availableActions = listOf("Cambiar a otra seccion", "Buscar libros", "Abrir menu lateral")
+        )
+        Routes.CHALLENGES -> HelpScreenContext(
+            route = route,
+            screenName = "Desafios de lectura",
+            description = "Seccion preparada para retos, objetivos y progreso lector.",
+            availableActions = listOf("Cambiar a Estadisticas", "Buscar libros", "Abrir menu lateral")
+        )
+        Routes.FOR_YOU -> HelpScreenContext(
+            route = route,
+            screenName = "Para ti",
+            description = "Recomendaciones y seleccion personalizada segun ajustes de privacidad.",
+            availableActions = listOf("Abrir un libro", "Activar recomendaciones desde privacidad", "Buscar libros")
+        )
+        Routes.HELP -> HelpScreenContext(
+            route = route,
+            screenName = "Ayuda",
+            description = "Pantalla de asistencia, FAQ, flujos guiados y chat de ayuda.",
+            availableActions = listOf("Iniciar chat", "Consultar preguntas frecuentes", "Revisar errores frecuentes")
+        )
+        else -> HelpScreenContext(
+            route = route,
+            screenName = "KaiShelves",
+            description = "Pantalla de la aplicacion KaiShelves.",
+            availableActions = listOf("Abrir el menu lateral", "Buscar libros", "Ir a Ayuda")
+        )
     }
 }

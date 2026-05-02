@@ -18,6 +18,14 @@ val googleBooksApiKey = localProperties
     .getProperty("googleBooksApiKey", "")
     .trim()
 
+val groqApiKey = localProperties
+    .getProperty("groqApiKey", "")
+    .trim()
+
+val groqModel = localProperties
+    .getProperty("groqModel", "llama-3.1-8b-instant")
+    .trim()
+
 android {
     namespace = "com.example.kaishelvesapp"
 
@@ -28,10 +36,12 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 2
-        versionName = "2.4.0"
+        versionName = "2.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GOOGLE_BOOKS_API_KEY", "\"$googleBooksApiKey\"")
+        buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
+        buildConfigField("String", "GROQ_MODEL", "\"$groqModel\"")
     }
 
     buildTypes {
