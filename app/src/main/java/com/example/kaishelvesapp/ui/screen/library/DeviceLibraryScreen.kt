@@ -58,6 +58,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -72,6 +73,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.TableRows
@@ -161,6 +163,7 @@ import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.net.URL
+import java.net.URLEncoder
 
 private enum class DeviceLibraryLayoutMode {
     List,
@@ -198,7 +201,7 @@ fun DeviceLibraryScreen(
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    var layoutMode by remember { mutableStateOf(DeviceLibraryLayoutMode.List) }
+    var layoutMode by remember { mutableStateOf(readDeviceLibraryLayoutMode(context)) }
     var sortOption by remember { mutableStateOf(DeviceLibrarySortOption.Title) }
     var sortDescending by remember { mutableStateOf(false) }
     var showSearchPanel by remember { mutableStateOf(false) }
@@ -365,7 +368,10 @@ fun DeviceLibraryScreen(
                     layoutMode = layoutMode,
                     sortOption = sortOption,
                     sortDescending = sortDescending,
-                    onLayoutModeChange = { layoutMode = it },
+                    onLayoutModeChange = {
+                        layoutMode = it
+                        saveDeviceLibraryLayoutMode(context, it)
+                    },
                     onSortOptionChange = { sortOption = it },
                     onToggleSortDirection = { sortDescending = !sortDescending },
                     onDismiss = { showFilterPanel = false }
@@ -601,7 +607,7 @@ private fun DeviceLibraryTopBarOptionsMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(min = 300.dp, max = 390.dp),
+        modifier = Modifier.widthIn(min = 236.dp, max = 292.dp),
         shape = RoundedCornerShape(2.dp),
         containerColor = Color(0xFF262626),
         tonalElevation = 0.dp,
@@ -1059,6 +1065,8 @@ private fun RenameDefaultCoverDialog(
 @Composable
 private fun BackgroundImageSearchDialog(
     backgroundTreeUri: Uri?,
+    title: String = "Imagen de fondo",
+    searchQuery: String = "Imagen de fondo",
     onDismiss: () -> Unit,
     onImageSaved: (DefaultCoverOption) -> Unit
 ) {
@@ -1104,7 +1112,7 @@ private fun BackgroundImageSearchDialog(
                         )
                     }
                     Text(
-                        text = "Imagen de fondo",
+                        text = title,
                         style = MaterialTheme.typography.titleLarge,
                         color = OldIvory,
                         maxLines = 1,
@@ -1135,7 +1143,8 @@ private fun BackgroundImageSearchDialog(
                                     false
                                 }
                             }
-                            loadUrl("https://www.google.com/search?tbm=isch&q=Imagen%20de%20fondo")
+                            val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
+                            loadUrl("https://www.google.com/search?tbm=isch&q=$encodedQuery")
                         }
                     }
                 )
@@ -1146,7 +1155,7 @@ private fun BackgroundImageSearchDialog(
                         .background(Color(0xFFD9D9D9))
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     if (selectedImagePreview != null) {
                         Image(
@@ -1161,7 +1170,7 @@ private fun BackgroundImageSearchDialog(
                     Text(
                         text = selectedImageUrl?.let { "Imagen seleccionada" }
                             ?: "Consejo: Realice una pulsación larga para seleccionar una imagen",
-                        modifier = Modifier.weight(1f),
+                        modifier = if (selectedImageUrl == null) Modifier.fillMaxWidth() else Modifier,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF5F5F5F),
                         textAlign = TextAlign.Center
@@ -2164,7 +2173,88 @@ private fun defaultCoversDir(context: Context): File {
 private const val DEFAULT_COVER_PREFS = "device_library_default_cover"
 private const val DEFAULT_COVER_KEY = "selected_cover"
 private const val DEFAULT_COVER_STORAGE_TREE_KEY = "storage_tree_uri"
+private const val BOOK_METADATA_PREFS = "device_library_book_metadata"
+private const val PINNED_BOOKS_PREFS = "device_library_pinned_books"
+private const val PINNED_BOOKS_KEY = "ordered_book_ids"
+private const val LIBRARY_VIEW_PREFS = "device_library_view"
+private const val LIBRARY_LAYOUT_MODE_KEY = "layout_mode"
 private val imageExtensions = setOf("jpg", "jpeg", "png", "webp")
+
+private fun readDeviceBookUserMetadata(context: Context, file: DeviceLibraryFile): DeviceBookUserMetadata {
+    val prefs = context.getSharedPreferences(BOOK_METADATA_PREFS, Context.MODE_PRIVATE)
+    val key = deviceBookMetadataKey(file)
+    return DeviceBookUserMetadata(
+        title = prefs.getString("${key}_title", "").orEmpty(),
+        author = prefs.getString("${key}_author", "").orEmpty(),
+        description = prefs.getString("${key}_description", "").orEmpty(),
+        coverText = prefs.getString("${key}_cover_text", "").orEmpty(),
+        coverId = prefs.getString("${key}_cover_id", "").orEmpty(),
+        favorite = prefs.getBoolean("${key}_favorite", false),
+        category = prefs.getString("${key}_category", "").orEmpty(),
+        series = prefs.getString("${key}_series", "").orEmpty(),
+        tags = prefs.getString("${key}_tags", "").orEmpty()
+    )
+}
+
+private fun saveDeviceBookUserMetadata(
+    context: Context,
+    file: DeviceLibraryFile,
+    metadata: DeviceBookUserMetadata
+) {
+    val key = deviceBookMetadataKey(file)
+    context.getSharedPreferences(BOOK_METADATA_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString("${key}_title", metadata.title)
+        .putString("${key}_author", metadata.author)
+        .putString("${key}_description", metadata.description)
+        .putString("${key}_cover_text", metadata.coverText)
+        .putString("${key}_cover_id", metadata.coverId)
+        .putBoolean("${key}_favorite", metadata.favorite)
+        .putString("${key}_category", metadata.category)
+        .putString("${key}_series", metadata.series)
+        .putString("${key}_tags", metadata.tags)
+        .apply()
+}
+
+private fun deviceBookMetadataKey(file: DeviceLibraryFile): String {
+    return file.uri.toString().hashCode().toUInt().toString(16)
+}
+
+private fun readPinnedDeviceBookIds(context: Context): List<String> {
+    return context.getSharedPreferences(PINNED_BOOKS_PREFS, Context.MODE_PRIVATE)
+        .getString(PINNED_BOOKS_KEY, "")
+        .orEmpty()
+        .lineSequence()
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .toList()
+}
+
+private fun savePinnedDeviceBookIds(context: Context, pinnedBookIds: List<String>) {
+    context.getSharedPreferences(PINNED_BOOKS_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(PINNED_BOOKS_KEY, pinnedBookIds.distinct().joinToString("\n"))
+        .apply()
+}
+
+private fun deviceBookPinId(file: DeviceLibraryFile): String {
+    return file.uri.toString()
+}
+
+private fun readDeviceLibraryLayoutMode(context: Context): DeviceLibraryLayoutMode {
+    val savedName = context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .getString(LIBRARY_LAYOUT_MODE_KEY, DeviceLibraryLayoutMode.List.name)
+    return DeviceLibraryLayoutMode.entries.firstOrNull { it.name == savedName }
+        ?: DeviceLibraryLayoutMode.List
+}
+
+private fun saveDeviceLibraryLayoutMode(context: Context, layoutMode: DeviceLibraryLayoutMode) {
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(LIBRARY_LAYOUT_MODE_KEY, layoutMode.name)
+        .apply()
+}
 
 private fun Set<String>.toggleItem(item: String, checked: Boolean): Set<String> {
     return if (checked) this + item else this - item
@@ -2689,6 +2779,14 @@ private fun DeviceLibraryContent(
     layoutMode: DeviceLibraryLayoutMode,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
+    val context = LocalContext.current
+    var pinnedBookIds by remember { mutableStateOf(readPinnedDeviceBookIds(context)) }
+    val displayedFiles = remember(files, pinnedBookIds) {
+        val filesById = files.associateBy(::deviceBookPinId)
+        val pinnedFiles = pinnedBookIds.mapNotNull(filesById::get)
+        pinnedFiles + files.filterNot { deviceBookPinId(it) in pinnedBookIds }
+    }
+
     if (isLoading) {
         Box(
             modifier = modifier,
@@ -2730,11 +2828,16 @@ private fun DeviceLibraryContent(
         DeviceLibraryLayoutMode.List -> DeviceLibraryListView(
             modifier = modifier,
             files = files,
+            displayedFiles = displayedFiles,
+            pinnedBookIds = pinnedBookIds,
+            onPinnedBookIdsChange = { pinnedBookIds = it },
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Grid -> DeviceLibraryGridView(
             modifier = modifier,
-            files = files,
+            files = displayedFiles,
+            pinnedBookIds = pinnedBookIds,
+            onPinnedBookIdsChange = { pinnedBookIds = it },
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Carousel -> DeviceLibraryCarouselView(
@@ -2749,8 +2852,13 @@ private fun DeviceLibraryContent(
 private fun DeviceLibraryListView(
     modifier: Modifier,
     files: List<DeviceLibraryFile>,
+    displayedFiles: List<DeviceLibraryFile>,
+    pinnedBookIds: List<String>,
+    onPinnedBookIdsChange: (List<String>) -> Unit,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     Box(modifier = modifier.background(ShelfBackgroundBrush)) {
@@ -2760,10 +2868,34 @@ private fun DeviceLibraryListView(
             contentPadding = PaddingValues(start = 16.dp, end = 28.dp, top = 18.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            items(files, key = { it.uri.toString() }) { file ->
+            items(displayedFiles, key = { it.uri.toString() }) { file ->
+                val fileId = deviceBookPinId(file)
                 ShelfListRow(
                     file = file,
                     progress = readingProgressFor(file),
+                    isPinned = fileId in pinnedBookIds,
+                    onTogglePin = {
+                        if (fileId in pinnedBookIds) {
+                            val updatedPinnedBookIds = pinnedBookIds - fileId
+                            onPinnedBookIdsChange(updatedPinnedBookIds)
+                            savePinnedDeviceBookIds(context, updatedPinnedBookIds)
+                            val updatedDisplayedFiles = updatedPinnedBookIds
+                                .mapNotNull { pinnedId -> files.firstOrNull { deviceBookPinId(it) == pinnedId } } +
+                                files.filterNot { deviceBookPinId(it) in updatedPinnedBookIds }
+                            val targetIndex = updatedDisplayedFiles.indexOfFirst { deviceBookPinId(it) == fileId }
+                                .coerceAtLeast(0)
+                            scope.launch {
+                                listState.animateScrollToItem(targetIndex)
+                            }
+                        } else {
+                            val updatedPinnedBookIds = listOf(fileId) + pinnedBookIds.filterNot { it == fileId }
+                            onPinnedBookIdsChange(updatedPinnedBookIds)
+                            savePinnedDeviceBookIds(context, updatedPinnedBookIds)
+                            scope.launch {
+                                listState.animateScrollToItem(0)
+                            }
+                        }
+                    },
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -2780,8 +2912,11 @@ private fun DeviceLibraryListView(
 private fun DeviceLibraryGridView(
     modifier: Modifier,
     files: List<DeviceLibraryFile>,
+    pinnedBookIds: List<String>,
+    onPinnedBookIdsChange: (List<String>) -> Unit,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
+    val context = LocalContext.current
     val gridState = rememberLazyGridState()
 
     Box(modifier = modifier.background(ShelfBackgroundBrush)) {
@@ -2794,9 +2929,20 @@ private fun DeviceLibraryGridView(
             verticalArrangement = Arrangement.spacedBy(26.dp)
         ) {
             items(files, key = { it.uri.toString() }) { file ->
+                val fileId = deviceBookPinId(file)
                 ShelfGridBook(
                     file = file,
                     progress = readingProgressFor(file),
+                    isPinned = fileId in pinnedBookIds,
+                    onTogglePin = {
+                        val updatedPinnedBookIds = if (fileId in pinnedBookIds) {
+                            pinnedBookIds - fileId
+                        } else {
+                            listOf(fileId) + pinnedBookIds.filterNot { it == fileId }
+                        }
+                        onPinnedBookIdsChange(updatedPinnedBookIds)
+                        savePinnedDeviceBookIds(context, updatedPinnedBookIds)
+                    },
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -3032,6 +3178,8 @@ private fun DeviceLibraryCarouselView(
 private fun ShelfListRow(
     file: DeviceLibraryFile,
     progress: Int,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -3040,11 +3188,16 @@ private fun ShelfListRow(
             if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
         }
     }
-    val title = bookMetadata?.title?.takeIf { it.isNotBlank() }
+    var userMetadata by remember(file.uri) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
+    val title = userMetadata.title.takeIf { it.isNotBlank() }
+        ?: bookMetadata?.title?.takeIf { it.isNotBlank() }
         ?: file.name.substringBeforeLast('.')
-    val author = bookMetadata?.author.orEmpty()
-    val summary = bookMetadata?.description.orEmpty()
+    val author = userMetadata.author.takeIf { it.isNotBlank() } ?: bookMetadata?.author.orEmpty()
+    val summary = userMetadata.description.takeIf { it.isNotBlank() } ?: bookMetadata?.description.orEmpty()
     var showBookOptions by remember(file.uri) { mutableStateOf(false) }
+    var showBookInfoDialog by remember(file.uri) { mutableStateOf(false) }
+    var showCoverDownload by remember(file.uri) { mutableStateOf(false) }
+    val backgroundTreeUri = remember { readDefaultCoverStorageTreeUri(context)?.let(Uri::parse) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -3084,6 +3237,8 @@ private fun ShelfListRow(
         ) {
             FilePagePreview(
                 file = file,
+                coverText = userMetadata.coverText,
+                overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(coverWidth)
@@ -3130,7 +3285,20 @@ private fun ShelfListRow(
 
                         DeviceLibraryBookOptionsMenu(
                             expanded = showBookOptions,
-                            onDismiss = { showBookOptions = false }
+                            isPinned = isPinned,
+                            onDismiss = { showBookOptions = false },
+                            onTogglePin = {
+                                showBookOptions = false
+                                onTogglePin()
+                            },
+                            onShowBookInfo = {
+                                showBookOptions = false
+                                showBookInfoDialog = true
+                            },
+                            onDownloadCover = {
+                                showBookOptions = false
+                                showCoverDownload = true
+                            }
                         )
                     }
                 }
@@ -3190,37 +3358,491 @@ private fun ShelfListRow(
                 )
             }
         }
+
+        if (showBookInfoDialog) {
+            DeviceLibraryBookInfoDialog(
+                file = file,
+                metadata = bookMetadata,
+                initialUserMetadata = userMetadata,
+                onSave = { savedMetadata -> userMetadata = savedMetadata },
+                onDismiss = { showBookInfoDialog = false }
+            )
+        }
+
+        if (showCoverDownload) {
+            val search = listOf(title, author, "portada libro")
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            BackgroundImageSearchDialog(
+                backgroundTreeUri = backgroundTreeUri,
+                title = "Descargar portada",
+                searchQuery = search,
+                onDismiss = { showCoverDownload = false },
+                onImageSaved = { savedCover ->
+                    val savedMetadata = userMetadata.copy(coverId = savedCover.id)
+                    saveDeviceBookUserMetadata(context, file, savedMetadata)
+                    userMetadata = savedMetadata
+                    showCoverDownload = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+private fun DeviceLibraryBookInfoDialog(
+    file: DeviceLibraryFile,
+    metadata: DeviceBookDisplayMetadata?,
+    initialUserMetadata: DeviceBookUserMetadata,
+    onSave: (DeviceBookUserMetadata) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val dateFormatter = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
+    val title = initialUserMetadata.title.takeIf { it.isNotBlank() }
+        ?: metadata?.title?.takeIf { it.isNotBlank() }
+        ?: file.name.substringBeforeLast('.')
+    val author = initialUserMetadata.author.takeIf { it.isNotBlank() }
+        ?: metadata?.author?.takeIf { it.isNotBlank() }
+        ?: "Autor desconocido"
+    val description = initialUserMetadata.description.takeIf { it.isNotBlank() } ?: metadata?.description.orEmpty()
+    val importedAt = file.modifiedAtMillis?.takeIf { it > 0 }?.let { dateFormatter.format(Date(it)) }
+        ?: "Sin fecha disponible"
+    val sizeText = file.sizeBytes?.let { Formatter.formatShortFileSize(context, it) }
+    val pathText = readableDeviceBookPath(file, sizeText)
+    val scrollState = rememberScrollState()
+    val backgroundTreeUri = remember { readDefaultCoverStorageTreeUri(context)?.let(Uri::parse) }
+    var showCoverDownload by remember(file.uri) { mutableStateOf(false) }
+    var favorite by remember(file.uri) { mutableStateOf(initialUserMetadata.favorite) }
+    var editableTitle by remember(file.uri) { mutableStateOf(title) }
+    var editableAuthor by remember(file.uri) { mutableStateOf(author) }
+    var editableDescription by remember(file.uri) { mutableStateOf(description) }
+    var coverText by remember(file.uri) { mutableStateOf(initialUserMetadata.coverText) }
+    var coverId by remember(file.uri) { mutableStateOf(initialUserMetadata.coverId) }
+    var category by remember(file.uri) { mutableStateOf(initialUserMetadata.category) }
+    var series by remember(file.uri) { mutableStateOf(initialUserMetadata.series) }
+    var tags by remember(file.uri) { mutableStateOf(initialUserMetadata.tags) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF171717))
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Volver",
+                        tint = OldIvory
+                    )
+                }
+                Text(
+                    text = "Información del libro",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = OldIvory,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    FilePagePreview(
+                        file = file,
+                        coverText = coverText,
+                        overrideCoverId = coverId.takeIf { it.isNotBlank() },
+                        modifier = Modifier
+                            .width(122.dp)
+                            .aspectRatio(0.68f)
+                    )
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        DeviceBookInfoField(
+                            label = "Título del libro",
+                            value = editableTitle,
+                            onValueChange = { editableTitle = it },
+                            textStyle = MaterialTheme.typography.titleLarge.copy(
+                                color = OldIvory,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                        DeviceBookInfoField(
+                            label = "Autor del libro",
+                            value = editableAuthor,
+                            onValueChange = { editableAuthor = it },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = "Buscar autor",
+                                    tint = OldIvory.copy(alpha = 0.72f)
+                                )
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    DeviceBookInfoField(
+                        label = "Texto de la portada (opcional)",
+                        value = coverText,
+                        onValueChange = { coverText = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DeviceBookInfoSmallButton(text = "Seleccionar portada")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    DeviceBookInfoSmallButton(
+                        text = "Descargar...",
+                        onClick = { showCoverDownload = true }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(34.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    repeat(5) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = OldIvory.copy(alpha = 0.18f),
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                DeviceBookInfoField(
+                    label = "Descripción",
+                    value = editableDescription,
+                    onValueChange = { editableDescription = it },
+                    minLines = 6,
+                    maxLines = Int.MAX_VALUE
+                )
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = favorite,
+                        onCheckedChange = { favorite = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TarnishedGold,
+                            uncheckedColor = OldIvory.copy(alpha = 0.72f),
+                            checkmarkColor = Color.Black
+                        )
+                    )
+                    Text(
+                        text = "Favorito",
+                        modifier = Modifier.width(92.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory
+                    )
+                    DeviceBookInfoField(
+                        label = "Categoría (opcional)",
+                        value = category,
+                        onValueChange = { category = it },
+                        modifier = Modifier.weight(1f),
+                        trailingIcon = { DeviceBookInfoDropDownIcon() }
+                    )
+                }
+
+                DeviceBookInfoField(
+                    label = "Serie",
+                    value = series,
+                    onValueChange = { series = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 36.dp)
+                )
+
+                DeviceBookInfoField(
+                    label = "Etiquetas",
+                    value = tags,
+                    onValueChange = { tags = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 36.dp),
+                    trailingIcon = { DeviceBookInfoDropDownIcon() }
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 36.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Filtro de lectura",
+                        modifier = Modifier.width(122.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory.copy(alpha = 0.76f),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Auto",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = OldIvory,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = OldIvory.copy(alpha = 0.28f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Text(
+                    text = pathText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.86f)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Hora de importación: $importedAt",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.86f),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black)
+                    .padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                DeviceBookInfoBottomButton(
+                    text = "Cancelar",
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                )
+                DeviceBookInfoBottomButton(
+                    text = "Guardar",
+                    onClick = {
+                        val savedMetadata = DeviceBookUserMetadata(
+                            title = editableTitle.trim(),
+                            author = editableAuthor.trim(),
+                            description = editableDescription.trim(),
+                            coverText = coverText.trim(),
+                            coverId = coverId,
+                            favorite = favorite,
+                            category = category.trim(),
+                            series = series.trim(),
+                            tags = tags.trim()
+                        )
+                        saveDeviceBookUserMetadata(context, file, savedMetadata)
+                        onSave(savedMetadata)
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+
+    if (showCoverDownload) {
+        val search = listOf(editableTitle, editableAuthor, "portada libro")
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        BackgroundImageSearchDialog(
+            backgroundTreeUri = backgroundTreeUri,
+            title = "Descargar portada",
+            searchQuery = search,
+            onDismiss = { showCoverDownload = false },
+            onImageSaved = { savedCover ->
+                coverId = savedCover.id
+                showCoverDownload = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun DeviceBookInfoField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    textStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleMedium.copy(
+        color = OldIvory,
+        fontWeight = FontWeight.SemiBold
+    ),
+    minLines: Int = 1,
+    maxLines: Int = if (minLines > 1) 5 else 2,
+    trailingIcon: @Composable (() -> Unit)? = null
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = OldIvory.copy(alpha = 0.66f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        textStyle = textStyle,
+        minLines = minLines,
+        maxLines = maxLines,
+        trailingIcon = trailingIcon,
+        colors = TextFieldDefaults.colors(
+            focusedTextColor = OldIvory,
+            unfocusedTextColor = OldIvory,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            cursorColor = TarnishedGold,
+            focusedIndicatorColor = OldIvory.copy(alpha = 0.58f),
+            unfocusedIndicatorColor = OldIvory.copy(alpha = 0.34f),
+            focusedLabelColor = OldIvory.copy(alpha = 0.66f),
+            unfocusedLabelColor = OldIvory.copy(alpha = 0.66f)
+        )
+    )
+}
+
+@Composable
+private fun DeviceBookInfoSmallButton(
+    text: String,
+    onClick: () -> Unit = {}
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .height(38.dp)
+            .widthIn(min = 104.dp),
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, OldIvory.copy(alpha = 0.7f)),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = OldIvory,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DeviceBookInfoBottomButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = modifier.height(48.dp),
+        shape = RoundedCornerShape(6.dp),
+        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+            containerColor = Color(0xFF242424),
+            contentColor = OldIvory
+        )
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun DeviceBookInfoDropDownIcon() {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .border(2.dp, OldIvory.copy(alpha = 0.7f), RoundedCornerShape(50)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = OldIvory.copy(alpha = 0.72f)
+        )
+    }
+}
+
+private fun readableDeviceBookPath(file: DeviceLibraryFile, sizeText: String?): String {
+    val location = file.location.trim('/').takeIf { it.isNotBlank() }
+    val path = listOfNotNull("/sdcard", location, file.name).joinToString("/")
+    return if (sizeText.isNullOrBlank()) path else "$path ($sizeText)"
 }
 
 @Composable
 private fun DeviceLibraryBookOptionsMenu(
     expanded: Boolean,
-    onDismiss: () -> Unit
+    isPinned: Boolean,
+    onDismiss: () -> Unit,
+    onTogglePin: () -> Unit,
+    onShowBookInfo: () -> Unit,
+    onDownloadCover: () -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.widthIn(min = 300.dp, max = 390.dp),
+        modifier = Modifier.widthIn(min = 244.dp, max = 304.dp),
         shape = RoundedCornerShape(2.dp),
         containerColor = Color(0xFF262626),
         tonalElevation = 0.dp,
         shadowElevation = 8.dp
     ) {
         DeviceLibraryBookOptionItem(
-            text = "Pin en la parte superior",
-            onClick = onDismiss
+            text = if (isPinned) "Eliminar de la parte superior" else "Pin en la parte superior",
+            onClick = onTogglePin
         )
 
         HorizontalDivider(color = OldIvory.copy(alpha = 0.16f))
 
         DeviceLibraryBookOptionItem(
             text = "Información del libro",
-            onClick = onDismiss
+            onClick = onShowBookInfo
         )
         DeviceLibraryBookOptionItem(
             text = "Descargar Portada de Libro",
-            onClick = onDismiss
+            onClick = onDownloadCover
         )
         DeviceLibraryBookOptionItem(
             text = "Crear acceso directo en escritorio",
@@ -3246,14 +3868,14 @@ private fun DeviceLibraryBookOptionItem(
         text = {
             Text(
                 text = text,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = OldIvory,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         },
         onClick = onClick,
-        modifier = Modifier.height(58.dp)
+        modifier = Modifier.height(46.dp)
     )
 }
 
@@ -3261,8 +3883,26 @@ private fun DeviceLibraryBookOptionItem(
 private fun ShelfGridBook(
     file: DeviceLibraryFile,
     progress: Int,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val bookMetadata by produceState<DeviceBookDisplayMetadata?>(initialValue = null, file.uri) {
+        value = withContext(Dispatchers.IO) {
+            if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
+        }
+    }
+    var userMetadata by remember(file.uri) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
+    val title = userMetadata.title.takeIf { it.isNotBlank() }
+        ?: bookMetadata?.title?.takeIf { it.isNotBlank() }
+        ?: file.name.substringBeforeLast('.')
+    val author = userMetadata.author.takeIf { it.isNotBlank() } ?: bookMetadata?.author.orEmpty()
+    var showBookOptions by remember(file.uri) { mutableStateOf(false) }
+    var showBookInfoDialog by remember(file.uri) { mutableStateOf(false) }
+    var showCoverDownload by remember(file.uri) { mutableStateOf(false) }
+    val backgroundTreeUri = remember { readDefaultCoverStorageTreeUri(context)?.let(Uri::parse) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -3271,8 +3911,49 @@ private fun ShelfGridBook(
     ) {
         FilePagePreview(
             file = file,
+            coverText = userMetadata.coverText,
+            overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
             modifier = Modifier.fillMaxSize()
         )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 2.dp, bottom = 2.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .clickable { showBookOptions = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.more_option),
+                    tint = OldIvory,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            DeviceLibraryBookOptionsMenu(
+                expanded = showBookOptions,
+                isPinned = isPinned,
+                onDismiss = { showBookOptions = false },
+                onTogglePin = {
+                    showBookOptions = false
+                    onTogglePin()
+                },
+                onShowBookInfo = {
+                    showBookOptions = false
+                    showBookInfoDialog = true
+                },
+                onDownloadCover = {
+                    showBookOptions = false
+                    showCoverDownload = true
+                }
+            )
+        }
         Text(
             text = "${progress}%",
             modifier = Modifier
@@ -3284,6 +3965,34 @@ private fun ShelfGridBook(
             style = MaterialTheme.typography.labelSmall,
             color = OldIvory
         )
+
+        if (showBookInfoDialog) {
+            DeviceLibraryBookInfoDialog(
+                file = file,
+                metadata = bookMetadata,
+                initialUserMetadata = userMetadata,
+                onSave = { savedMetadata -> userMetadata = savedMetadata },
+                onDismiss = { showBookInfoDialog = false }
+            )
+        }
+
+        if (showCoverDownload) {
+            val search = listOf(title, author, "portada libro")
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            BackgroundImageSearchDialog(
+                backgroundTreeUri = backgroundTreeUri,
+                title = "Descargar portada",
+                searchQuery = search,
+                onDismiss = { showCoverDownload = false },
+                onImageSaved = { savedCover ->
+                    val savedMetadata = userMetadata.copy(coverId = savedCover.id)
+                    saveDeviceBookUserMetadata(context, file, savedMetadata)
+                    userMetadata = savedMetadata
+                    showCoverDownload = false
+                }
+            )
+        }
     }
 }
 
@@ -3426,13 +4135,19 @@ private fun DeviceFileRow(
 @Composable
 private fun FilePagePreview(
     file: DeviceLibraryFile,
+    coverText: String = "",
+    overrideCoverId: String? = null,
     modifier: Modifier = Modifier
         .width(48.dp)
         .aspectRatio(0.68f)
 ) {
     val context = LocalContext.current
-    val preview by produceState<Bitmap?>(initialValue = null, file.uri) {
+    val overrideCover = remember(overrideCoverId) {
+        overrideCoverId?.let { findDefaultCoverOption(context, it) }
+    }
+    val preview by produceState<Bitmap?>(initialValue = null, file.uri, overrideCoverId) {
         value = withContext(Dispatchers.IO) {
+            if (overrideCoverId != null) return@withContext null
             when {
                 isPdf(file) -> renderPdfFirstPage(context, file.uri)
                 isEpub(file) -> extractEpubCover(context, file.uri)
@@ -3447,16 +4162,80 @@ private fun FilePagePreview(
             .background(OldIvory.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center
     ) {
-        if (preview != null) {
-            Image(
-                bitmap = preview!!.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            FallbackBookPreview(file = file)
+        when {
+            overrideCover != null -> DefaultCoverOptionPreview(cover = overrideCover)
+            preview != null -> {
+                Image(
+                    bitmap = preview!!.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            else -> FallbackBookPreview(file = file)
         }
+
+        if (coverText.isNotBlank()) {
+            Text(
+                text = coverText,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.54f))
+                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = OldIvory,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun DefaultCoverOptionPreview(cover: DefaultCoverOption) {
+    val context = LocalContext.current
+    val fileCoverBitmap by produceState<Bitmap?>(initialValue = null, cover.file) {
+        value = withContext(Dispatchers.IO) {
+            cover.file?.let { BitmapFactory.decodeFile(it.absolutePath) }
+        }
+    }
+    val uriCoverBitmap by produceState<Bitmap?>(initialValue = null, cover.uri) {
+        value = withContext(Dispatchers.IO) {
+            cover.uri?.let { uri ->
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)
+                }.getOrNull()
+            }
+        }
+    }
+
+    when {
+        cover.resourceId != null -> Image(
+            painter = painterResource(cover.resourceId),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        fileCoverBitmap != null -> Image(
+            bitmap = fileCoverBitmap!!.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        uriCoverBitmap != null -> Image(
+            bitmap = uriCoverBitmap!!.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        else -> Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(OldIvory.copy(alpha = 0.92f))
+        )
     }
 }
 
@@ -3593,6 +4372,18 @@ private data class DeviceBookDisplayMetadata(
     val title: String = "",
     val author: String = "",
     val description: String = ""
+)
+
+private data class DeviceBookUserMetadata(
+    val title: String = "",
+    val author: String = "",
+    val description: String = "",
+    val coverText: String = "",
+    val coverId: String = "",
+    val favorite: Boolean = false,
+    val category: String = "",
+    val series: String = "",
+    val tags: String = ""
 )
 
 private fun renderPdfFirstPage(context: Context, uri: Uri): Bitmap? {
