@@ -199,6 +199,9 @@
     <string name="sort_option_author">Author</string>
     <string name="sort_option_rating">Your rating</string>
     <string name="sort_option_read_date">Read date</string>
+    <string name="cover_view">Cover view</string>
+    <string name="list_view">List view</string>
+    <string name="scroll_to_top">Scroll to top</string>
 
     <string name="book_already_in_readings">This volume is already part of your readings.</string>
     <string name="book_can_be_added_to_readings">You can add this volume to your personal reading record and rate it later.</string>

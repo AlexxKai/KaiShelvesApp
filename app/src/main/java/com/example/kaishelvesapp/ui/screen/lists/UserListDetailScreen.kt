@@ -3,6 +3,7 @@ package com.example.kaishelvesapp.ui.screen.lists
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,10 +25,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +50,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +78,9 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private enum class ListDetailSortOption {
     TITLE,
@@ -89,12 +101,18 @@ fun UserListDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
     val isReadList = listId == UserListsRepository.SYSTEM_LIST_READ_ID
     val isPendingList = listId == UserListsRepository.SYSTEM_LIST_PENDING_ID
     val displayedPendingBooks = remember { mutableStateListOf<UserListDetailBookItem>() }
+    var isPendingEditMode by rememberSaveable(listId) { mutableStateOf(false) }
+    var showCoverView by rememberSaveable(listId) { mutableStateOf(false) }
     var draggingBookId by remember { mutableStateOf<String?>(null) }
+    var draggingStartIndex by remember { mutableStateOf<Int?>(null) }
+    var draggingTranslationX by remember { mutableFloatStateOf(0f) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
+    var autoScrollDelta by remember { mutableFloatStateOf(0f) }
     val sortedBooks = remember(uiState.books, sortOption, isReadList, isPendingList) {
         if (isPendingList) {
             uiState.books
@@ -127,6 +145,23 @@ fun UserListDetailScreen(
         }
     }
 
+    LaunchedEffect(isPendingList, isPendingEditMode) {
+        if (!isPendingList || !isPendingEditMode) {
+            draggingBookId = null
+            draggingStartIndex = null
+            draggingTranslationX = 0f
+            draggingTranslationY = 0f
+            autoScrollDelta = 0f
+        }
+    }
+
+    LaunchedEffect(draggingBookId, autoScrollDelta) {
+        while (draggingBookId != null && autoScrollDelta != 0f) {
+            listState.scrollBy(autoScrollDelta)
+            delay(16)
+        }
+    }
+
     LaunchedEffect(uiState.errorMessageRes, uiState.successMessageRes) {
         uiState.errorMessageRes?.let {
             snackbarHostState.showSnackbar(context.getString(it))
@@ -141,7 +176,21 @@ fun UserListDetailScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        floatingActionButton = {
+            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240) {
+                FloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = BloodWine,
+                    contentColor = TarnishedGold
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowUpward,
+                        contentDescription = stringResource(R.string.scroll_to_top)
+                    )
+                }
+            }
+        }
     ) { innerPadding ->
         LazyColumn(
             state = listState,
@@ -160,7 +209,23 @@ fun UserListDetailScreen(
                     sortOption = sortOption,
                     isReadList = isReadList,
                     isPendingList = isPendingList,
+                    isPendingEditMode = isPendingEditMode,
+                    showCoverView = showCoverView,
                     onBack = onBack,
+                    onToggleViewMode = {
+                        if (!isPendingEditMode) {
+                            showCoverView = !showCoverView
+                        }
+                    },
+                    onTogglePendingEditMode = {
+                        if (isPendingEditMode) {
+                            val orderedIds = displayedPendingBooks.map { pendingItem ->
+                                pendingItem.book.id.ifBlank { pendingItem.book.isbn }
+                            }
+                            viewModel.updateBooksOrder(listId, orderedIds)
+                        }
+                        isPendingEditMode = !isPendingEditMode
+                    },
                     onSortChange = {
                         sortOption = when {
                             !isReadList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
@@ -217,25 +282,116 @@ fun UserListDetailScreen(
                 }
 
                 else -> {
-                    itemsIndexed(visibleBooks, key = { _, item -> item.book.id.ifBlank { item.book.isbn } }) { _, item ->
+                    if (showCoverView && !isPendingEditMode) {
+                        itemsIndexed(
+                            visibleBooks.chunked(3),
+                            key = { index, row -> "cover_row_$index:${row.joinToString { it.book.id.ifBlank { it.book.isbn } }}" }
+                        ) { rowIndex, rowItems ->
+                            CoverRow(
+                                items = rowItems,
+                                isPendingList = isPendingList,
+                                draggingBookId = draggingBookId,
+                                draggingOffsetX = draggingTranslationX,
+                                draggingOffsetY = draggingTranslationY,
+                                onBookClick = { book -> onBookClick(book) },
+                                dragModifierFor = { bookId ->
+                                    if (isPendingList) {
+                                        Modifier.pointerInput(bookId, visibleBooks.size) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    draggingBookId = bookId
+                                                    draggingStartIndex = displayedPendingBooks.indexOfFirst { pendingItem ->
+                                                        pendingItem.book.id.ifBlank { pendingItem.book.isbn } == bookId
+                                                    }.takeIf { it >= 0 }
+                                                    draggingTranslationX = 0f
+                                                    draggingTranslationY = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggingBookId = null
+                                                    draggingStartIndex = null
+                                                    draggingTranslationX = 0f
+                                                    draggingTranslationY = 0f
+                                                    autoScrollDelta = 0f
+                                                    displayedPendingBooks.clear()
+                                                    displayedPendingBooks.addAll(uiState.books)
+                                                },
+                                                onDragEnd = {
+                                                    val fromIndex = draggingStartIndex
+                                                    if (fromIndex != null) {
+                                                        val columnDelta = (draggingTranslationX / 104f).roundToInt()
+                                                        val rowDelta = (draggingTranslationY / 158f).roundToInt()
+                                                        val targetIndex = (fromIndex + columnDelta + (rowDelta * 3))
+                                                            .coerceIn(0, displayedPendingBooks.lastIndex)
+                                                        if (targetIndex != fromIndex) {
+                                                            displayedPendingBooks.move(fromIndex, targetIndex)
+                                                        }
+                                                    }
+                                                    val orderedIds = displayedPendingBooks.map { pendingItem ->
+                                                        pendingItem.book.id.ifBlank { pendingItem.book.isbn }
+                                                    }
+                                                    draggingBookId = null
+                                                    draggingStartIndex = null
+                                                    draggingTranslationX = 0f
+                                                    draggingTranslationY = 0f
+                                                    autoScrollDelta = 0f
+                                                    viewModel.updateBooksOrder(listId, orderedIds)
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    draggingTranslationX += dragAmount.x
+                                                    draggingTranslationY += dragAmount.y
+                                                    val currentIndex = displayedPendingBooks.indexOfFirst { pendingItem ->
+                                                        pendingItem.book.id.ifBlank { pendingItem.book.isbn } == bookId
+                                                    }
+                                                    if (currentIndex == -1) return@detectDragGesturesAfterLongPress
+
+                                                    val rowItem = listState.layoutInfo.visibleItemsInfo
+                                                        .firstOrNull { it.index == rowIndex + 1 }
+                                                    if (rowItem != null) {
+                                                        autoScrollDelta = when {
+                                                            rowItem.offset + rowItem.size + draggingTranslationY >
+                                                                listState.layoutInfo.viewportEndOffset - 96 -> 18f
+                                                            rowItem.offset + draggingTranslationY <
+                                                                listState.layoutInfo.viewportStartOffset + 96 -> -18f
+                                                            else -> 0f
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                }
+                            )
+                        }
+                    } else {
+                        itemsIndexed(visibleBooks, key = { _, item -> item.book.id.ifBlank { item.book.isbn } }) { _, item ->
                         val bookId = item.book.id.ifBlank { item.book.isbn }
                         val isDragging = draggingBookId == bookId
                         ListBookCard(
                             item = item,
                             isReadList = isReadList,
                             isPendingList = isPendingList,
+                            isPendingEditMode = isPendingEditMode,
                             isDragging = isDragging,
+                            draggingOffset = if (isDragging) draggingTranslationY else 0f,
                             onOpen = { onBookClick(item.book) },
-                            dragHandleModifier = if (isPendingList) {
+                            dragHandleModifier = if (isPendingList && isPendingEditMode) {
                                 Modifier.pointerInput(bookId, visibleBooks.size) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
                                             draggingBookId = bookId
+                                            draggingStartIndex = null
+                                            draggingTranslationX = 0f
                                             draggingTranslationY = 0f
                                         },
                                         onDragCancel = {
                                             draggingBookId = null
+                                            draggingStartIndex = null
+                                            draggingTranslationX = 0f
                                             draggingTranslationY = 0f
+                                            autoScrollDelta = 0f
                                             displayedPendingBooks.clear()
                                             displayedPendingBooks.addAll(uiState.books)
                                         },
@@ -244,7 +400,10 @@ fun UserListDetailScreen(
                                                 pendingItem.book.id.ifBlank { pendingItem.book.isbn }
                                             }
                                             draggingBookId = null
+                                            draggingStartIndex = null
+                                            draggingTranslationX = 0f
                                             draggingTranslationY = 0f
+                                            autoScrollDelta = 0f
                                             viewModel.updateBooksOrder(listId, orderedIds)
                                         },
                                         onDrag = { change, dragAmount ->
@@ -255,13 +414,38 @@ fun UserListDetailScreen(
                                             }
                                             if (currentIndex == -1) return@detectDragGesturesAfterLongPress
 
-                                            when {
-                                                draggingTranslationY > 86f && currentIndex < displayedPendingBooks.lastIndex -> {
-                                                    displayedPendingBooks.move(currentIndex, currentIndex + 1)
-                                                    draggingTranslationY = 0f
+                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                            val currentLayoutIndex = currentIndex + 1
+                                            val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
+                                                ?: return@detectDragGesturesAfterLongPress
+                                            val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
+                                            val viewportStart = listState.layoutInfo.viewportStartOffset
+                                            val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                            val currentTop = currentItem.offset + draggingTranslationY
+                                            val currentBottom = currentItem.offset + currentItem.size + draggingTranslationY
+
+                                            autoScrollDelta = when {
+                                                currentBottom > viewportEnd - 96 -> 18f
+                                                currentTop < viewportStart + 96 -> -18f
+                                                else -> 0f
+                                            }
+
+                                            val targetItem = visibleItems
+                                                .filter { it.index > 0 }
+                                                .firstOrNull { itemInfo ->
+                                                    itemInfo.index != currentLayoutIndex &&
+                                                        currentMidPoint >= itemInfo.offset &&
+                                                        currentMidPoint <= itemInfo.offset + itemInfo.size
                                                 }
-                                                draggingTranslationY < -86f && currentIndex > 0 -> {
-                                                    displayedPendingBooks.move(currentIndex, currentIndex - 1)
+
+                                            if (targetItem != null) {
+                                                val targetIndex = (targetItem.index - 1)
+                                                    .coerceIn(0, displayedPendingBooks.lastIndex)
+                                                val fromIndex = displayedPendingBooks.indexOfFirst { pendingItem ->
+                                                    pendingItem.book.id.ifBlank { pendingItem.book.isbn } == bookId
+                                                }
+                                                if (fromIndex != -1 && fromIndex != targetIndex) {
+                                                    displayedPendingBooks.move(fromIndex, targetIndex)
                                                     draggingTranslationY = 0f
                                                 }
                                             }
@@ -272,6 +456,7 @@ fun UserListDetailScreen(
                                 Modifier
                             }
                         )
+                        }
                     }
                 }
             }
@@ -292,7 +477,11 @@ private fun ListDetailHeaderCard(
     sortOption: ListDetailSortOption,
     isReadList: Boolean,
     isPendingList: Boolean,
+    isPendingEditMode: Boolean,
+    showCoverView: Boolean,
     onBack: () -> Unit,
+    onToggleViewMode: () -> Unit,
+    onTogglePendingEditMode: () -> Unit,
     onSortChange: () -> Unit
 ) {
     Card(
@@ -373,6 +562,61 @@ private fun ListDetailHeaderCard(
                 color = OldIvory
             )
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onToggleViewMode,
+                    enabled = !isPendingEditMode,
+                    modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
+                ) {
+                    Icon(
+                        imageVector = if (showCoverView) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView,
+                        contentDescription = null,
+                        tint = TarnishedGold,
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = if (showCoverView) stringResource(R.string.list_view) else stringResource(R.string.cover_view),
+                        color = TarnishedGold,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (isPendingList && !showCoverView) {
+                    OutlinedButton(
+                        onClick = onTogglePendingEditMode,
+                        enabled = !showCoverView,
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            imageVector = if (isPendingEditMode) Icons.Filled.Done else Icons.Filled.Edit,
+                            contentDescription = null,
+                            tint = TarnishedGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = if (isPendingEditMode) stringResource(R.string.save) else stringResource(R.string.edit_review_button),
+                            color = TarnishedGold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
             if (!isPendingList) {
                 Row(
                     modifier = Modifier
@@ -421,11 +665,60 @@ private fun ListDetailHeaderCard(
 }
 
 @Composable
+private fun CoverRow(
+    items: List<UserListDetailBookItem>,
+    isPendingList: Boolean,
+    draggingBookId: String?,
+    draggingOffsetX: Float,
+    draggingOffsetY: Float,
+    onBookClick: (Libro) -> Unit,
+    dragModifierFor: (String) -> Modifier
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items.forEach { item ->
+            val bookId = item.book.id.ifBlank { item.book.isbn }
+            val isDragging = draggingBookId == bookId
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .graphicsLayer {
+                        translationX = if (isDragging) draggingOffsetX else 0f
+                        translationY = if (isDragging) draggingOffsetY else 0f
+                        scaleX = if (isDragging) 1.04f else 1f
+                        scaleY = if (isDragging) 1.04f else 1f
+                    }
+                    .then(dragModifierFor(bookId))
+                    .clickable(enabled = draggingBookId == null) { onBookClick(item.book) },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BookCover(
+                    imageUrl = item.book.imagen,
+                    title = item.book.titulo,
+                    showFrame = false,
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(138.dp)
+                )
+            }
+        }
+
+        repeat(3 - items.size) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
 private fun ListBookCard(
     item: UserListDetailBookItem,
     isReadList: Boolean,
     isPendingList: Boolean,
+    isPendingEditMode: Boolean,
     isDragging: Boolean,
+    draggingOffset: Float,
     onOpen: () -> Unit,
     dragHandleModifier: Modifier = Modifier
 ) {
@@ -434,10 +727,11 @@ private fun ListBookCard(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer {
+                translationY = draggingOffset
                 scaleX = if (isDragging) 1.01f else 1f
                 scaleY = if (isDragging) 1.01f else 1f
             }
-            .clickable { onOpen() },
+            .clickable(enabled = !isPendingEditMode) { onOpen() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
@@ -456,22 +750,22 @@ private fun ListBookCard(
                     title = libro.titulo,
                     showFrame = false,
                     modifier = Modifier
-                        .width(62.dp)
-                        .height(92.dp)
+                        .width(if (isPendingEditMode) 48.dp else 62.dp)
+                        .height(if (isPendingEditMode) 72.dp else 92.dp)
                 )
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(if (isPendingEditMode) 10.dp else 14.dp))
 
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
                         text = libro.titulo.ifBlank { stringResource(R.string.unknown_title) },
-                        style = MaterialTheme.typography.titleLarge,
+                        style = if (isPendingEditMode) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                         color = TarnishedGold
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(if (isPendingEditMode) 4.dp else 6.dp))
 
                     if (libro.autor.isNotBlank()) {
                         Text(
@@ -481,7 +775,7 @@ private fun ListBookCard(
                         )
                     }
 
-                    if (libro.genero.isNotBlank()) {
+                    if (!isPendingEditMode && libro.genero.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = libro.genero,
@@ -521,7 +815,7 @@ private fun ListBookCard(
                     }
                 }
 
-                if (isPendingList) {
+                if (isPendingList && isPendingEditMode) {
                     Box(
                         modifier = dragHandleModifier.padding(start = 10.dp, top = 12.dp, bottom = 12.dp),
                         contentAlignment = Alignment.Center
@@ -535,12 +829,14 @@ private fun ListBookCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            if (!isPendingEditMode) {
+                Spacer(modifier = Modifier.height(14.dp))
 
-            BookShelfActions(
-                book = libro,
-                viewModelKeyPrefix = "list_detail_shelf"
-            )
+                BookShelfActions(
+                    book = libro,
+                    viewModelKeyPrefix = "list_detail_shelf"
+                )
+            }
         }
     }
 }

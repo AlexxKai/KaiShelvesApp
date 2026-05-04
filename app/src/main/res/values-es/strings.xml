@@ -199,6 +199,9 @@
     <string name="sort_option_author">Autor</string>
     <string name="sort_option_rating">Tu valoracion</string>
     <string name="sort_option_read_date">Fecha de lectura</string>
+    <string name="cover_view">Vista de portadas</string>
+    <string name="list_view">Vista de lista</string>
+    <string name="scroll_to_top">Subir arriba</string>
 
     <string name="book_already_in_readings">Este volumen ya forma parte de tus lecturas.</string>
     <string name="book_can_be_added_to_readings">Puedes incorporar este volumen a tu registro personal de lecturas para conservarlo y puntuarlo mas tarde.</string>
