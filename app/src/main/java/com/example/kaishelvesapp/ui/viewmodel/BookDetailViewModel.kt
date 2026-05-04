@@ -37,6 +37,16 @@ class BookDetailViewModel(
     private val _uiState = MutableStateFlow(BookDetailUiState())
     val uiState: StateFlow<BookDetailUiState> = _uiState.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            userListsRepository.observeCachedUserLists().collect { lists ->
+                if (lists.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(availableLists = lists)
+                }
+            }
+        }
+    }
+
     fun cargarEstadoLectura(bookId: String) {
         if (bookId.isBlank()) return
 
@@ -66,19 +76,27 @@ class BookDetailViewModel(
         }
     }
 
-    fun cargarListasParaLibro(bookId: String) {
+    fun cargarListasParaLibro(bookId: String, useCachedSnapshot: Boolean = true) {
         val cachedLists = userListsRepository.getCachedUserListsOrDefault()
         val cachedTags = userListsRepository.getCachedUserTags()
 
-        _uiState.value = _uiState.value.copy(
-            isListsLoading = cachedLists.isEmpty(),
-            isBookSelectionLoading = bookId.isNotBlank(),
-            availableLists = cachedLists,
-            availableTags = cachedTags,
-            selectedListIds = emptySet(),
-            selectedTagIds = emptySet(),
-            errorMessageRes = null
-        )
+        _uiState.value = if (useCachedSnapshot) {
+            _uiState.value.copy(
+                isListsLoading = cachedLists.isEmpty(),
+                isBookSelectionLoading = bookId.isNotBlank(),
+                availableLists = cachedLists,
+                availableTags = cachedTags,
+                selectedListIds = emptySet(),
+                selectedTagIds = emptySet(),
+                errorMessageRes = null
+            )
+        } else {
+            _uiState.value.copy(
+                isListsLoading = false,
+                isBookSelectionLoading = bookId.isNotBlank(),
+                errorMessageRes = null
+            )
+        }
 
         viewModelScope.launch {
             val selectedResult = if (bookId.isBlank()) {
@@ -114,7 +132,28 @@ class BookDetailViewModel(
         }
     }
 
+    private fun adjustListCounts(
+        lists: List<UserBookList>,
+        previousListIds: Set<String>,
+        updatedListIds: Set<String>
+    ): List<UserBookList> {
+        val addedListIds = updatedListIds - previousListIds
+        val removedListIds = previousListIds - updatedListIds
+        if (addedListIds.isEmpty() && removedListIds.isEmpty()) return lists
+
+        return lists.map { list ->
+            val delta = (if (list.id in addedListIds) 1 else 0) - (if (list.id in removedListIds) 1 else 0)
+            if (delta == 0) {
+                list
+            } else {
+                list.copy(bookCount = (list.bookCount + delta).coerceAtLeast(0))
+            }
+        }
+    }
+
     fun guardarOrganizacion(libro: Libro, selectedListIds: Set<String>, selectedTagIds: Set<String>) {
+        val previousListIds = _uiState.value.selectedListIds
+        val previousAvailableLists = _uiState.value.availableLists
         _uiState.value = _uiState.value.copy(
             isSavingLists = true,
             errorMessageRes = null,
@@ -131,11 +170,12 @@ class BookDetailViewModel(
             if (listsResult.isSuccess && tagsResult.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     isSavingLists = false,
+                    availableLists = adjustListCounts(previousAvailableLists, previousListIds, selectedListIds),
                     selectedListIds = selectedListIds,
                     selectedTagIds = selectedTagIds,
                     successMessageRes = R.string.book_lists_updated
                 )
-                cargarListasParaLibro(libro.id.ifBlank { libro.isbn })
+                cargarListasParaLibro(libro.id.ifBlank { libro.isbn }, useCachedSnapshot = false)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isSavingLists = false,
@@ -156,6 +196,9 @@ class BookDetailViewModel(
         resena: String,
         contieneSpoilers: Boolean
     ) {
+        val previousListIds = _uiState.value.selectedListIds
+        val previousAvailableLists = _uiState.value.availableLists
+        val updatedListIds = setOf(UserListsRepository.SYSTEM_LIST_READ_ID)
         _uiState.value = _uiState.value.copy(
             isSavingLists = true,
             errorMessageRes = null,
@@ -181,11 +224,12 @@ class BookDetailViewModel(
             if (listsResult.isSuccess && tagsResult.isSuccess && reviewResult.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     isSavingLists = false,
-                    selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_READ_ID),
+                    availableLists = adjustListCounts(previousAvailableLists, previousListIds, updatedListIds),
+                    selectedListIds = updatedListIds,
                     selectedTagIds = selectedTagIds,
                     successMessageRes = R.string.book_lists_updated
                 )
-                cargarListasParaLibro(libro.id.ifBlank { libro.isbn })
+                cargarListasParaLibro(libro.id.ifBlank { libro.isbn }, useCachedSnapshot = false)
                 cargarEstadoLectura(libro.id.ifBlank { libro.isbn })
             } else {
                 _uiState.value = _uiState.value.copy(
@@ -232,6 +276,8 @@ class BookDetailViewModel(
     }
 
     fun clearBookOrganization(bookId: String) {
+        val previousListIds = _uiState.value.selectedListIds
+        val previousAvailableLists = _uiState.value.availableLists
         _uiState.value = _uiState.value.copy(
             isSavingLists = true,
             errorMessageRes = null,
@@ -243,11 +289,12 @@ class BookDetailViewModel(
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
                         isSavingLists = false,
+                        availableLists = adjustListCounts(previousAvailableLists, previousListIds, emptySet()),
                         selectedListIds = emptySet(),
                         selectedTagIds = emptySet(),
                         successMessageRes = R.string.book_lists_updated
                     )
-                    cargarListasParaLibro(bookId)
+                    cargarListasParaLibro(bookId, useCachedSnapshot = false)
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(

@@ -28,10 +28,14 @@ object GuestLocalStore {
     const val SYSTEM_LIST_WANT_TO_READ_ID = "system_want_to_read"
     const val SYSTEM_LIST_READING_ID = "system_reading"
     const val SYSTEM_LIST_READ_ID = "system_read"
+    const val SYSTEM_LIST_UNFINISHED_ID = "system_unfinished"
+    const val SYSTEM_LIST_PENDING_ID = "system_pending"
 
     const val SYSTEM_LIST_WANT_TO_READ_KEY = "want_to_read"
     const val SYSTEM_LIST_READING_KEY = "reading"
     const val SYSTEM_LIST_READ_KEY = "read"
+    const val SYSTEM_LIST_UNFINISHED_KEY = "unfinished"
+    const val SYSTEM_LIST_PENDING_KEY = "pending"
 
     private val gson: Gson = GsonBuilder().create()
 
@@ -64,6 +68,22 @@ object GuestLocalStore {
             position = 2,
             isSystem = true,
             systemKey = SYSTEM_LIST_READ_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_PENDING_ID,
+            name = "Pendientes",
+            description = "Libros que quieres ordenar a tu manera para retomarlos despues.",
+            position = 3,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_PENDING_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_UNFINISHED_ID,
+            name = "No terminado",
+            description = "Libros que dejaste a medias o prefieres pausar.",
+            position = 4,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_UNFINISHED_KEY
         )
     )
 

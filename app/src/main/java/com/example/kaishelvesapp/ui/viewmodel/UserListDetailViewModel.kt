@@ -126,6 +126,28 @@ class UserListDetailViewModel(
         }
     }
 
+    fun updateBooksOrder(listId: String, orderedBookIds: List<String>) {
+        if (listId != UserListsRepository.SYSTEM_LIST_PENDING_ID) return
+
+        _uiState.value = _uiState.value.copy(
+            books = orderedBookIds.mapNotNull { bookId ->
+                _uiState.value.books.firstOrNull { item ->
+                    item.book.id.ifBlank { item.book.isbn } == bookId
+                }
+            }
+        )
+
+        viewModelScope.launch {
+            repository.updateBooksInListOrder(listId, orderedBookIds)
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessageRes = R.string.list_order_update_error
+                    )
+                    loadListDetail(listId)
+                }
+        }
+    }
+
     fun clearMessages() {
         _uiState.value = _uiState.value.copy(
             errorMessageRes = null,

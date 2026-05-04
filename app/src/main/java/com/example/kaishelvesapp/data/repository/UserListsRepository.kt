@@ -9,6 +9,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -24,26 +27,35 @@ class UserListsRepository(
         const val SYSTEM_LIST_WANT_TO_READ_ID = "system_want_to_read"
         const val SYSTEM_LIST_READING_ID = "system_reading"
         const val SYSTEM_LIST_READ_ID = "system_read"
+        const val SYSTEM_LIST_UNFINISHED_ID = "system_unfinished"
+        const val SYSTEM_LIST_PENDING_ID = "system_pending"
 
         const val SYSTEM_LIST_WANT_TO_READ_KEY = "want_to_read"
         const val SYSTEM_LIST_READING_KEY = "reading"
         const val SYSTEM_LIST_READ_KEY = "read"
+        const val SYSTEM_LIST_UNFINISHED_KEY = "unfinished"
+        const val SYSTEM_LIST_PENDING_KEY = "pending"
 
         private var cachedListsOwnerId: String? = null
         private var cachedUserLists: List<UserBookList>? = null
         private var cachedTagsOwnerId: String? = null
         private var cachedUserTags: List<UserBookTag>? = null
+        private val cachedUserListsState = MutableStateFlow<List<UserBookList>>(emptyList())
     }
 
     private val systemListIds = setOf(
         SYSTEM_LIST_WANT_TO_READ_ID,
         SYSTEM_LIST_READING_ID,
-        SYSTEM_LIST_READ_ID
+        SYSTEM_LIST_READ_ID,
+        SYSTEM_LIST_UNFINISHED_ID,
+        SYSTEM_LIST_PENDING_ID
     )
 
     private val systemListPriority = listOf(
         SYSTEM_LIST_READ_ID,
         SYSTEM_LIST_READING_ID,
+        SYSTEM_LIST_PENDING_ID,
+        SYSTEM_LIST_UNFINISHED_ID,
         SYSTEM_LIST_WANT_TO_READ_ID
     )
 
@@ -60,6 +72,27 @@ class UserListsRepository(
     private fun isGuestSessionActive(): Boolean {
         return auth.currentUser == null && GuestLocalStore.isSessionActive()
     }
+
+    private fun updateCachedListCounts(
+        ownerId: String?,
+        addedListIds: Set<String>,
+        removedListIds: Set<String>
+    ) {
+        if (cachedListsOwnerId != ownerId || cachedUserLists == null) return
+
+        val updatedLists = cachedUserLists?.map { list ->
+            val delta = (if (list.id in addedListIds) 1 else 0) - (if (list.id in removedListIds) 1 else 0)
+            if (delta == 0) {
+                list
+            } else {
+                list.copy(bookCount = (list.bookCount + delta).coerceAtLeast(0))
+            }
+        }
+        cachedUserLists = updatedLists
+        cachedUserListsState.value = updatedLists.orEmpty()
+    }
+
+    fun observeCachedUserLists(): StateFlow<List<UserBookList>> = cachedUserListsState.asStateFlow()
 
     private fun localBookId(book: Libro): String {
         return safeBookDocId(book.id.ifBlank { book.isbn })
@@ -286,6 +319,22 @@ class UserListsRepository(
             position = 2,
             isSystem = true,
             systemKey = SYSTEM_LIST_READ_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_PENDING_ID,
+            name = "Pendientes",
+            description = "Libros que quieres ordenar a tu manera para retomarlos despues.",
+            position = 3,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_PENDING_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_UNFINISHED_ID,
+            name = "No terminado",
+            description = "Libros que dejaste a medias o prefieres pausar.",
+            position = 4,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_UNFINISHED_KEY
         )
     )
 
@@ -341,6 +390,7 @@ class UserListsRepository(
                 val lists = localGuestLists(GuestLocalStore.readState())
                 cachedListsOwnerId = currentOwnerIdOrNull()
                 cachedUserLists = lists
+                cachedUserListsState.value = lists
                 return Result.success(lists)
             }
 
@@ -375,6 +425,7 @@ class UserListsRepository(
 
             cachedListsOwnerId = uid
             cachedUserLists = lists
+            cachedUserListsState.value = lists
             Result.success(lists)
         } catch (e: Exception) {
             Result.failure(e)
@@ -407,10 +458,14 @@ class UserListsRepository(
     suspend fun getBooksInList(listId: String): Result<List<Libro>> {
         return try {
             if (isGuestSessionActive()) {
-                val books = GuestLocalStore.readState()
+                val storedBooks = GuestLocalStore.readState()
                     .listBooks[listId]
                     .orEmpty()
-                    .sortedBy { it.titulo.lowercase() }
+                val books = if (listId == SYSTEM_LIST_PENDING_ID) {
+                    storedBooks
+                } else {
+                    storedBooks.sortedBy { it.titulo.lowercase() }
+                }
                 return Result.success(books)
             }
 
@@ -423,11 +478,21 @@ class UserListsRepository(
                 .get()
                 .await()
 
-            val books = snapshot.documents.mapNotNull { document ->
+            val sortedDocuments = if (listId == SYSTEM_LIST_PENDING_ID) {
+                snapshot.documents.sortedWith(
+                    compareBy<com.google.firebase.firestore.DocumentSnapshot> {
+                        it.getLong("listPosition") ?: Long.MAX_VALUE
+                    }.thenBy { it.getString("titulo").orEmpty().lowercase() }
+                )
+            } else {
+                snapshot.documents.sortedBy { it.getString("titulo").orEmpty().lowercase() }
+            }
+
+            val books = sortedDocuments.mapNotNull { document ->
                 document.toObject(Libro::class.java)?.copy(
                     id = document.getString("id").orEmpty().ifBlank { document.id }
                 )
-            }.sortedBy { it.titulo.lowercase() }
+            }
 
             Result.success(books)
         } catch (e: Exception) {
@@ -610,6 +675,19 @@ class UserListsRepository(
         }
     }
 
+    private suspend fun nextListPosition(uid: String, listId: String): Long {
+        return userListsCollection(uid)
+            .document(listId)
+            .collection("libros")
+            .get()
+            .await()
+            .documents
+            .mapNotNull { it.getLong("listPosition") }
+            .maxOrNull()
+            ?.plus(1L)
+            ?: 0L
+    }
+
     suspend fun updateBookAssignments(
         libro: Libro,
         selectedListIds: Set<String>
@@ -621,9 +699,13 @@ class UserListsRepository(
                     return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
                 }
 
+                var localIdsToAdd = emptySet<String>()
+                var localIdsToRemove = emptySet<String>()
                 GuestLocalStore.updateState { currentState ->
                     val normalizedSelectedIds = localNormalizeSelectedListIds(currentState, selectedListIds)
                     val currentSelectedIds = localSelectedListIds(currentState, safeBookId)
+                    localIdsToAdd = normalizedSelectedIds - currentSelectedIds
+                    localIdsToRemove = currentSelectedIds - normalizedSelectedIds
                     val mutableListBooks = currentState.listBooks.toMutableMap()
                     val storedBook = localStoredBook(libro, safeBookId)
 
@@ -646,6 +728,11 @@ class UserListsRepository(
                         updatedState
                     }
                 }
+                updateCachedListCounts(
+                    ownerId = currentOwnerIdOrNull(),
+                    addedListIds = localIdsToAdd,
+                    removedListIds = localIdsToRemove
+                )
                 return Result.success(Unit)
             }
 
@@ -688,10 +775,15 @@ class UserListsRepository(
                 val listRef = userListsCollection(uid).document(listId)
                 val bookRef = listRef.collection("libros").document(safeBookId)
                 val alreadyExists = bookRef.get().await().exists()
-                batch.set(
-                    bookRef,
+                val payload = if (listId == SYSTEM_LIST_PENDING_ID && !alreadyExists) {
+                    bookPayload + mapOf(
+                        "activityAt" to FieldValue.serverTimestamp(),
+                        "listPosition" to nextListPosition(uid, listId)
+                    )
+                } else {
                     bookPayload + mapOf("activityAt" to FieldValue.serverTimestamp())
-                )
+                }
+                batch.set(bookRef, payload, SetOptions.merge())
                 if (!alreadyExists) {
                     batch.update(listRef, "bookCount", FieldValue.increment(1))
                 }
@@ -726,6 +818,11 @@ class UserListsRepository(
             }
 
             batch.commit().await()
+            updateCachedListCounts(
+                ownerId = uid,
+                addedListIds = idsToAdd,
+                removedListIds = idsToRemove
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -934,6 +1031,56 @@ class UserListsRepository(
         }
     }
 
+    suspend fun updateBooksInListOrder(listId: String, orderedBookIds: List<String>): Result<Unit> {
+        return try {
+            if (listId != SYSTEM_LIST_PENDING_ID) {
+                return Result.success(Unit)
+            }
+
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    val currentBooks = currentState.listBooks[listId].orEmpty()
+                    val booksById = currentBooks.associateBy { localBookId(it) }
+                    val normalizedOrderedIds = orderedBookIds
+                        .map(::safeBookDocId)
+                        .filter { booksById.containsKey(it) }
+                    val missingBooks = currentBooks.filterNot { localBookId(it) in normalizedOrderedIds }
+                    val reorderedBooks = normalizedOrderedIds.mapNotNull { booksById[it] } + missingBooks
+                    currentState.copy(
+                        listBooks = currentState.listBooks + (listId to reorderedBooks)
+                    )
+                }
+                return Result.success(Unit)
+            }
+
+            val uid = requireUid()
+            ensureDefaultLists(uid)
+
+            val listRef = userListsCollection(uid).document(listId)
+            val currentBooks = listRef.collection("libros").get().await().documents
+            val currentIds = currentBooks.map { it.id }.toSet()
+            val normalizedOrderedIds = orderedBookIds
+                .map(::safeBookDocId)
+                .filter { it in currentIds }
+            val missingIds = currentBooks.map { it.id }.filterNot { it in normalizedOrderedIds }
+            val finalIds = normalizedOrderedIds + missingIds
+            val batch = firestore.batch()
+
+            finalIds.forEachIndexed { index, bookId ->
+                batch.update(
+                    listRef.collection("libros").document(bookId),
+                    "listPosition",
+                    index
+                )
+            }
+
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun syncBookIntoSystemReadList(libro: Libro): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
@@ -1062,7 +1209,9 @@ class UserListsRepository(
                     return Result.failure(IllegalArgumentException("El libro no tiene identificador valido"))
                 }
 
+                var removedListIds = emptySet<String>()
                 GuestLocalStore.updateState { currentState ->
+                    removedListIds = localSelectedListIds(currentState, safeBookId)
                     val updatedListBooks = currentState.listBooks.mapValues { (_, books) ->
                         books.filterNot { localBookId(it) == safeBookId }
                     }
@@ -1073,6 +1222,11 @@ class UserListsRepository(
                         readBooks = currentState.readBooks.filterNot { it.id == safeBookId }
                     )
                 }
+                updateCachedListCounts(
+                    ownerId = currentOwnerIdOrNull(),
+                    addedListIds = emptySet(),
+                    removedListIds = removedListIds
+                )
                 return Result.success(Unit)
             }
 
@@ -1084,10 +1238,12 @@ class UserListsRepository(
 
             val allListsSnapshot = userListsCollection(uid).get().await()
             val batch = firestore.batch()
+            val removedListIds = mutableSetOf<String>()
 
             allListsSnapshot.documents.forEach { document ->
                 val bookRef = document.reference.collection("libros").document(safeBookId)
                 if (bookRef.get().await().exists()) {
+                    removedListIds += document.id
                     batch.delete(bookRef)
                     batch.update(document.reference, "bookCount", FieldValue.increment(-1))
                 }
@@ -1096,6 +1252,11 @@ class UserListsRepository(
             batch.delete(userBookMetadataCollection(uid).document(safeBookId))
             batch.delete(userReadCollection(uid).document(safeBookId))
             batch.commit().await()
+            updateCachedListCounts(
+                ownerId = uid,
+                addedListIds = emptySet(),
+                removedListIds = removedListIds
+            )
 
             Result.success(Unit)
         } catch (e: Exception) {

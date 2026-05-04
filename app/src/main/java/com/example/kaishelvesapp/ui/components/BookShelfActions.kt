@@ -231,7 +231,9 @@ fun BookShelfActions(
                 showOrganizerDialog = true
             }
         },
-        onOpenOrganizer = { showOrganizerDialog = true }
+        onOpenOrganizer = {
+            showOrganizerDialog = true
+        }
     )
 }
 

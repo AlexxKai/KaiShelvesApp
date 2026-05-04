@@ -233,7 +233,7 @@
     <string name="create">Crear</string>
     <string name="tag">Etiqueta</string>
     <string name="shelf">Estantería</string>
-    <string name="single_shelf_note">Un libro no puede estar en dos estanterías distintas al mismo tiempo. Las estanterías predeterminadas son Quiero leer, Leyendo y Leído.</string>
+    <string name="single_shelf_note">Un libro no puede estar en dos estanterias distintas al mismo tiempo. Las estanterias predeterminadas son Quiero leer, Leyendo, Leido, Pendientes y No terminado.</string>
     <string name="tag_create_note">Añade todas las etiquetas que quieras. Prueba a crear una etiqueta, como, por ejemplo, realismo mágico, autores africanos o protagonistas femeninas.</string>
     <string name="shelf_name_hint">Nombre de la estantería</string>
     <string name="tag_name_hint">Nombre de la etiqueta</string>

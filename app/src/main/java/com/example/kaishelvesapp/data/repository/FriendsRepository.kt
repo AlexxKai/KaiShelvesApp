@@ -14,8 +14,10 @@ import com.google.firebase.firestore.SetOptions
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.tasks.await
+import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_PENDING_ID
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_READ_ID
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_READING_ID
+import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_UNFINISHED_ID
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_WANT_TO_READ_ID
 
 enum class SuggestionSource {
@@ -262,6 +264,8 @@ class FriendsRepository(
             SYSTEM_LIST_WANT_TO_READ_ID -> "Quiero leer"
             SYSTEM_LIST_READING_ID -> "Leyendo"
             SYSTEM_LIST_READ_ID -> "Leído"
+            SYSTEM_LIST_UNFINISHED_ID -> "No terminado"
+            SYSTEM_LIST_PENDING_ID -> "Pendientes"
             else -> "Lista"
         }
     }
@@ -1146,7 +1150,9 @@ class FriendsRepository(
                             SYSTEM_LIST_WANT_TO_READ_ID -> 0
                             SYSTEM_LIST_READING_ID -> 1
                             SYSTEM_LIST_READ_ID -> 2
-                            else -> 3
+                            SYSTEM_LIST_PENDING_ID -> 3
+                            SYSTEM_LIST_UNFINISHED_ID -> 4
+                            else -> 5
                         }
                     }.thenBy { it.name.lowercase() }
                 )
@@ -1200,7 +1206,9 @@ class FriendsRepository(
                     name = defaultSystemListTitle(listId),
                     isSystem = listId == SYSTEM_LIST_WANT_TO_READ_ID ||
                         listId == SYSTEM_LIST_READING_ID ||
-                        listId == SYSTEM_LIST_READ_ID
+                        listId == SYSTEM_LIST_READ_ID ||
+                        listId == SYSTEM_LIST_UNFINISHED_ID ||
+                        listId == SYSTEM_LIST_PENDING_ID
                 )
             }
 

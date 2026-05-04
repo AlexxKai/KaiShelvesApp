@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,7 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
@@ -124,7 +124,9 @@ fun UserListsScreen(
     fun isProtectedSystemList(list: UserBookList) = list.isSystem || list.id in setOf(
         UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID,
         UserListsRepository.SYSTEM_LIST_READING_ID,
-        UserListsRepository.SYSTEM_LIST_READ_ID
+        UserListsRepository.SYSTEM_LIST_READ_ID,
+        UserListsRepository.SYSTEM_LIST_PENDING_ID,
+        UserListsRepository.SYSTEM_LIST_UNFINISHED_ID
     )
     val systemLists = uiState.lists.filter(::isProtectedSystemList)
     fun currentCustomOrder(lists: List<UserBookList>) = lists.map { it.id }
@@ -554,11 +556,11 @@ private fun UserListCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = !isDragging) { onOpen() },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -570,115 +572,189 @@ private fun UserListCard(
                         )
                     )
                 )
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+            ListPreviewStack(
+                userList = userList,
+                modifier = Modifier
+                    .width(112.dp)
+                    .height(92.dp)
+            )
+
+            Spacer(modifier = Modifier.width(18.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = userList.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TarnishedGold,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = userList.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TarnishedGold,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = stringResource(R.string.list_books_count, userList.bookCount),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    if (isEditable) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = dragHandleModifier.padding(start = 2.dp, top = 4.dp, bottom = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.DragIndicator,
+                                    contentDescription = stringResource(R.string.drag_to_reorder),
+                                    tint = OldIvory.copy(alpha = 0.75f)
+                                )
+                            }
+
+                            IconButton(onClick = onEdit) {
+                                Icon(
+                                    imageVector = Icons.Filled.Edit,
+                                    contentDescription = stringResource(R.string.edit_list),
+                                    tint = TarnishedGold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (userList.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = userList.description,
                         style = MaterialTheme.typography.bodySmall,
-                        color = OldIvory,
+                        color = OldIvory.copy(alpha = 0.86f),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isEditable) {
-                        Box(
-                            modifier = dragHandleModifier.padding(start = 6.dp, top = 8.dp, bottom = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.DragIndicator,
-                                contentDescription = stringResource(R.string.drag_to_reorder),
-                                tint = OldIvory.copy(alpha = 0.75f)
-                            )
-                        }
-
-                        IconButton(onClick = onEdit) {
-                            Icon(
-                                imageVector = Icons.Filled.Edit,
-                                contentDescription = stringResource(R.string.edit_list),
-                                tint = TarnishedGold
-                            )
-                        }
-                    }
-                }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(8.dp))
+@Composable
+private fun ListPreviewStack(
+    userList: UserBookList,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.BottomStart
+    ) {
+        if (userList.previewImageUrls.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .offset(x = 34.dp)
+                    .width(44.dp)
+                    .height(70.dp)
+                    .background(
+                        color = OldIvory.copy(alpha = 0.82f),
+                        shape = RoundedCornerShape(2.dp)
+                    )
+            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .offset(x = 52.dp)
+                    .width(38.dp)
+                    .height(58.dp)
+                    .background(
+                        color = OldIvory.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(2.dp)
+                    )
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(70.dp)
+                    .height(86.dp)
+                    .background(
+                        color = DeepWalnut,
+                        shape = RoundedCornerShape(2.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.LibraryBooks,
+                    imageVector = Icons.Filled.Add,
                     contentDescription = null,
-                    tint = TarnishedGold
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Text(
-                    text = stringResource(R.string.list_books_count, userList.bookCount),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = OldIvory,
-                    modifier = Modifier.weight(1f)
+                    tint = OldIvory,
+                    modifier = Modifier.size(34.dp)
                 )
             }
+        } else {
+            userList.previewImageUrls
+                .take(3)
+                .forEachIndexed { index, imageUrl ->
+                    val coverWidth = when (index) {
+                        0 -> 70.dp
+                        1 -> 52.dp
+                        else -> 42.dp
+                    }
+                    val coverHeight = when (index) {
+                        0 -> 86.dp
+                        1 -> 76.dp
+                        else -> 64.dp
+                    }
+                    val xOffset = when (index) {
+                        0 -> 0.dp
+                        1 -> 34.dp
+                        else -> 62.dp
+                    }
 
-            if (userList.previewImageUrls.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                    BookCover(
+                        imageUrl = imageUrl,
+                        title = userList.name,
+                        showFrame = false,
+                        modifier = Modifier
+                            .offset(x = xOffset)
+                            .zIndex((3 - index).toFloat())
+                            .width(coverWidth)
+                            .height(coverHeight)
+                    )
+                }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    userList.previewImageUrls.take(3).forEach { imageUrl ->
-                        BookCover(
-                            imageUrl = imageUrl,
-                            title = userList.name,
-                            modifier = Modifier
-                                .width(34.dp)
-                                .height(52.dp)
+            if (userList.bookCount > userList.previewImageUrls.size) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .zIndex(4f)
+                        .background(
+                            color = BloodWine.copy(alpha = 0.72f),
+                            shape = RoundedCornerShape(6.dp)
                         )
-                    }
-
-                    if (userList.bookCount > userList.previewImageUrls.size) {
-                        Box(
-                            modifier = Modifier
-                                .width(34.dp)
-                                .height(52.dp)
-                                .background(
-                                    color = BloodWine.copy(alpha = 0.45f),
-                                    shape = RoundedCornerShape(10.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "+${userList.bookCount - userList.previewImageUrls.size}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TarnishedGold
-                            )
-                        }
-                    }
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "+${userList.bookCount - userList.previewImageUrls.size}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TarnishedGold
+                    )
                 }
             }
         }

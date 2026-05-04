@@ -233,7 +233,7 @@
     <string name="create">Create</string>
     <string name="tag">Tag</string>
     <string name="shelf">Shelf</string>
-    <string name="single_shelf_note">A book cannot belong to two different shelves at the same time. The predefined shelves are Want to read, Reading and Read.</string>
+    <string name="single_shelf_note">A book cannot belong to two different shelves at the same time. The predefined shelves are Want to read, Reading, Read, Pending and Unfinished.</string>
     <string name="tag_create_note">Add all the tags you want. Try creating a tag such as magical realism, African authors or female protagonists.</string>
     <string name="shelf_name_hint">Shelf name</string>
     <string name="tag_name_hint">Tag name</string>

@@ -10,6 +10,7 @@ import com.example.kaishelvesapp.data.remote.googlebooks.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import retrofit2.HttpException
 import java.text.SimpleDateFormat
@@ -64,7 +65,30 @@ class BookRepository(
 
     private fun Throwable.shouldRetryGoogleBooksWithoutApiKey(): Boolean {
         val httpException = this as? HttpException ?: return false
-        return httpException.code() == 403 && GoogleBooksClient.hasApiKey
+        return GoogleBooksClient.hasApiKey && httpException.code() in setOf(403, 429, 500, 502, 503, 504)
+    }
+
+    private fun Throwable.shouldRetryGoogleBooksRequest(): Boolean {
+        val httpException = this as? HttpException ?: return false
+        return httpException.code() in setOf(429, 500, 502, 503, 504)
+    }
+
+    private suspend fun <T> retryGoogleBooksRequest(block: suspend () -> T): T {
+        var lastError: Exception? = null
+
+        repeat(3) { attempt ->
+            try {
+                return block()
+            } catch (error: Exception) {
+                lastError = error
+                if (!error.shouldRetryGoogleBooksRequest() || attempt == 2) {
+                    throw error
+                }
+                delay(350L * (attempt + 1))
+            }
+        }
+
+        throw lastError ?: IllegalStateException("No se pudo completar la peticion a Google Books")
     }
 
     private suspend fun searchGoogleBooks(
@@ -73,25 +97,29 @@ class BookRepository(
         startIndex: Int = 0,
         orderBy: String? = null
     ) = try {
-        api.searchBooks(
-            query = query,
-            maxResults = maxResults,
-            startIndex = startIndex,
-            orderBy = orderBy,
-            langRestrict = currentGoogleBooksLanguage()
-        )
+        retryGoogleBooksRequest {
+            api.searchBooks(
+                query = query,
+                maxResults = maxResults,
+                startIndex = startIndex,
+                orderBy = orderBy,
+                langRestrict = currentGoogleBooksLanguage()
+            )
+        }
     } catch (error: Exception) {
         if (!error.shouldRetryGoogleBooksWithoutApiKey()) {
             throw error
         }
 
-        publicApi.searchBooks(
-            query = query,
-            maxResults = maxResults,
-            startIndex = startIndex,
-            orderBy = orderBy,
-            langRestrict = currentGoogleBooksLanguage()
-        )
+        retryGoogleBooksRequest {
+            publicApi.searchBooks(
+                query = query,
+                maxResults = maxResults,
+                startIndex = startIndex,
+                orderBy = orderBy,
+                langRestrict = currentGoogleBooksLanguage()
+            )
+        }
     }
 
     suspend fun obtenerLibros(): Result<List<Libro>> {
