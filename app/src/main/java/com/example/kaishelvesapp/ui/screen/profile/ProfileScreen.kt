@@ -72,7 +72,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -93,6 +92,7 @@ import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
+import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.screen.friends.FriendProfileContent
@@ -688,38 +688,35 @@ private fun PasswordChangeFields(
     onPasswordConfirmationChange: (String) -> Unit,
     onConfirm: () -> Unit
 ) {
-    OutlinedTextField(
+    PasswordOutlinedTextField(
         value = currentPassword,
         onValueChange = onCurrentPasswordChange,
         label = { Text(stringResource(R.string.profile_current_password)) },
         modifier = Modifier.fillMaxWidth(),
         colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation()
+        singleLine = true
     )
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    OutlinedTextField(
+    PasswordOutlinedTextField(
         value = password,
         onValueChange = onPasswordChange,
         label = { Text(stringResource(R.string.profile_new_password)) },
         modifier = Modifier.fillMaxWidth(),
         colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation()
+        singleLine = true
     )
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    OutlinedTextField(
+    PasswordOutlinedTextField(
         value = passwordConfirmation,
         onValueChange = onPasswordConfirmationChange,
         label = { Text(stringResource(R.string.profile_confirm_password)) },
         modifier = Modifier.fillMaxWidth(),
         colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-        singleLine = true,
-        visualTransformation = PasswordVisualTransformation()
+        singleLine = true
     )
 
     Spacer(modifier = Modifier.height(12.dp))
@@ -1000,7 +997,7 @@ private fun PasswordLoginDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
+                PasswordOutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChange,
                     label = {
@@ -1016,20 +1013,18 @@ private fun PasswordLoginDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
+                PasswordOutlinedTextField(
                     value = passwordConfirmation,
                     onValueChange = onPasswordConfirmationChange,
                     label = { Text(stringResource(R.string.profile_confirm_password)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    singleLine = true
                 )
 
                 message?.let {

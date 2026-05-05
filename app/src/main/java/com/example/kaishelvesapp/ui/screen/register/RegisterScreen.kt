@@ -27,12 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
+import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -113,14 +113,13 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
+                PasswordOutlinedTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
                     label = { Text(stringResource(R.string.password)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                    visualTransformation = PasswordVisualTransformation()
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))

@@ -37,7 +37,8 @@ data class AuthUiState(
     val hasPasswordLogin: Boolean = false,
     val hasGoogleLogin: Boolean = false,
     val loginProviders: List<LoginProviderState> = emptyList(),
-    val pendingGuestMergeDecision: GuestMergeDecision? = null
+    val pendingGuestMergeDecision: GuestMergeDecision? = null,
+    val pendingEmailVerificationEmail: String? = null
 )
 
 class AuthViewModel(
@@ -46,7 +47,9 @@ class AuthViewModel(
 
     private val _uiState = MutableStateFlow(
         AuthUiState(
-            isLoggedIn = repository.isAuthenticated()
+            isLoggedIn = repository.isAuthenticated() && !repository.hasPendingEmailVerification(),
+            pendingEmailVerificationEmail = repository.pendingEmailVerificationEmail()
+                .takeIf { repository.hasPendingEmailVerification() }
         )
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -58,7 +61,12 @@ class AuthViewModel(
             }
         }
 
-        if (repository.isAuthenticated()) {
+        if (repository.hasPendingEmailVerification()) {
+            _uiState.value = _uiState.value.copy(
+                isLoggedIn = false,
+                pendingEmailVerificationEmail = repository.pendingEmailVerificationEmail()
+            )
+        } else if (repository.isAuthenticated()) {
             loadCurrentUserProfile()
         }
     }
@@ -185,6 +193,16 @@ class AuthViewModel(
     }
 
     fun loadCurrentUserProfile() {
+        if (repository.hasPendingEmailVerification()) {
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                isLoggedIn = false,
+                pendingEmailVerificationEmail = repository.pendingEmailVerificationEmail(),
+                errorMessage = null
+            )
+            return
+        }
+
         _uiState.value = _uiState.value.copy(
             isLoading = true,
             errorMessage = null
@@ -208,6 +226,7 @@ class AuthViewModel(
                         hasPasswordLogin = repository.hasPasswordLogin(),
                         hasGoogleLogin = repository.hasGoogleLogin(),
                         loginProviders = repository.getLoginProviders(),
+                        pendingEmailVerificationEmail = null,
                         errorMessage = null
                     )
                 }
@@ -248,6 +267,40 @@ class AuthViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessage = authErrorText(error, AuthMessage.LoginFailed)
+                    )
+                }
+        }
+    }
+
+    fun sendPasswordReset() {
+        val email = _uiState.value.loginIdentifier.trim()
+
+        if (email.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = authText(AuthMessage.PasswordResetEmailRequired),
+                successMessage = null
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.sendPasswordReset(email)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        successMessage = authText(AuthMessage.PasswordResetSent)
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = authErrorText(error, AuthMessage.PasswordResetFailed)
                     )
                 }
         }
@@ -351,6 +404,7 @@ class AuthViewModel(
                         guestUsername = usuario.usuario,
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
+                        pendingEmailVerificationEmail = null,
                         errorMessage = null
                     )
                 }
@@ -369,7 +423,9 @@ class AuthViewModel(
             pendingGuestMergeDecision = null,
             isLoading = false,
             user = null,
-            isLoggedIn = repository.isAuthenticated()
+            isLoggedIn = repository.isAuthenticated() && !repository.hasPendingEmailVerification(),
+            pendingEmailVerificationEmail = repository.pendingEmailVerificationEmail()
+                .takeIf { repository.hasPendingEmailVerification() }
         )
         if (repository.isAuthenticated()) {
             loadCurrentUserProfile()
@@ -395,6 +451,7 @@ class AuthViewModel(
                         profilePhotoUri = usuario.photoUrl,
                         isLoggedIn = true,
                         pendingGuestMergeDecision = null,
+                        pendingEmailVerificationEmail = null,
                         successMessage = authText(AuthMessage.GuestMergeSuccess)
                     )
                 }
@@ -687,6 +744,79 @@ class AuthViewModel(
         _uiState.value = AuthUiState(isLoggedIn = false)
     }
 
+    fun dismissEmailVerification() {
+        repository.cancelPendingEmailVerification()
+        _uiState.value = _uiState.value.copy(
+            isLoading = false,
+            user = null,
+            pendingEmailVerificationEmail = null,
+            pendingGuestMergeDecision = null,
+            errorMessage = null,
+            successMessage = null,
+            isLoggedIn = repository.isAuthenticated()
+        )
+
+        if (repository.isAuthenticated()) {
+            loadCurrentUserProfile()
+        }
+    }
+
+    fun confirmEmailVerification() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.checkEmailVerification()
+                .onSuccess { authResult ->
+                    if (authResult is AuthOperationResult.EmailVerificationRequired) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            user = authResult.user,
+                            email = authResult.email,
+                            pendingEmailVerificationEmail = authResult.email,
+                            isLoggedIn = false,
+                            errorMessage = authText(AuthMessage.EmailNotVerified)
+                        )
+                    } else {
+                        handleAuthOperationResult(authResult)
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = authErrorText(error, AuthMessage.EmailVerificationCheckFailed)
+                    )
+                }
+        }
+    }
+
+    fun resendEmailVerification() {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.resendEmailVerification()
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        successMessage = authText(AuthMessage.EmailVerificationSent)
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = authErrorText(error, AuthMessage.EmailVerificationSendFailed)
+                    )
+                }
+        }
+    }
+
     private fun authErrorText(error: Throwable, fallback: AuthMessage): String {
         val firebaseCode = (error as? FirebaseAuthException)?.errorCode
         val message = error.message.orEmpty()
@@ -764,6 +894,7 @@ class AuthViewModel(
                     hasGoogleLogin = repository.hasGoogleLogin(),
                     loginProviders = repository.getLoginProviders(),
                     pendingGuestMergeDecision = null,
+                    pendingEmailVerificationEmail = null,
                     errorMessage = null
                 )
             }
@@ -777,6 +908,21 @@ class AuthViewModel(
                     profilePhotoUri = result.decision.user.photoUrl,
                     isLoggedIn = false,
                     pendingGuestMergeDecision = result.decision,
+                    pendingEmailVerificationEmail = null,
+                    errorMessage = null
+                )
+            }
+
+            is AuthOperationResult.EmailVerificationRequired -> {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    user = result.user,
+                    email = result.email,
+                    username = result.user.usuario,
+                    profilePhotoUri = result.user.photoUrl,
+                    isLoggedIn = false,
+                    pendingGuestMergeDecision = null,
+                    pendingEmailVerificationEmail = result.email,
                     errorMessage = null
                 )
             }
@@ -839,6 +985,22 @@ private enum class AuthMessage(
         spanish = "Error al registrar usuario",
         english = "User registration failed"
     ),
+    EmailNotVerified(
+        spanish = "El email todavia no esta verificado",
+        english = "The email is not verified yet"
+    ),
+    EmailVerificationSent(
+        spanish = "Email de verificacion reenviado",
+        english = "Verification email resent"
+    ),
+    EmailVerificationCheckFailed(
+        spanish = "No se pudo comprobar la verificacion del email",
+        english = "The email verification could not be checked"
+    ),
+    EmailVerificationSendFailed(
+        spanish = "No se pudo reenviar el email de verificacion",
+        english = "The verification email could not be resent"
+    ),
     EmailAlreadyInUse(
         spanish = "Ese correo electrónico ya está en uso",
         english = "That email address is already in use"
@@ -850,6 +1012,18 @@ private enum class AuthMessage(
     PasswordTooShort(
         spanish = "La contraseña debe tener al menos 6 caracteres",
         english = "Password must be at least 6 characters long"
+    ),
+    PasswordResetEmailRequired(
+        spanish = "Introduce tu correo electrónico para recuperar la contraseña",
+        english = "Enter your email address to recover your password"
+    ),
+    PasswordResetSent(
+        spanish = "Te hemos enviado un email para recuperar la contraseña",
+        english = "We sent you an email to recover your password"
+    ),
+    PasswordResetFailed(
+        spanish = "No se pudo enviar el email de recuperación",
+        english = "The password recovery email could not be sent"
     ),
     GuestUsernameRequired(
         spanish = "Introduce un nombre de usuario para continuar sin cuenta",

@@ -42,6 +42,7 @@ import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
+import com.example.kaishelvesapp.ui.screen.login.EmailVerificationScreen
 import com.example.kaishelvesapp.ui.screen.login.LoginScreen
 import com.example.kaishelvesapp.ui.screen.placeholder.PlaceholderScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
@@ -70,6 +71,7 @@ import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
+    const val EMAIL_VERIFICATION = "email_verification"
     const val HOME = "home"
     const val SEARCH = "search"
     const val DISCOVER = "discover"
@@ -136,7 +138,11 @@ fun AppNavigation(
     var showGuestRestrictedNotice by remember { mutableStateOf(false) }
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
 
-    val startDestination = if (authState.isLoggedIn) Routes.DISCOVER else Routes.LOGIN
+    val startDestination = when {
+        authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
+        authState.isLoggedIn -> Routes.DISCOVER
+        else -> Routes.LOGIN
+    }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route ?: startDestination
 
@@ -144,7 +150,23 @@ fun AppNavigation(
         return if (isGuest) Routes.DISCOVER else Routes.HOME
     }
 
-    LaunchedEffect(authState.isLoggedIn, authState.user?.isGuest) {
+    LaunchedEffect(authState.pendingEmailVerificationEmail) {
+        if (authState.pendingEmailVerificationEmail == null) return@LaunchedEffect
+
+        initialLoggedInRouteResolved = false
+        if (navController.currentBackStackEntry?.destination?.route != Routes.EMAIL_VERIFICATION) {
+            navController.navigate(Routes.EMAIL_VERIFICATION) {
+                popUpTo(Routes.LOGIN) { inclusive = false }
+            }
+        }
+    }
+
+    LaunchedEffect(authState.isLoggedIn, authState.user?.isGuest, authState.pendingEmailVerificationEmail) {
+        if (authState.pendingEmailVerificationEmail != null) {
+            initialLoggedInRouteResolved = false
+            return@LaunchedEffect
+        }
+
         if (!authState.isLoggedIn) {
             initialLoggedInRouteResolved = false
             return@LaunchedEffect
@@ -261,6 +283,23 @@ fun AppNavigation(
                 onBackToLogin = {
                     authViewModel.clearError()
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.EMAIL_VERIFICATION) {
+            EmailVerificationScreen(
+                email = authState.pendingEmailVerificationEmail.orEmpty(),
+                isLoading = authState.isLoading,
+                message = authState.errorMessage ?: authState.successMessage,
+                isError = authState.errorMessage != null,
+                onAlreadyVerified = authViewModel::confirmEmailVerification,
+                onResendVerificationEmail = authViewModel::resendEmailVerification,
+                onDismiss = {
+                    authViewModel.dismissEmailVerification()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.EMAIL_VERIFICATION) { inclusive = true }
+                    }
                 }
             )
         }

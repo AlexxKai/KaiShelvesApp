@@ -22,6 +22,14 @@
     <string name="username">Username</string>
     <string name="admin_badge">Administrator</string>
     <string name="password">Password</string>
+    <string name="forgot_password">Forgot your password?</string>
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+    <string name="email_verification_title">Verify your email</string>
+    <string name="email_verification_sent_to">We have sent a verification email to:</string>
+    <string name="email_verification_already_verified">I verified it</string>
+    <string name="email_verification_resend">Resend verification email</string>
+    <string name="email_verification_close">Close</string>
     <string name="continue_with_google">Continue with Google</string>
     <string name="continue_without_account">Continue without account</string>
     <string name="create_account_and_sync">Create account and sync local data</string>

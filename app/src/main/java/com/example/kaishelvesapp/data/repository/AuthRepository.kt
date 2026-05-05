@@ -54,6 +54,10 @@ data class GuestMergeDecision(
 sealed interface AuthOperationResult {
     data class Success(val user: Usuario) : AuthOperationResult
     data class PendingGuestMerge(val decision: GuestMergeDecision) : AuthOperationResult
+    data class EmailVerificationRequired(
+        val user: Usuario,
+        val email: String
+    ) : AuthOperationResult
 }
 
 data class LoginProviderState(
@@ -95,6 +99,21 @@ class AuthRepository(
 
     fun isAuthenticated(): Boolean {
         return auth.currentUser != null || GuestLocalStore.isSessionActive()
+    }
+
+    fun hasPendingEmailVerification(): Boolean {
+        val currentUser = auth.currentUser ?: return false
+        return requiresEmailVerification(currentUser)
+    }
+
+    fun pendingEmailVerificationEmail(): String {
+        return auth.currentUser?.email.orEmpty()
+    }
+
+    fun cancelPendingEmailVerification() {
+        if (hasPendingEmailVerification()) {
+            auth.signOut()
+        }
     }
 
     fun getCurrentUid(): String? {
@@ -346,6 +365,10 @@ class AuthRepository(
             val firebaseUser = authResult.user
                 ?: return Result.failure(Exception("No se pudo obtener el usuario autenticado"))
             val usuario = getOrCreateUserProfile(firebaseUser)
+            if (requiresEmailVerification(firebaseUser)) {
+                sendEmailVerification(firebaseUser)
+                return Result.success(AuthOperationResult.EmailVerificationRequired(usuario, firebaseUser.email.orEmpty()))
+            }
             Result.success(resolvePostAuthResult(usuario))
         } catch (e: Exception) {
             Result.failure(e)
@@ -371,12 +394,57 @@ class AuthRepository(
             try {
                 saveUserProfile(nuevoUsuario)
                 setPrimaryLoginProviderIfMissing(firebaseUser.uid, EmailAuthProvider.PROVIDER_ID)
+                sendEmailVerification(firebaseUser)
             } catch (e: Exception) {
                 firebaseUser.delete().await()
                 throw e
             }
 
-            Result.success(resolvePostAuthResult(nuevoUsuario))
+            Result.success(AuthOperationResult.EmailVerificationRequired(nuevoUsuario, firebaseUser.email.orEmpty()))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun checkEmailVerification(): Result<AuthOperationResult> {
+        return try {
+            val currentUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            currentUser.reload().await()
+            val reloadedUser = auth.currentUser
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val usuario = getOrCreateUserProfile(reloadedUser)
+
+            if (requiresEmailVerification(reloadedUser)) {
+                return Result.success(
+                    AuthOperationResult.EmailVerificationRequired(
+                        user = usuario,
+                        email = reloadedUser.email.orEmpty()
+                    )
+                )
+            }
+
+            Result.success(resolvePostAuthResult(usuario))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun resendEmailVerification(): Result<Unit> {
+        return try {
+            auth.currentUser?.sendEmailVerification()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
+        return try {
+            auth.setLanguageCode("es")
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -799,6 +867,19 @@ class AuthRepository(
                 cloudSummary = buildCloudLibrarySummary(fetchCloudLibrarySnapshot(user.uid))
             )
         )
+    }
+
+    private fun requiresEmailVerification(user: FirebaseUser): Boolean {
+        val hasEmailPasswordProvider = user.providerData.any {
+            it.providerId == EmailAuthProvider.PROVIDER_ID
+        }
+        return hasEmailPasswordProvider && !user.isEmailVerified
+    }
+
+    private suspend fun sendEmailVerification(user: FirebaseUser) {
+        if (requiresEmailVerification(user)) {
+            user.sendEmailVerification().await()
+        }
     }
 
     private fun userListsCollection(uid: String) = firestore.collection("usuarios")

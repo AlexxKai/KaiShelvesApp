@@ -23,16 +23,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
+import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -47,6 +51,7 @@ fun LoginScreen(
     onGoToRegister: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showGuestDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.isLoggedIn, uiState.user?.isGuest) {
         if (uiState.isLoggedIn && uiState.user != null) {
@@ -61,6 +66,62 @@ fun LoginScreen(
             onDismiss = viewModel::dismissPendingGuestMergeDecision,
             onChoose = viewModel::resolvePendingGuestMerge
         )
+    }
+
+    if (showGuestDialog) {
+        Dialog(onDismissRequest = { showGuestDialog = false }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Obsidian),
+                border = BorderStroke(1.dp, TarnishedGold)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = uiState.guestUsername,
+                        onValueChange = viewModel::onGuestUsernameChange,
+                        label = { Text(stringResource(R.string.username)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = stringResource(R.string.guest_mode_warning),
+                        color = OldIvory.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (uiState.errorMessage != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = uiState.errorMessage ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { viewModel.continueAsGuest() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isLoading,
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(color = OldIvory)
+                        } else {
+                            Text(stringResource(R.string.continue_without_account))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Column(
@@ -109,15 +170,25 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
+                PasswordOutlinedTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
                     label = { Text(stringResource(R.string.password)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors(),
-                    visualTransformation = PasswordVisualTransformation()
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
                 )
+
+                TextButton(
+                    onClick = viewModel::sendPasswordReset,
+                    modifier = Modifier.align(Alignment.End),
+                    enabled = !uiState.isLoading
+                ) {
+                    Text(
+                        text = stringResource(R.string.forgot_password),
+                        color = OldIvory
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -125,6 +196,16 @@ fun LoginScreen(
                     Text(
                         text = uiState.errorMessage ?: "",
                         color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                if (uiState.successMessage != null) {
+                    Text(
+                        text = uiState.successMessage ?: "",
+                        color = OldIvory,
                         style = MaterialTheme.typography.bodyMedium
                     )
 
@@ -162,27 +243,11 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedTextField(
-                    value = uiState.guestUsername,
-                    onValueChange = viewModel::onGuestUsernameChange,
-                    label = { Text(stringResource(R.string.username)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = stringResource(R.string.guest_mode_warning),
-                    color = OldIvory.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 Button(
-                    onClick = { viewModel.continueAsGuest() },
+                    onClick = {
+                        viewModel.clearError()
+                        showGuestDialog = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !uiState.isLoading,
                     colors = KaiShelvesThemeDefaults.primaryButtonColors()
