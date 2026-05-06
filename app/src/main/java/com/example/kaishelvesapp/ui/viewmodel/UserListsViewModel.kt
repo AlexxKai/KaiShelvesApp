@@ -4,15 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTagSummary
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+const val USER_TAG_DETAIL_PREFIX = "tag__"
+
 data class UserListsUiState(
     val isLoading: Boolean = false,
     val lists: List<UserBookList> = emptyList(),
+    val tags: List<UserBookTagSummary> = emptyList(),
     val errorMessageRes: Int? = null,
     val successMessageRes: Int? = null
 )
@@ -38,21 +42,23 @@ class UserListsViewModel(
         )
 
         viewModelScope.launch {
-            repository.getUserLists()
-                .onSuccess { lists ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        lists = lists,
-                        errorMessageRes = null,
-                        successMessageRes = successMessageRes
-                    )
-                }
-                .onFailure {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessageRes = R.string.lists_load_error
-                    )
-                }
+            val listsResult = repository.getUserLists()
+            val tagsResult = repository.getUserTagSummaries()
+
+            if (listsResult.isSuccess && tagsResult.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    lists = listsResult.getOrDefault(emptyList()),
+                    tags = tagsResult.getOrDefault(emptyList()),
+                    errorMessageRes = null,
+                    successMessageRes = successMessageRes
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessageRes = R.string.lists_load_error
+                )
+            }
         }
     }
 
@@ -78,6 +84,33 @@ class UserListsViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         errorMessageRes = R.string.list_create_error
+                    )
+                }
+        }
+    }
+
+    fun createTag(name: String) {
+        val trimmedName = name.trim()
+        if (trimmedName.isBlank()) {
+            _uiState.value = _uiState.value.copy(errorMessageRes = R.string.list_name_required)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessageRes = null,
+            successMessageRes = null
+        )
+
+        viewModelScope.launch {
+            repository.createTag(trimmedName)
+                .onSuccess {
+                    fetchLists(successMessageRes = R.string.tag_created)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessageRes = R.string.tag_create_error
                     )
                 }
         }

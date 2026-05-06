@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
@@ -37,11 +38,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -73,6 +75,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTagSummary
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
@@ -84,10 +87,16 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.viewmodel.USER_TAG_DETAIL_PREFIX
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private enum class ListsCreateType {
+    TAG,
+    SHELF
+}
 
 @Composable
 fun UserListsScreen(
@@ -117,6 +126,7 @@ fun UserListsScreen(
     var editingList by remember { mutableStateOf<UserBookList?>(null) }
     var deletingList by remember { mutableStateOf<UserBookList?>(null) }
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
+    var showAllCollections by rememberSaveable { mutableStateOf(false) }
     val displayedCustomLists = remember { mutableStateListOf<UserBookList>() }
     var draggingItemId by remember { mutableStateOf<String?>(null) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
@@ -163,14 +173,16 @@ fun UserListsScreen(
     }
 
     if (showCreateDialog) {
-        ListEditorDialog(
-            title = stringResource(R.string.create_new_list),
-            confirmLabel = stringResource(R.string.save),
-            initialName = "",
-            initialDescription = "",
+        CollectionCreateDialog(
             onDismiss = { showCreateDialog = false },
-            onConfirm = { name, description ->
-                viewModel.createList(name, description)
+            onCreateShelf = { name ->
+                viewModel.createList(name, "")
+                if (name.trim().isNotBlank()) {
+                    showCreateDialog = false
+                }
+            },
+            onCreateTag = { name ->
+                viewModel.createTag(name)
                 if (name.trim().isNotBlank()) {
                     showCreateDialog = false
                 }
@@ -283,15 +295,20 @@ fun UserListsScreen(
                 )
             },
             floatingActionButton = {
-                FloatingActionButton(
-                    onClick = { showCreateDialog = true },
-                    containerColor = BloodWine,
-                    contentColor = TarnishedGold
+                if (
+                    showAllCollections &&
+                    (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = stringResource(R.string.create_new_list)
-                    )
+                    FloatingActionButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                        containerColor = BloodWine,
+                        contentColor = TarnishedGold
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowUpward,
+                            contentDescription = stringResource(R.string.scroll_to_top)
+                        )
+                    }
                 }
             }
         ) { innerPadding ->
@@ -319,6 +336,52 @@ fun UserListsScreen(
                     item {
                         EmptyListsCard()
                     }
+                } else if (showAllCollections) {
+                    item {
+                        AllCollectionsHeader(
+                            onBack = { showAllCollections = false }
+                        )
+                    }
+
+                    items(
+                        items = systemLists,
+                        key = { list -> list.id }
+                    ) { list ->
+                        UserListCard(
+                            userList = list,
+                            onOpen = { onOpenList(list.id) },
+                            onEdit = {},
+                            isDragging = false,
+                            isEditable = false
+                        )
+                    }
+
+                    items(
+                        items = displayedCustomLists,
+                        key = { list -> list.id }
+                    ) { list ->
+                        UserListCard(
+                            userList = list,
+                            onOpen = { onOpenList(list.id) },
+                            onEdit = { editingList = list },
+                            isDragging = false,
+                            isEditable = true
+                        )
+                    }
+
+                    items(
+                        items = uiState.tags,
+                        key = { tag -> tag.tag.id }
+                    ) { tag ->
+                        TagListCard(
+                            tagSummary = tag,
+                            onOpen = { onOpenList(USER_TAG_DETAIL_PREFIX + tag.tag.id) }
+                        )
+                    }
+
+                    item {
+                        CreateCollectionButton(onClick = { showCreateDialog = true })
+                    }
                 } else {
                     items(
                         items = systemLists,
@@ -333,177 +396,16 @@ fun UserListsScreen(
                         )
                     }
 
-                    itemsIndexed(
-                        items = displayedCustomLists,
-                        key = { _, list -> list.id }
-                    ) { index, list ->
-                        val isDragging = draggingItemId == list.id
-                        val isEditable = true
-                        val dismissThreshold: (Float) -> Float = { it * 0.35f }
-                        val dismissState = rememberSaveable(
-                            list.id,
-                            saver = SwipeToDismissBoxState.Saver(positionalThreshold = dismissThreshold)
-                        ) {
-                            SwipeToDismissBoxState(
-                                initialValue = SwipeToDismissBoxValue.Settled,
-                                positionalThreshold = dismissThreshold
-                            )
-                        }
-                        LaunchedEffect(dismissState.targetValue, isEditable) {
-                            if (isEditable && dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
-                                deletingList = list
-                                dismissState.reset()
-                            }
-                        }
-                        LaunchedEffect(deletingList?.id, uiState.lists, isEditable) {
-                            if (isEditable && deletingList?.id != list.id && dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-                                dismissState.reset()
-                            }
-                        }
-                        SwipeToDismissBox(
-                            state = dismissState,
-                            enableDismissFromStartToEnd = false,
-                            enableDismissFromEndToStart = isEditable,
-                            backgroundContent = {
-                                val swipeProgress = dismissState.progress.coerceIn(0f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            color = Color(0xFF7A1F1F).copy(alpha = 0.18f + (0.62f * swipeProgress)),
-                                            shape = RoundedCornerShape(24.dp)
-                                        )
-                                        .padding(end = 20.dp),
-                                    contentAlignment = Alignment.CenterEnd
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Delete,
-                                        contentDescription = stringResource(R.string.delete_list),
-                                        tint = OldIvory.copy(alpha = 0.35f + (0.65f * swipeProgress)),
-                                        modifier = Modifier.size((18 + (8 * swipeProgress)).dp)
-                                    )
-                                }
-                            },
-                            modifier = Modifier.animateItem()
-                        ) {
-                            UserListCard(
-                                userList = list,
-                                onOpen = { onOpenList(list.id) },
-                                onEdit = { if (isEditable) editingList = list },
-                                isDragging = isDragging,
-                                isEditable = isEditable,
-                                dragHandleModifier = Modifier.pointerInput(list.id, displayedCustomLists.size) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            draggingItemId = list.id
-                                            draggingTranslationY = 0f
-                                            autoScrollDelta = 0f
-                                        },
-                                        onDragCancel = {
-                                            val orderedIds = currentCustomOrder(displayedCustomLists)
-                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists.filterNot(::isProtectedSystemList))
-                                            draggingItemId = null
-                                            draggingTranslationY = 0f
-                                            autoScrollDelta = 0f
-                                            if (orderChanged) {
-                                                viewModel.updateListOrder(orderedIds)
-                                            } else {
-                                                displayedCustomLists.clear()
-                                                displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            val orderedIds = currentCustomOrder(displayedCustomLists)
-                                            val orderChanged = orderedIds != currentCustomOrder(uiState.lists.filterNot(::isProtectedSystemList))
-                                            draggingItemId = null
-                                            draggingTranslationY = 0f
-                                            autoScrollDelta = 0f
-                                            if (orderChanged) {
-                                                viewModel.updateListOrder(orderedIds)
-                                            } else {
-                                                displayedCustomLists.clear()
-                                                displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
-                                            }
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            val currentDraggingId = draggingItemId ?: return@detectDragGesturesAfterLongPress
-                                            val currentIndex = displayedCustomLists.indexOfFirst { it.id == currentDraggingId }
-                                            if (currentIndex == -1) return@detectDragGesturesAfterLongPress
+                    item {
+                        TagsPreviewSection(
+                            tags = uiState.tags,
+                            onOpenTag = { tag -> onOpenList(USER_TAG_DETAIL_PREFIX + tag.tag.id) },
+                            onViewAll = { showAllCollections = true }
+                        )
+                    }
 
-                                            draggingTranslationY += dragAmount.y
-
-                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
-                                            val customItemsStartIndex = systemLists.size
-                                            val currentLayoutIndex = currentIndex + customItemsStartIndex
-                                            val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
-                                                ?: return@detectDragGesturesAfterLongPress
-                                            val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
-                                            val viewportStart = listState.layoutInfo.viewportStartOffset
-                                            val viewportEnd = listState.layoutInfo.viewportEndOffset
-                                            val currentTop = currentItem.offset + draggingTranslationY
-                                            val currentBottom = currentTop + currentItem.size
-
-                                            autoScrollDelta = when {
-                                                currentBottom > viewportEnd - 120 -> {
-                                                    val intensity = ((currentBottom - (viewportEnd - 120)) / 120f)
-                                                        .coerceIn(0.2f, 1f)
-                                                    10f + (24f * intensity)
-                                                }
-                                                currentTop < viewportStart + 120 -> {
-                                                    val intensity = (((viewportStart + 120) - currentTop) / 120f)
-                                                        .coerceIn(0.2f, 1f)
-                                                    -(10f + (24f * intensity))
-                                                }
-                                                else -> 0f
-                                            }
-
-                                            val previousItem = visibleItems.firstOrNull {
-                                                it.index == currentLayoutIndex - 1 && it.index >= customItemsStartIndex
-                                            }
-                                            val nextItem = visibleItems.firstOrNull {
-                                                it.index == currentLayoutIndex + 1 &&
-                                                    it.index < customItemsStartIndex + displayedCustomLists.size
-                                            }
-
-                                            when {
-                                                nextItem != null && currentMidPoint > nextItem.offset + nextItem.size * 0.68f -> {
-                                                    val targetListIndex = (nextItem.index - customItemsStartIndex)
-                                                        .coerceAtMost(displayedCustomLists.lastIndex)
-                                                    if (displayedCustomLists.getOrNull(targetListIndex) != null) {
-                                                        val deltaToTarget = (nextItem.offset - currentItem.offset).toFloat()
-                                                        displayedCustomLists.move(currentIndex, targetListIndex)
-                                                        draggingTranslationY -= deltaToTarget
-                                                    }
-                                                }
-
-                                                previousItem != null && currentMidPoint < previousItem.offset + previousItem.size * 0.32f -> {
-                                                    val targetListIndex = (previousItem.index - customItemsStartIndex)
-                                                        .coerceAtLeast(0)
-                                                    if (displayedCustomLists.getOrNull(targetListIndex) != null) {
-                                                        val deltaToTarget = (currentItem.offset - previousItem.offset).toFloat()
-                                                        displayedCustomLists.move(currentIndex, targetListIndex)
-                                                        draggingTranslationY += deltaToTarget
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    )
-                                },
-                                modifier = Modifier
-                                    .zIndex(if (isDragging) 1f else 0f)
-                                    .shadow(
-                                        elevation = if (isDragging) 18.dp else 0.dp,
-                                        shape = RoundedCornerShape(24.dp),
-                                        clip = false
-                                    )
-                                    .graphicsLayer {
-                                        translationY = if (isDragging) draggingTranslationY else 0f
-                                        scaleX = if (isDragging) 1.02f else 1f
-                                        scaleY = if (isDragging) 1.02f else 1f
-                                    }
-                            )
-                        }
+                    item {
+                        CreateCollectionButton(onClick = { showCreateDialog = true })
                     }
                 }
 
@@ -540,6 +442,187 @@ private fun EmptyListsCard(
             )
         }
     }
+}
+
+@Composable
+private fun AllCollectionsHeader(
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextButton(onClick = onBack) {
+            Text(
+                text = stringResource(R.string.lists_intro_title),
+                color = Color(0xFF66D6D6)
+            )
+        }
+        Text(
+            text = stringResource(R.string.all_lists_title),
+            style = MaterialTheme.typography.headlineSmall,
+            color = OldIvory,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ViewAllButton(
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = stringResource(R.string.view_all).uppercase(),
+            color = Color(0xFF66D6D6),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun TagsPreviewSection(
+    tags: List<UserBookTagSummary>,
+    onOpenTag: (UserBookTagSummary) -> Unit,
+    onViewAll: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(R.string.tags_title).uppercase(),
+            style = MaterialTheme.typography.titleLarge,
+            color = OldIvory,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .width(172.dp)
+                .height(1.dp)
+                .background(TarnishedGold.copy(alpha = 0.28f), RoundedCornerShape(999.dp))
+        )
+
+        Spacer(modifier = Modifier.height(22.dp))
+
+        if (tags.isEmpty()) {
+            Text(
+                text = stringResource(R.string.no_tags_available),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.78f)
+            )
+        } else {
+            tags.take(6).chunked(3).forEach { rowTags ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    rowTags.forEach { tag ->
+                        TagChip(
+                            tagSummary = tag,
+                            onClick = { onOpenTag(tag) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        ViewAllButton(onClick = onViewAll)
+    }
+}
+
+@Composable
+private fun TagChip(
+    tagSummary: UserBookTagSummary,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        color = Color(0xFF244845).copy(alpha = 0.72f),
+        shape = RoundedCornerShape(999.dp),
+        border = BorderStroke(1.dp, Color(0xFF66D6D6).copy(alpha = 0.18f))
+    ) {
+        Text(
+            text = "${tagSummary.tag.name} (${tagSummary.bookCount})",
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF9DE6DD),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CreateCollectionButton(
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .height(54.dp)
+            .clickable(onClick = onClick),
+        color = BloodWine.copy(alpha = 0.34f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.42f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = null,
+                tint = TarnishedGold,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.create_new_tag_or_shelf).removePrefix("+").trim(),
+                color = OldIvory,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun TagListCard(
+    tagSummary: UserBookTagSummary,
+    onOpen: () -> Unit
+) {
+    UserListCard(
+        userList = UserBookList(
+            id = USER_TAG_DETAIL_PREFIX + tagSummary.tag.id,
+            name = tagSummary.tag.name,
+            bookCount = tagSummary.bookCount,
+            previewImageUrls = tagSummary.previewImageUrls
+        ),
+        onOpen = onOpen,
+        onEdit = {},
+        isDragging = false,
+        isEditable = false
+    )
 }
 
 @Composable
@@ -765,6 +848,114 @@ private fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {
     if (fromIndex == toIndex) return
     val item = removeAt(fromIndex)
     add(toIndex, item)
+}
+
+@Composable
+private fun CollectionCreateDialog(
+    onDismiss: () -> Unit,
+    onCreateShelf: (String) -> Unit,
+    onCreateTag: (String) -> Unit
+) {
+    var selectedType by rememberSaveable { mutableStateOf(ListsCreateType.SHELF) }
+    var name by rememberSaveable { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(R.string.create_new_tag_or_shelf).removePrefix("+").trim(),
+                color = TarnishedGold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedType = ListsCreateType.SHELF },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedType == ListsCreateType.SHELF,
+                            onClick = { selectedType = ListsCreateType.SHELF }
+                        )
+                        Text(text = stringResource(R.string.shelf), color = OldIvory)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedType = ListsCreateType.TAG },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedType == ListsCreateType.TAG,
+                            onClick = { selectedType = ListsCreateType.TAG }
+                        )
+                        Text(text = stringResource(R.string.tag), color = OldIvory)
+                    }
+                }
+
+                Text(
+                    text = if (selectedType == ListsCreateType.SHELF) {
+                        stringResource(R.string.single_shelf_note)
+                    } else {
+                        stringResource(R.string.tag_create_note)
+                    },
+                    color = OldIvory.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = {
+                        Text(
+                            if (selectedType == ListsCreateType.SHELF) {
+                                stringResource(R.string.shelf_name_hint)
+                            } else {
+                                stringResource(R.string.tag_name_hint)
+                            }
+                        )
+                    },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (selectedType == ListsCreateType.SHELF) {
+                        onCreateShelf(name)
+                    } else {
+                        onCreateTag(name)
+                    }
+                }
+            ) {
+                Text(
+                    text = stringResource(R.string.create),
+                    color = TarnishedGold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = stringResource(R.string.cancel),
+                    color = OldIvory
+                )
+            }
+        },
+        containerColor = Obsidian
+    )
 }
 
 @Composable

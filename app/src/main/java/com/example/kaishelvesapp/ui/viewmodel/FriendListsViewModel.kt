@@ -3,6 +3,7 @@ package com.example.kaishelvesapp.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.FriendBookListSummary
+import com.example.kaishelvesapp.data.repository.FriendBookTagSummary
 import com.example.kaishelvesapp.data.repository.FriendsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 data class FriendListsUiState(
     val isLoading: Boolean = false,
     val lists: List<FriendBookListSummary> = emptyList(),
+    val tags: List<FriendBookTagSummary> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -37,20 +39,24 @@ class FriendListsViewModel(
         )
 
         viewModelScope.launch {
-            repository.loadFriendLists(friendUid)
-                .onSuccess { lists ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        lists = lists,
-                        errorMessage = null
-                    )
-                }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "No se pudieron cargar las listas"
-                    )
-                }
+            val listsResult = repository.loadFriendLists(friendUid)
+            val tagsResult = repository.loadFriendTags(friendUid)
+
+            if (listsResult.isSuccess && tagsResult.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    lists = listsResult.getOrDefault(emptyList()),
+                    tags = tagsResult.getOrDefault(emptyList()),
+                    errorMessage = null
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = listsResult.exceptionOrNull()?.message
+                        ?: tagsResult.exceptionOrNull()?.message
+                        ?: "No se pudieron cargar las listas"
+                )
+            }
         }
     }
 }

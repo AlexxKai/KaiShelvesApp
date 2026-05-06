@@ -5,6 +5,7 @@ import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -21,6 +22,7 @@ import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.S
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_WANT_TO_READ_ID
 
 private const val LAST_QUARTER_MILLIS = 90L * 24L * 60L * 60L * 1000L
+const val FRIEND_TAG_DETAIL_PREFIX = "friend_tag__"
 
 enum class SuggestionSource {
     FRIEND_OF_FRIEND,
@@ -105,6 +107,13 @@ data class FriendBookListSummary(
     val previewImageUrls: List<String>
 )
 
+data class FriendBookTagSummary(
+    val id: String,
+    val name: String,
+    val bookCount: Int,
+    val previewImageUrls: List<String>
+)
+
 data class FriendBookListDetailBookItem(
     val book: Libro,
     val rating: Int? = null,
@@ -176,6 +185,10 @@ class FriendsRepository(
         .collection("listas")
         .document(listId)
         .collection("libros")
+
+    private fun tagsCollection(uid: String) = usersCollection().document(uid).collection("etiquetas")
+
+    private fun bookMetadataCollection(uid: String) = usersCollection().document(uid).collection("libros_metadata")
 
     private fun sentRequestsCollection(uid: String) = usersCollection().document(uid).collection("friend_requests_sent")
 
@@ -402,6 +415,107 @@ class FriendsRepository(
             }
 
         return uniqueKeys.size
+    }
+
+    private fun safeBookDocId(rawId: String): String {
+        return rawId
+            .trim()
+            .ifBlank { "unknown_book" }
+            .replace("/", "_")
+    }
+
+    private suspend fun allBooksByIdInLists(uid: String): Map<String, Libro> {
+        return listsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .flatMap { listDocument ->
+                listDocument.reference
+                    .collection("libros")
+                    .get()
+                    .await()
+                    .documents
+            }
+            .mapNotNull { bookDocument ->
+                bookDocument.toObject(Libro::class.java)?.copy(
+                    id = bookDocument.getString("id").orEmpty().ifBlank { bookDocument.id }
+                )
+            }
+            .distinctBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+            .associateBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+    }
+
+    private suspend fun loadFriendTagSummaries(friendUid: String): List<FriendBookTagSummary> {
+        val tags = tagsCollection(friendUid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                document.toObject(UserBookTag::class.java)?.copy(id = document.id)
+            }
+            .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
+
+        if (tags.isEmpty()) return emptyList()
+
+        val metadataDocuments = bookMetadataCollection(friendUid)
+            .get()
+            .await()
+            .documents
+        val metadataBooksById = metadataDocuments
+            .mapNotNull { metadataDocument ->
+                metadataDocument.toObject(Libro::class.java)?.copy(
+                    id = metadataDocument.getString("id").orEmpty().ifBlank { metadataDocument.id }
+                )
+            }
+            .associateBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+        val allBooksById = allBooksByIdInLists(friendUid) + metadataBooksById
+
+        return tags.map { tag ->
+            val bookIds = metadataDocuments
+                .filter { document ->
+                    val tagIds = document.get("tagIds") as? List<*>
+                    tag.id in tagIds.orEmpty().filterIsInstance<String>()
+                }
+                .map { it.id }
+
+            FriendBookTagSummary(
+                id = tag.id,
+                name = tag.name,
+                bookCount = bookIds.size,
+                previewImageUrls = bookIds.mapNotNull { bookId ->
+                    allBooksById[bookId]?.imagen?.takeIf(String::isNotBlank)
+                }.take(3)
+            )
+        }
+    }
+
+    private suspend fun loadFriendTagBooks(friendUid: String, tagId: String): List<FriendBookListDetailBookItem> {
+        val metadataDocuments = bookMetadataCollection(friendUid)
+            .get()
+            .await()
+            .documents
+        val taggedBookIds = metadataDocuments
+            .filter { document ->
+                val tagIds = document.get("tagIds") as? List<*>
+                tagId in tagIds.orEmpty().filterIsInstance<String>()
+            }
+            .map { it.id }
+            .toSet()
+        val metadataBooks = metadataDocuments
+            .filter { it.id in taggedBookIds }
+            .mapNotNull { metadataDocument ->
+                metadataDocument.toObject(Libro::class.java)?.copy(
+                    id = metadataDocument.getString("id").orEmpty().ifBlank { metadataDocument.id }
+                )
+            }
+        val listBooks = allBooksByIdInLists(friendUid)
+            .filterKeys { it in taggedBookIds }
+            .values
+
+        return (listBooks + metadataBooks)
+            .distinctBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+            .sortedBy { it.titulo.lowercase() }
+            .map { book -> FriendBookListDetailBookItem(book = book) }
     }
 
     private fun sortActivitiesByRecency(items: List<FriendActivityItem>): List<FriendActivityItem> {
@@ -1566,6 +1680,30 @@ class FriendsRepository(
         }
     }
 
+    suspend fun loadFriendTags(friendUid: String): Result<List<FriendBookTagSummary>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las etiquetas sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
+            if (friendUid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar al usuario"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesiÃƒÂ³n iniciada"))
+            val friend = getUserProfile(friendUid)
+                ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
+            if (!canOpenReadingActivity(friendUid, uid, friend)) {
+                return Result.failure(Exception("Este usuario no muestra su actividad de lectura ahora mismo"))
+            }
+
+            Result.success(loadFriendTagSummaries(friendUid))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun loadFriendListDetail(friendUid: String, listId: String): Result<FriendBookListDetail> {
         return try {
             if (isGuestSessionActive()) {
@@ -1582,6 +1720,27 @@ class FriendsRepository(
                 ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
             if (!canOpenReadingActivity(friendUid, uid, friend)) {
                 return Result.failure(Exception("Este usuario no muestra su actividad de lectura ahora mismo"))
+            }
+
+            if (listId.startsWith(FRIEND_TAG_DETAIL_PREFIX)) {
+                val tagId = listId.removePrefix(FRIEND_TAG_DETAIL_PREFIX)
+                val tagDocument = tagsCollection(friendUid)
+                    .document(tagId)
+                    .get()
+                    .await()
+                val tagName = tagDocument.getString("name").orEmpty()
+                val items = loadFriendTagBooks(friendUid, tagId)
+
+                return Result.success(
+                    FriendBookListDetail(
+                        list = UserBookList(
+                            id = listId,
+                            name = tagName,
+                            bookCount = items.size
+                        ),
+                        books = items
+                    )
+                )
             }
 
             val listDocument = usersCollection()

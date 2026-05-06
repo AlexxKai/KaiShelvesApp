@@ -45,6 +45,35 @@ class UserListDetailViewModel(
         )
 
         viewModelScope.launch {
+            if (listId.startsWith(USER_TAG_DETAIL_PREFIX)) {
+                val tagId = listId.removePrefix(USER_TAG_DETAIL_PREFIX)
+                val tagResult = repository.getTagById(tagId)
+                val booksResult = repository.getBooksInTag(tagId)
+
+                if (tagResult.isSuccess && booksResult.isSuccess) {
+                    val books = booksResult.getOrDefault(emptyList()).map { book ->
+                        UserListDetailBookItem(book = book)
+                    }
+                    val tag = tagResult.getOrNull()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        userList = UserBookList(
+                            id = listId,
+                            name = tag?.name.orEmpty(),
+                            bookCount = books.size
+                        ),
+                        books = books,
+                        errorMessageRes = null
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessageRes = R.string.list_detail_load_error
+                    )
+                }
+                return@launch
+            }
+
             val listResult = repository.getListById(listId)
             val readBooksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
                 bookRepository.obtenerListaLecturas()

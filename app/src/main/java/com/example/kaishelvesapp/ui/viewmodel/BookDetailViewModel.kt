@@ -163,7 +163,7 @@ class BookDetailViewModel(
         viewModelScope.launch {
             val listsResult = userListsRepository.updateBookAssignments(libro, selectedListIds)
             val tagsResult = userListsRepository.updateBookTags(
-                libro.id.ifBlank { libro.isbn },
+                libro,
                 selectedTagIds
             )
 
@@ -211,7 +211,7 @@ class BookDetailViewModel(
                 setOf(UserListsRepository.SYSTEM_LIST_READ_ID)
             )
             val tagsResult = userListsRepository.updateBookTags(
-                libro.id.ifBlank { libro.isbn },
+                libro,
                 selectedTagIds
             )
             val reviewResult = repository.actualizarResenaLectura(

@@ -5,6 +5,7 @@ import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
+import com.example.kaishelvesapp.data.model.UserBookTagSummary
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -120,6 +121,29 @@ class UserListsRepository(
                     .thenBy { it.position }
                     .thenBy { it.name.lowercase() }
             )
+    }
+
+    private fun localGuestTagSummaries(state: GuestLibraryState): List<UserBookTagSummary> {
+        val booksById = state.listBooks.values
+            .flatten()
+            .distinctBy(::localBookId)
+            .associateBy(::localBookId)
+
+        return state.tags
+            .sortedWith(compareBy<UserBookTag> { it.position }.thenBy { it.name.lowercase() })
+            .map { tag ->
+                val bookIds = state.bookTagIds
+                    .filterValues { tag.id in it }
+                    .keys
+                    .toList()
+                UserBookTagSummary(
+                    tag = tag,
+                    bookCount = bookIds.size,
+                    previewImageUrls = bookIds.mapNotNull { bookId ->
+                        booksById[bookId]?.imagen?.takeIf(String::isNotBlank)
+                    }.take(3)
+                )
+            }
     }
 
     private fun localNormalizeSelectedListIds(
@@ -588,6 +612,146 @@ class UserListsRepository(
             cachedTagsOwnerId = uid
             cachedUserTags = tags
             Result.success(tags)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getUserTagSummaries(): Result<List<UserBookTagSummary>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(localGuestTagSummaries(GuestLocalStore.readState()))
+            }
+
+            val uid = requireUid()
+            val tags = getUserTags().getOrThrow()
+            val metadataDocuments = userBookMetadataCollection(uid)
+                .get()
+                .await()
+                .documents
+
+            val allBooksById = userListsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .flatMap { listDocument ->
+                    listDocument.reference
+                        .collection("libros")
+                        .get()
+                        .await()
+                        .documents
+                }
+                .mapNotNull { bookDocument ->
+                    bookDocument.toObject(Libro::class.java)?.copy(
+                        id = bookDocument.getString("id").orEmpty().ifBlank { bookDocument.id }
+                    )
+                }
+                .distinctBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+                .associateBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+
+            val summaries = tags.map { tag ->
+                val bookIds = metadataDocuments
+                    .filter { document ->
+                        val tagIds = document.get("tagIds") as? List<*>
+                        tag.id in tagIds.orEmpty().filterIsInstance<String>()
+                    }
+                    .map { it.id }
+
+                UserBookTagSummary(
+                    tag = tag,
+                    bookCount = bookIds.size,
+                    previewImageUrls = bookIds.mapNotNull { bookId ->
+                        allBooksById[bookId]?.imagen?.takeIf(String::isNotBlank)
+                    }.take(3)
+                )
+            }
+
+            Result.success(summaries)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTagById(tagId: String): Result<UserBookTag?> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(GuestLocalStore.readState().tags.firstOrNull { it.id == tagId })
+            }
+
+            val uid = requireUid()
+            val snapshot = userTagsCollection(uid)
+                .document(tagId)
+                .get()
+                .await()
+
+            Result.success(snapshot.toObject(UserBookTag::class.java)?.copy(id = snapshot.id))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getBooksInTag(tagId: String): Result<List<Libro>> {
+        return try {
+            if (isGuestSessionActive()) {
+                val state = GuestLocalStore.readState()
+                val taggedBookIds = state.bookTagIds
+                    .filterValues { tagId in it }
+                    .keys
+                    .toSet()
+                val books = state.listBooks.values
+                    .flatten()
+                    .distinctBy(::localBookId)
+                    .filter { localBookId(it) in taggedBookIds }
+                    .sortedBy { it.titulo.lowercase() }
+                return Result.success(books)
+            }
+
+            val uid = requireUid()
+            val taggedBookIds = userBookMetadataCollection(uid)
+                .get()
+                .await()
+                .documents
+                .filter { document ->
+                    val tagIds = document.get("tagIds") as? List<*>
+                    tagId in tagIds.orEmpty().filterIsInstance<String>()
+                }
+                .map { it.id }
+                .toSet()
+
+            val listBooks = userListsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .flatMap { listDocument ->
+                    listDocument.reference
+                        .collection("libros")
+                        .get()
+                        .await()
+                        .documents
+                }
+                .mapNotNull { bookDocument ->
+                    bookDocument.toObject(Libro::class.java)?.copy(
+                        id = bookDocument.getString("id").orEmpty().ifBlank { bookDocument.id }
+                    )
+                }
+                .distinctBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+                .filter { book -> safeBookDocId(book.id.ifBlank { book.isbn }) in taggedBookIds }
+            val metadataBooks = userBookMetadataCollection(uid)
+                .get()
+                .await()
+                .documents
+                .filter { it.id in taggedBookIds }
+                .mapNotNull { metadataDocument ->
+                    metadataDocument.toObject(Libro::class.java)?.copy(
+                        id = metadataDocument.getString("id").orEmpty().ifBlank { metadataDocument.id }
+                    )
+                }
+
+            val books = (listBooks + metadataBooks)
+                .distinctBy { book -> safeBookDocId(book.id.ifBlank { book.isbn }) }
+                .sortedBy { it.titulo.lowercase() }
+
+            Result.success(books)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1157,6 +1321,22 @@ class UserListsRepository(
     }
 
     suspend fun updateBookTags(bookId: String, tagIds: Set<String>): Result<Unit> {
+        return updateBookTags(bookId = bookId, libro = null, tagIds = tagIds)
+    }
+
+    suspend fun updateBookTags(libro: Libro, tagIds: Set<String>): Result<Unit> {
+        return updateBookTags(
+            bookId = libro.id.ifBlank { libro.isbn },
+            libro = libro,
+            tagIds = tagIds
+        )
+    }
+
+    private suspend fun updateBookTags(
+        bookId: String,
+        libro: Libro?,
+        tagIds: Set<String>
+    ): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
                 val safeBookId = safeBookDocId(bookId)
@@ -1192,7 +1372,10 @@ class UserListsRepository(
                     metadataRef.set(mapOf("tagIds" to emptyList<String>()), com.google.firebase.firestore.SetOptions.merge()).await()
                 }
             } else {
-                metadataRef.set(mapOf("tagIds" to tagIds.toList()), com.google.firebase.firestore.SetOptions.merge()).await()
+                val payload = libro
+                    ?.let { buildBookPayload(it, safeBookId) }
+                    .orEmpty() + mapOf("tagIds" to tagIds.toList())
+                metadataRef.set(payload, com.google.firebase.firestore.SetOptions.merge()).await()
             }
 
             Result.success(Unit)

@@ -48,10 +48,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.ui.theme.BloodWine
@@ -94,6 +96,7 @@ fun ActivitySocialActions(
             isSaving = isSaving,
             onDismiss = { showComments = false },
             onLoadComments = onLoadComments,
+            onToggleLike = onToggleLike,
             onAddComment = onAddComment
         )
     }
@@ -172,6 +175,7 @@ private fun ActivityCommentsDialog(
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onLoadComments: (String) -> Unit,
+    onToggleLike: (String) -> Unit,
     onAddComment: (String, String) -> Unit
 ) {
     var commentText by rememberSaveable(item.id) { mutableStateOf("") }
@@ -219,33 +223,13 @@ private fun ActivityCommentsDialog(
                     Spacer(modifier = Modifier.width(48.dp))
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    KaiUserAvatar(
-                        displayName = item.user.usuario.ifBlank { item.user.email },
-                        imageUrl = item.user.photoUrl,
-                        size = 42.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = postTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = OldIvory,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = postTimestamp,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = OldIvory.copy(alpha = 0.72f)
-                        )
-                    }
-                }
+                ActivityUpdateCommentHeader(
+                    item = item,
+                    postTitle = postTitle,
+                    postTimestamp = postTimestamp,
+                    isSaving = isSaving,
+                    onToggleLike = onToggleLike
+                )
 
                 HorizontalDivider(color = TarnishedGold.copy(alpha = 0.22f))
 
@@ -361,6 +345,148 @@ private fun ActivityCommentsDialog(
             }
         }
     }
+}
+
+@Composable
+private fun ActivityUpdateCommentHeader(
+    item: FriendActivityItem,
+    postTitle: String,
+    postTimestamp: String,
+    isSaving: Boolean,
+    onToggleLike: (String) -> Unit
+) {
+    val book = item.book ?: item.readBook?.toLibro()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            KaiUserAvatar(
+                displayName = item.user.usuario.ifBlank { item.user.email },
+                imageUrl = item.user.photoUrl,
+                size = 42.dp
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = postTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = OldIvory,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = postTimestamp,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = OldIvory.copy(alpha = 0.72f)
+                )
+            }
+        }
+
+        if (book != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                BookCover(
+                    imageUrl = book.imagen,
+                    title = book.titulo,
+                    modifier = Modifier
+                        .width(92.dp)
+                        .height(136.dp)
+                )
+
+                Spacer(modifier = Modifier.width(18.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = book.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = OldIvory,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (book.autor.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.book_by_author, book.autor),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color(0xFF66D6D6),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    BookShelfActions(
+                        book = book,
+                        modifier = Modifier.width(212.dp),
+                        viewModelKeyPrefix = "comments_book_shelf",
+                        compact = true
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .clickable(enabled = !isSaving) { onToggleLike(item.id) },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = if (item.social.likedByCurrentUser) {
+                    stringResource(R.string.home_feed_unlike)
+                } else {
+                    stringResource(R.string.home_feed_like)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF66D6D6)
+            )
+            if (item.social.likeCount > 0) {
+                Icon(
+                    imageVector = Icons.Filled.ThumbUp,
+                    contentDescription = stringResource(R.string.likes_count),
+                    tint = if (item.social.likedByCurrentUser) Color(0xFF66D6D6) else OldIvory.copy(alpha = 0.8f),
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = item.social.likeCount.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF66D6D6)
+                )
+            }
+        }
+    }
+}
+
+private fun com.example.kaishelvesapp.data.model.LibroLeido.toLibro(): Libro {
+    return Libro(
+        id = id,
+        isbn = isbn,
+        titulo = titulo,
+        autor = autor,
+        editorial = editorial,
+        genero = genero,
+        fechaPublicacion = fechaPublicacion,
+        paginas = paginas,
+        imagen = imagen,
+        pdf = pdf
+    )
 }
 
 @Composable

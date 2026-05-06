@@ -289,6 +289,9 @@
     <string name="lists_subtitle">Keep your predefined shelves and your custom lists together in one place.</string>
     <string name="lists_intro_title">My books</string>
     <string name="lists_intro_body">You will always have Want to read, Reading and Read at the top, plus any custom lists you create.</string>
+    <string name="all_lists_title">All lists</string>
+    <string name="tags_title">Tags</string>
+    <string name="view_all">View all</string>
     <string name="create_new_list">Create new list</string>
     <string name="predefined_list_badge">Fixed</string>
     <string name="edit_list">Edit list</string>

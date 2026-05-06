@@ -289,6 +289,9 @@
     <string name="lists_subtitle">Reúne en un solo sitio tus listas fijas y las personalizadas que vayas creando.</string>
     <string name="lists_intro_title">Mis libros</string>
     <string name="lists_intro_body">Siempre verás arriba Quiero leer, Leyendo y Leído, junto a las listas personalizadas que crees.</string>
+    <string name="all_lists_title">Todas las listas</string>
+    <string name="tags_title">Etiquetas</string>
+    <string name="view_all">Ver todos</string>
     <string name="create_new_list">Crear nueva lista</string>
     <string name="predefined_list_badge">Fija</string>
     <string name="edit_list">Editar lista</string>
