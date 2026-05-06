@@ -15,6 +15,7 @@ data class FriendSuggestionsUiState(
     val query: String = "",
     val suggestions: List<FriendSuggestion> = emptyList(),
     val sentRequestIds: Set<String> = emptySet(),
+    val receivedRequestIds: Set<String> = emptySet(),
     val errorMessage: String? = null,
     val successMessage: String? = null
 ) {
@@ -67,6 +68,7 @@ class FriendSuggestionsViewModel(
                         isLoading = false,
                         suggestions = data.suggestions,
                         sentRequestIds = data.sentRequestIds,
+                        receivedRequestIds = data.receivedRequestIds,
                         errorMessage = null
                     )
                 }
@@ -81,6 +83,7 @@ class FriendSuggestionsViewModel(
 
     fun sendFriendRequest(user: Usuario) {
         if (user.uid in _uiState.value.sentRequestIds) return
+        if (user.uid in _uiState.value.receivedRequestIds) return
 
         viewModelScope.launch {
             repository.sendFriendRequest(user)
@@ -94,6 +97,72 @@ class FriendSuggestionsViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         errorMessage = error.message ?: "No se pudo enviar la solicitud",
+                        successMessage = null
+                    )
+                }
+        }
+    }
+
+    fun cancelSentFriendRequest(user: Usuario) {
+        if (user.uid !in _uiState.value.sentRequestIds) return
+
+        viewModelScope.launch {
+            repository.cancelSentFriendRequest(user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        sentRequestIds = _uiState.value.sentRequestIds - user.uid,
+                        successMessage = "Solicitud cancelada",
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo cancelar la solicitud",
+                        successMessage = null
+                    )
+                }
+        }
+    }
+
+    fun acceptFriendRequest(user: Usuario, onSuccess: (() -> Unit)? = null) {
+        if (user.uid !in _uiState.value.receivedRequestIds) return
+
+        viewModelScope.launch {
+            repository.acceptFriendRequest(user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        suggestions = _uiState.value.suggestions.filterNot { it.user.uid == user.uid },
+                        receivedRequestIds = _uiState.value.receivedRequestIds - user.uid,
+                        successMessage = "Solicitud aceptada",
+                        errorMessage = null
+                    )
+                    onSuccess?.invoke()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo aceptar la solicitud",
+                        successMessage = null
+                    )
+                }
+        }
+    }
+
+    fun rejectFriendRequest(user: Usuario, onSuccess: (() -> Unit)? = null) {
+        if (user.uid !in _uiState.value.receivedRequestIds) return
+
+        viewModelScope.launch {
+            repository.rejectFriendRequest(user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        receivedRequestIds = _uiState.value.receivedRequestIds - user.uid,
+                        successMessage = "Solicitud cancelada",
+                        errorMessage = null
+                    )
+                    onSuccess?.invoke()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo cancelar la solicitud",
                         successMessage = null
                     )
                 }

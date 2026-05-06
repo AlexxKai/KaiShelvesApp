@@ -165,6 +165,11 @@ fun FriendProfileScreen(
                                 onFriendshipChanged()
                             }
                         },
+                        onCancelSentFriendRequest = {
+                            viewModel.cancelSentFriendRequest {
+                                onFriendshipChanged()
+                            }
+                        },
                         onOpenFriendLists = onOpenFriendLists,
                         onOpenFriendProfile = onOpenFriendProfile,
                         onOpenBook = onOpenBook,
@@ -306,6 +311,7 @@ fun FriendProfileContent(
     isSendingRequest: Boolean,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
+    onCancelSentFriendRequest: () -> Unit = {},
     onOpenFriendLists: (String, String) -> Unit,
     onOpenFriendProfile: (String) -> Unit,
     onOpenBook: (Libro) -> Unit,
@@ -315,8 +321,11 @@ fun FriendProfileContent(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    deletingActivityIds: Set<String> = emptySet(),
+    onDeleteActivityUpdate: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     showFriendActions: Boolean = true,
+    showActivityDeleteActions: Boolean = false,
     isScrollable: Boolean = true,
     contentHorizontalPadding: Dp = 16.dp,
     transparentCards: Boolean = true
@@ -345,7 +354,8 @@ fun FriendProfileContent(
                 isRemovingFriend = isRemovingFriend,
                 isSendingRequest = isSendingRequest,
                 onRemoveFriend = onRemoveFriend,
-                onSendFriendRequest = onSendFriendRequest
+                onSendFriendRequest = onSendFriendRequest,
+                onCancelSentFriendRequest = onCancelSentFriendRequest
             )
         }
         Spacer(modifier = Modifier.height(18.dp))
@@ -385,6 +395,9 @@ fun FriendProfileContent(
                 onToggleLike = onToggleLike,
                 onLoadComments = onLoadComments,
                 onAddComment = onAddComment,
+                deletingActivityIds = deletingActivityIds,
+                onDeleteActivityUpdate = onDeleteActivityUpdate,
+                showActivityDeleteActions = showActivityDeleteActions,
                 onOpenBook = onOpenBook,
                 transparentBackground = transparentCards
             )
@@ -455,7 +468,8 @@ private fun FriendProfileMenuRow(
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
     onRemoveFriend: () -> Unit,
-    onSendFriendRequest: () -> Unit
+    onSendFriendRequest: () -> Unit,
+    onCancelSentFriendRequest: () -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
     var showRemoveDialog by remember { mutableStateOf(false) }
@@ -505,10 +519,12 @@ private fun FriendProfileMenuRow(
     ) {
         Row(
             modifier = Modifier.clickable(
-                enabled = if (isFriend) !isRemovingFriend else !isRequestSent && !isSendingRequest
+                enabled = if (isFriend) !isRemovingFriend else !isSendingRequest
             ) {
                 if (isFriend) {
                     showRemoveDialog = true
+                } else if (isRequestSent) {
+                    onCancelSentFriendRequest()
                 } else {
                     onSendFriendRequest()
                 }
@@ -921,6 +937,9 @@ private fun UpdatesSection(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    deletingActivityIds: Set<String>,
+    onDeleteActivityUpdate: (String) -> Unit,
+    showActivityDeleteActions: Boolean,
     onOpenBook: (Libro) -> Unit,
     transparentBackground: Boolean = false
 ) {
@@ -949,6 +968,9 @@ private fun UpdatesSection(
                         onToggleLike = onToggleLike,
                         onLoadComments = onLoadComments,
                         onAddComment = onAddComment,
+                        isDeleting = item.id in deletingActivityIds,
+                        canDelete = showActivityDeleteActions,
+                        onDeleteActivityUpdate = onDeleteActivityUpdate,
                         onOpenBook = onOpenBook
                     )
                 }
@@ -966,8 +988,13 @@ private fun UpdateItem(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    isDeleting: Boolean,
+    canDelete: Boolean,
+    onDeleteActivityUpdate: (String) -> Unit,
     onOpenBook: (Libro) -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val compact = maxWidth < 300.dp
         val avatarSize = if (compact) 46.dp else 52.dp
@@ -1014,11 +1041,66 @@ private fun UpdateItem(
                     )
                 }
 
-                Text(
-                    text = title,
-                    style = titleStyle,
-                    color = OldIvory
-                )
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            if (!isDeleting) {
+                                showDeleteDialog = false
+                            }
+                        },
+                        title = {
+                            Text(text = stringResource(R.string.delete_activity_update_title))
+                        },
+                        text = {
+                            Text(text = stringResource(R.string.delete_activity_update_message))
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    onDeleteActivityUpdate(item.id)
+                                    showDeleteDialog = false
+                                },
+                                enabled = !isDeleting
+                            ) {
+                                Text(text = stringResource(R.string.delete))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = { showDeleteDialog = false },
+                                enabled = !isDeleting
+                            ) {
+                                Text(text = stringResource(R.string.cancel))
+                            }
+                        }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = title,
+                        style = titleStyle,
+                        color = OldIvory,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    if (canDelete) {
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            enabled = !isDeleting,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.delete_activity_update),
+                                tint = Color(0xFF66D6D6)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 

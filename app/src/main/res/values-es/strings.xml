@@ -81,7 +81,7 @@
     <string name="no_friend_requests">No tienes ninguna solicitud de amistad.</string>
     <string name="unknown_username">Usuario desconocido</string>
     <string name="no_email_available">Sin correo disponible</string>
-    <string name="friend_request_pending">Solicitud de amistad pendiente</string>
+    <string name="friend_request_pending">Solicitud pendiente</string>
     <string name="accept_request">Aceptar</string>
     <string name="reject_request">Rechazar</string>
     <string name="one_friend">1 amigo</string>
@@ -108,6 +108,9 @@
     <string name="no_groups_member_message">%1$s no es miembro de ningún grupo.</string>
     <string name="updates_title">Actualizaciones</string>
     <string name="no_updates_available">Todavía no hay actualizaciones disponibles.</string>
+    <string name="delete_activity_update">Eliminar actualización</string>
+    <string name="delete_activity_update_title">¿Eliminar este elemento?</string>
+    <string name="delete_activity_update_message">Esto ocultará el elemento de la sección de actualizaciones, tu perfil y los perfiles de tus amigos.</string>
     <string name="friendship_update_text">%1$s y %2$s ahora son amigos</string>
     <string name="friend_wants_to_read">%1$s quiere leer</string>
     <string name="friend_is_reading">%1$s está leyendo</string>

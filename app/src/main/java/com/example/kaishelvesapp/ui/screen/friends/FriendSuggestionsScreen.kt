@@ -9,17 +9,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
@@ -67,7 +70,8 @@ import com.example.kaishelvesapp.ui.viewmodel.FriendSuggestionsViewModel
 fun FriendSuggestionsScreen(
     viewModel: FriendSuggestionsViewModel,
     onBack: () -> Unit,
-    onOpenFriendProfile: (String) -> Unit = {}
+    onOpenFriendProfile: (String) -> Unit = {},
+    onFriendshipChanged: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -148,8 +152,16 @@ fun FriendSuggestionsScreen(
                             SuggestionCard(
                                 suggestion = suggestion,
                                 isRequestSent = suggestion.user.uid in uiState.sentRequestIds,
+                                hasReceivedRequest = suggestion.user.uid in uiState.receivedRequestIds,
                                 onOpenProfile = onOpenFriendProfile,
-                                onSendRequest = viewModel::sendFriendRequest
+                                onSendRequest = viewModel::sendFriendRequest,
+                                onCancelSentRequest = viewModel::cancelSentFriendRequest,
+                                onAcceptRequest = { user ->
+                                    viewModel.acceptFriendRequest(user, onSuccess = onFriendshipChanged)
+                                },
+                                onRejectRequest = { user ->
+                                    viewModel.rejectFriendRequest(user, onSuccess = onFriendshipChanged)
+                                }
                             )
                         }
                     }
@@ -211,10 +223,15 @@ private fun SuggestionSearchField(
 private fun SuggestionCard(
     suggestion: FriendSuggestion,
     isRequestSent: Boolean,
+    hasReceivedRequest: Boolean,
     onOpenProfile: (String) -> Unit,
-    onSendRequest: (Usuario) -> Unit
+    onSendRequest: (Usuario) -> Unit,
+    onCancelSentRequest: (Usuario) -> Unit,
+    onAcceptRequest: (Usuario) -> Unit,
+    onRejectRequest: (Usuario) -> Unit
 ) {
     val canOpenProfile = suggestion.user.privacySettings.profileVisible
+    val actionText = if (isRequestSent) stringResource(R.string.request_sent) else stringResource(R.string.add_friend)
 
     Card(
         modifier = Modifier
@@ -276,26 +293,92 @@ private fun SuggestionCard(
 
             Spacer(modifier = Modifier.size(10.dp))
 
-            Button(
-                onClick = { onSendRequest(suggestion.user) },
-                enabled = !isRequestSent,
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = BloodWine,
-                    contentColor = OldIvory,
-                    disabledContainerColor = TarnishedGold.copy(alpha = 0.24f),
-                    disabledContentColor = DeepWalnut.copy(alpha = 0.66f)
-                ),
-                border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.25f)),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.PersonAdd,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.size(6.dp))
-                Text(if (isRequestSent) stringResource(R.string.request_sent) else stringResource(R.string.add_friend))
+            if (hasReceivedRequest) {
+                Column(
+                    modifier = Modifier.width(96.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Button(
+                        onClick = { onAcceptRequest(suggestion.user) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(30.dp)
+                            .defaultMinSize(minWidth = 0.dp, minHeight = 30.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BloodWine,
+                            contentColor = OldIvory
+                        ),
+                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.25f)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text(
+                            text = stringResource(R.string.accept_request),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+
+                    Button(
+                        onClick = { onRejectRequest(suggestion.user) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(30.dp)
+                            .defaultMinSize(minWidth = 0.dp, minHeight = 30.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TarnishedGold.copy(alpha = 0.24f),
+                            contentColor = DeepWalnut
+                        ),
+                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.35f)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text(
+                            text = stringResource(R.string.cancel),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+                }
+            } else {
+                Button(
+                    onClick = {
+                        if (isRequestSent) {
+                            onCancelSentRequest(suggestion.user)
+                        } else {
+                            onSendRequest(suggestion.user)
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRequestSent) TarnishedGold.copy(alpha = 0.24f) else BloodWine,
+                        contentColor = if (isRequestSent) DeepWalnut.copy(alpha = 0.66f) else OldIvory,
+                        disabledContainerColor = TarnishedGold.copy(alpha = 0.24f),
+                        disabledContentColor = DeepWalnut.copy(alpha = 0.66f)
+                    ),
+                    border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.25f)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PersonAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(actionText)
+                }
             }
         }
     }

@@ -32,7 +32,8 @@ data class FriendSuggestion(
 
 data class FriendSuggestionsData(
     val suggestions: List<FriendSuggestion>,
-    val sentRequestIds: Set<String>
+    val sentRequestIds: Set<String>,
+    val receivedRequestIds: Set<String> = emptySet()
 )
 
 data class FriendRequestsData(
@@ -160,6 +161,10 @@ class FriendsRepository(
 
     private fun activityCommentsCollection(activityId: String) = activitySocialDocument(activityId)
         .collection("comments")
+
+    private fun hiddenActivityUpdatesCollection(uid: String) = usersCollection()
+        .document(uid)
+        .collection("hidden_activity_updates")
 
     private fun DocumentSnapshot.stringValue(vararg keys: String): String {
         return keys.firstNotNullOfOrNull { key ->
@@ -311,13 +316,16 @@ class FriendsRepository(
         return activityId.substringBefore("_").trim()
     }
 
-    private suspend fun activitySocialInteractionError(activityId: String, currentUid: String): String? {
+    private suspend fun activitySocialInteractionError(activityId: String): String? {
         val ownerUid = activityOwnerUid(activityId)
-        if (ownerUid.isBlank() || ownerUid == currentUid) {
+        if (ownerUid.isBlank()) {
             return null
         }
 
         val owner = getUserProfile(ownerUid) ?: return null
+        if (!owner.privacySettings.readingActivityVisible) {
+            return "Este usuario no muestra su actividad de lectura ahora mismo"
+        }
         if (!owner.privacySettings.socialInteractionPermissions) {
             return "Este usuario no permite interacciones en su actividad"
         }
@@ -327,6 +335,7 @@ class FriendsRepository(
 
     private suspend fun socialSummary(activityId: String, currentUid: String): ActivitySocialSummary {
         if (activityId.isBlank()) return ActivitySocialSummary()
+        if (activitySocialInteractionError(activityId) != null) return ActivitySocialSummary()
 
         val likes = activityLikesCollection(activityId).get().await()
         val comments = activityCommentsCollection(activityId).get().await()
@@ -346,6 +355,22 @@ class FriendsRepository(
         }
     }
 
+    private suspend fun visibleActivityUpdates(
+        ownerUid: String,
+        activities: List<FriendActivityItem>
+    ): List<FriendActivityItem> {
+        if (ownerUid.isBlank() || activities.isEmpty()) return activities
+
+        val hiddenIds = hiddenActivityUpdatesCollection(ownerUid)
+            .get()
+            .await()
+            .documents
+            .map { it.id }
+            .toSet()
+
+        return activities.filterNot { it.id in hiddenIds }
+    }
+
     suspend fun loadSuggestions(): Result<FriendSuggestionsData> {
         return try {
             if (isGuestSessionActive()) {
@@ -362,11 +387,25 @@ class FriendsRepository(
 
             val friendsSnapshot = friendsCollection(uid).get().await()
             val sentRequestsSnapshot = sentRequestsCollection(uid).get().await()
+            val receivedRequestsSnapshot = receivedRequestsCollection(uid).get().await()
             val currentFriends = friendsSnapshot.documents.map { it.id }.toSet()
             val sentRequestIds = sentRequestsSnapshot.documents.map { it.id }.toSet()
+            val receivedRequestIds = receivedRequestsSnapshot.documents.map { it.id }.toSet()
 
             val candidatesById = linkedMapOf<String, FriendSuggestion>()
             val secondDegreeIds = linkedSetOf<String>()
+
+            (sentRequestIds + receivedRequestIds)
+                .filterNot { requestUid -> requestUid == uid || requestUid in currentFriends }
+                .forEach { requestUid ->
+                    val user = getUserProfile(requestUid)
+                    if (user != null) {
+                        candidatesById[requestUid] = FriendSuggestion(
+                            user = user.visibleTo(uid),
+                            source = SuggestionSource.RANDOM
+                        )
+                    }
+                }
 
             currentFriends.forEach { friendUid ->
                 val friendConnections = friendsCollection(friendUid).get().await()
@@ -374,8 +413,7 @@ class FriendsRepository(
                     .map { it.id }
                     .filterNot { candidateUid ->
                         candidateUid == uid ||
-                            candidateUid in currentFriends ||
-                            candidateUid in sentRequestIds
+                            candidateUid in currentFriends
                     }
                     .forEach { candidateUid ->
                         secondDegreeIds += candidateUid
@@ -405,7 +443,6 @@ class FriendsRepository(
                     if (
                         candidateUid != uid &&
                         candidateUid !in currentFriends &&
-                        candidateUid !in sentRequestIds &&
                         user.privacySettings.friendRequestPermissions
                     ) {
                         candidatesById[candidateUid] = FriendSuggestion(
@@ -419,7 +456,8 @@ class FriendsRepository(
             Result.success(
                 FriendSuggestionsData(
                     suggestions = candidatesById.values.toList(),
-                    sentRequestIds = sentRequestIds
+                    sentRequestIds = sentRequestIds,
+                    receivedRequestIds = receivedRequestIds
                 )
             )
         } catch (e: Exception) {
@@ -475,6 +513,30 @@ class FriendsRepository(
                     "createdAt" to FieldValue.serverTimestamp()
                 )
             )
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun cancelSentFriendRequest(targetUser: Usuario): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            if (targetUser.uid.isBlank() || targetUser.uid == uid) {
+                return Result.failure(Exception("Usuario no valido"))
+            }
+
+            val batch = firestore.batch()
+            batch.delete(sentRequestsCollection(uid).document(targetUser.uid))
+            batch.delete(receivedRequestsCollection(targetUser.uid).document(uid))
             batch.commit().await()
 
             Result.success(Unit)
@@ -658,7 +720,17 @@ class FriendsRepository(
                 }
             }
 
-            Result.success(enrichWithSocial(sortActivitiesByRecency(activities), uid))
+            val visibleActivities = activities
+                .groupBy { activityOwnerUid(it.id) }
+                .values
+                .flatMap { ownerActivities ->
+                    visibleActivityUpdates(
+                        ownerUid = activityOwnerUid(ownerActivities.firstOrNull()?.id.orEmpty()),
+                        activities = ownerActivities
+                    )
+                }
+
+            Result.success(enrichWithSocial(sortActivitiesByRecency(visibleActivities), uid))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -939,9 +1011,46 @@ class FriendsRepository(
                     predefinedShelves = predefinedShelves,
                     friendPreviews = friendPreviews.map { it.visibleTo(uid) },
                     groupsCount = 0,
-                    updates = enrichWithSocial(sortActivitiesByRecency(updates), uid)
+                    updates = enrichWithSocial(
+                        sortActivitiesByRecency(
+                            visibleActivityUpdates(
+                                ownerUid = friendUid,
+                                activities = updates
+                            )
+                        ),
+                        uid
+                    )
                 )
             )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun hideActivityUpdate(activityId: String): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Las funciones sociales para invitado llegaran en una siguiente iteracion"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val ownerUid = activityOwnerUid(activityId)
+            if (activityId.isBlank() || ownerUid != uid) {
+                return Result.failure(Exception("No se pudo eliminar esta actualizacion"))
+            }
+
+            hiddenActivityUpdatesCollection(uid)
+                .document(activityId)
+                .set(
+                    mapOf(
+                        "activityId" to activityId,
+                        "hiddenAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                .await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -958,7 +1067,7 @@ class FriendsRepository(
             if (activityId.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar la publicacion"))
             }
-            activitySocialInteractionError(activityId, uid)?.let { error ->
+            activitySocialInteractionError(activityId)?.let { error ->
                 return Result.failure(Exception(error))
             }
 
@@ -1041,7 +1150,7 @@ class FriendsRepository(
             if (trimmedText.isBlank()) {
                 return Result.failure(Exception("Escribe un comentario"))
             }
-            activitySocialInteractionError(activityId, uid)?.let { error ->
+            activitySocialInteractionError(activityId)?.let { error ->
                 return Result.failure(Exception(error))
             }
 

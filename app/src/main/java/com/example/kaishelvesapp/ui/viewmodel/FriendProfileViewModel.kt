@@ -19,6 +19,7 @@ data class FriendProfileUiState(
     val commentsByActivityId: Map<String, List<ActivityComment>> = emptyMap(),
     val loadingCommentIds: Set<String> = emptySet(),
     val socialActionIds: Set<String> = emptySet(),
+    val deletingActivityIds: Set<String> = emptySet(),
     val errorMessage: String? = null
 )
 
@@ -127,6 +128,35 @@ class FriendProfileViewModel(
         }
     }
 
+    fun cancelSentFriendRequest(onSuccess: () -> Unit = {}) {
+        val profile = _uiState.value.profile ?: return
+        if (profile.isFriend || !profile.isRequestSent) return
+
+        _uiState.value = _uiState.value.copy(
+            isSendingRequest = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.cancelSentFriendRequest(profile.user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isSendingRequest = false,
+                        profile = profile.copy(isRequestSent = false),
+                        errorMessage = null
+                    )
+                    onSuccess()
+                    loadProfile(profile.user.uid)
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isSendingRequest = false,
+                        errorMessage = error.message ?: "No se pudo cancelar la solicitud"
+                    )
+                }
+        }
+    }
+
     fun toggleLike(activityId: String) {
         if (activityId.isBlank() || activityId in _uiState.value.socialActionIds) return
 
@@ -201,6 +231,38 @@ class FriendProfileViewModel(
 
             _uiState.value = _uiState.value.copy(
                 socialActionIds = _uiState.value.socialActionIds - activityId
+            )
+        }
+    }
+
+    fun hideActivityUpdate(activityId: String) {
+        if (activityId.isBlank() || activityId in _uiState.value.deletingActivityIds) return
+
+        _uiState.value = _uiState.value.copy(
+            deletingActivityIds = _uiState.value.deletingActivityIds + activityId,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.hideActivityUpdate(activityId)
+                .onSuccess {
+                    val profile = _uiState.value.profile
+                    _uiState.value = _uiState.value.copy(
+                        profile = profile?.copy(
+                            updates = profile.updates.filterNot { item -> item.id == activityId }
+                        ),
+                        commentsByActivityId = _uiState.value.commentsByActivityId - activityId,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo eliminar la actualizacion"
+                    )
+                }
+
+            _uiState.value = _uiState.value.copy(
+                deletingActivityIds = _uiState.value.deletingActivityIds - activityId
             )
         }
     }

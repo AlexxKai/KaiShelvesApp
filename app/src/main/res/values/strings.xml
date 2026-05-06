@@ -81,7 +81,7 @@
     <string name="no_friend_requests">You do not have any friend requests.</string>
     <string name="unknown_username">Unknown username</string>
     <string name="no_email_available">No email available</string>
-    <string name="friend_request_pending">Pending friend request</string>
+    <string name="friend_request_pending">Request pending</string>
     <string name="accept_request">Accept</string>
     <string name="reject_request">Reject</string>
     <string name="one_friend">1 friend</string>
@@ -108,6 +108,9 @@
     <string name="no_groups_member_message">%1$s is not a member of any group.</string>
     <string name="updates_title">Updates</string>
     <string name="no_updates_available">There are no updates available yet.</string>
+    <string name="delete_activity_update">Delete update</string>
+    <string name="delete_activity_update_title">Delete this item?</string>
+    <string name="delete_activity_update_message">This will hide the item from your updates section, your profile and your friends\' profiles.</string>
     <string name="friendship_update_text">%1$s and %2$s are now friends</string>
     <string name="friend_wants_to_read">%1$s wants to read</string>
     <string name="friend_is_reading">%1$s is reading</string>

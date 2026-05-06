@@ -67,7 +67,6 @@ android {
         compose = true
         buildConfig = true
     }
-
 }
 
 dependencies {

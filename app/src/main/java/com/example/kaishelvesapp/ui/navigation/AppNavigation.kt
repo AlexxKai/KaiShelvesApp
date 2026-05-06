@@ -735,6 +735,10 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() },
                 onOpenFriendProfile = { friendUid ->
                     navController.navigate(friendProfileRoute(friendUid))
+                },
+                onFriendshipChanged = {
+                    friendRequestsViewModel.loadReceivedRequests()
+                    friendsViewModel.loadFriends()
                 }
             )
         }
