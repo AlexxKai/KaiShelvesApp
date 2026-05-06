@@ -1,5 +1,7 @@
 package com.example.kaishelvesapp.ui.screen.friends
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +40,7 @@ import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PersonAddAlt1
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -93,6 +97,9 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun FriendProfileScreen(
@@ -155,6 +162,8 @@ fun FriendProfileScreen(
                         profile = uiState.profile!!,
                         isRemovingFriend = uiState.isRemovingFriend,
                         isSendingRequest = uiState.isSendingRequest,
+                        isBlockingMember = uiState.isBlockingMember,
+                        isSubmittingReport = uiState.isSubmittingReport,
                         onRemoveFriend = {
                             viewModel.removeFriend(friendUid) {
                                 onFriendshipChanged()
@@ -170,6 +179,13 @@ fun FriendProfileScreen(
                                 onFriendshipChanged()
                             }
                         },
+                        onBlockMember = {
+                            viewModel.blockCurrentProfile {
+                                onFriendshipChanged()
+                                onBack()
+                            }
+                        },
+                        onSubmitReport = viewModel::submitReport,
                         onOpenFriendLists = onOpenFriendLists,
                         onOpenFriendProfile = onOpenFriendProfile,
                         onOpenBook = onOpenBook,
@@ -309,9 +325,13 @@ fun FriendProfileContent(
     profile: FriendProfileData,
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
+    isBlockingMember: Boolean = false,
+    isSubmittingReport: Boolean = false,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onCancelSentFriendRequest: () -> Unit = {},
+    onBlockMember: () -> Unit = {},
+    onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenFriendLists: (String, String) -> Unit,
     onOpenFriendProfile: (String) -> Unit,
     onOpenBook: (Libro) -> Unit,
@@ -353,9 +373,13 @@ fun FriendProfileContent(
                 isRequestSent = profile.isRequestSent,
                 isRemovingFriend = isRemovingFriend,
                 isSendingRequest = isSendingRequest,
+                isBlockingMember = isBlockingMember,
+                isSubmittingReport = isSubmittingReport,
                 onRemoveFriend = onRemoveFriend,
                 onSendFriendRequest = onSendFriendRequest,
-                onCancelSentFriendRequest = onCancelSentFriendRequest
+                onCancelSentFriendRequest = onCancelSentFriendRequest,
+                onBlockMember = onBlockMember,
+                onSubmitReport = onSubmitReport
             )
         }
         Spacer(modifier = Modifier.height(18.dp))
@@ -467,12 +491,19 @@ private fun FriendProfileMenuRow(
     isRequestSent: Boolean,
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
+    isBlockingMember: Boolean,
+    isSubmittingReport: Boolean,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
-    onCancelSentFriendRequest: () -> Unit
+    onCancelSentFriendRequest: () -> Unit,
+    onBlockMember: () -> Unit,
+    onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
     var showRemoveDialog by remember { mutableStateOf(false) }
+    var showBlockDialog by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var showReportSuccessDialog by remember { mutableStateOf(false) }
 
     if (showRemoveDialog) {
         AlertDialog(
@@ -504,6 +535,77 @@ private fun FriendProfileMenuRow(
                     enabled = !isRemovingFriend
                 ) {
                     Text(text = stringResource(R.string.cancel))
+                }
+            },
+            containerColor = Obsidian,
+            titleContentColor = OldIvory,
+            textContentColor = OldIvory.copy(alpha = 0.9f)
+        )
+    }
+
+    if (showBlockDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!isBlockingMember) {
+                    showBlockDialog = false
+                }
+            },
+            title = {
+                Text(text = stringResource(R.string.block_member_title))
+            },
+            text = {
+                Text(text = stringResource(R.string.block_member_message))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onBlockMember()
+                        showBlockDialog = false
+                    },
+                    enabled = !isBlockingMember
+                ) {
+                    Text(text = stringResource(R.string.block_member))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBlockDialog = false },
+                    enabled = !isBlockingMember
+                ) {
+                    Text(text = stringResource(R.string.cancel))
+                }
+            },
+            containerColor = Obsidian,
+            titleContentColor = OldIvory,
+            textContentColor = OldIvory.copy(alpha = 0.9f)
+        )
+    }
+
+    if (showReportDialog) {
+        ReportAccountDialog(
+            isSubmitting = isSubmittingReport,
+            onDismiss = { showReportDialog = false },
+            onSubmit = { subject, message, photoUris ->
+                onSubmitReport(subject, message, photoUris) {
+                    showReportDialog = false
+                    showReportSuccessDialog = true
+                }
+            }
+        )
+    }
+
+    if (showReportSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showReportSuccessDialog = false },
+            title = {
+                Text(text = stringResource(R.string.report_sent_title))
+            },
+            text = {
+                Text(text = stringResource(R.string.report_sent_message))
+            },
+            confirmButton = {
+                TextButton(onClick = { showReportSuccessDialog = false }) {
+                    Text(text = stringResource(R.string.ok))
                 }
             },
             containerColor = Obsidian,
@@ -588,7 +690,10 @@ private fun FriendProfileMenuRow(
                             color = OldIvory
                         )
                     },
-                    onClick = { showMoreMenu = false }
+                    onClick = {
+                        showMoreMenu = false
+                        showReportDialog = true
+                    }
                 )
                 DropdownMenuItem(
                     text = {
@@ -597,11 +702,97 @@ private fun FriendProfileMenuRow(
                             color = OldIvory
                         )
                     },
-                    onClick = { showMoreMenu = false }
+                    onClick = {
+                        showMoreMenu = false
+                        showBlockDialog = true
+                    }
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ReportAccountDialog(
+    isSubmitting: Boolean,
+    onDismiss: () -> Unit,
+    onSubmit: (String, String, List<String>) -> Unit
+) {
+    var subject by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var photoUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        photoUris = uris.map { it.toString() }
+    }
+    val canSubmit = subject.isNotBlank() && message.isNotBlank() && !isSubmitting
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isSubmitting) {
+                onDismiss()
+            }
+        },
+        title = {
+            Text(text = stringResource(R.string.report_account))
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = { subject = it },
+                    label = { Text(stringResource(R.string.report_subject)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    label = { Text(stringResource(R.string.report_message)) },
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+                Button(
+                    onClick = { photoPickerLauncher.launch("image/*") },
+                    enabled = !isSubmitting,
+                    colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                ) {
+                    Text(text = stringResource(R.string.report_add_photos))
+                }
+                if (photoUris.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.report_photos_selected, photoUris.size),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory.copy(alpha = 0.82f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSubmit(subject, message, photoUris) },
+                enabled = canSubmit
+            ) {
+                Text(text = stringResource(R.string.send))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSubmitting
+            ) {
+                Text(text = stringResource(R.string.cancel))
+            }
+        },
+        containerColor = Obsidian,
+        titleContentColor = OldIvory,
+        textContentColor = OldIvory.copy(alpha = 0.9f)
+    )
 }
 
 @Composable
@@ -684,8 +875,11 @@ private fun FriendShelfRow(
     shelf: FriendShelfPreview,
     onOpenBook: (Libro) -> Unit
 ) {
+    val visibleBooks = shelf.books.take(4)
+    val rowWidth = 84.dp * visibleBooks.size + 14.dp * (visibleBooks.size - 1).coerceAtLeast(0)
+
     Column(
-        modifier = Modifier.width(392.dp)
+        modifier = Modifier.width(rowWidth)
     ) {
         Text(
             text = shelf.title,
@@ -698,7 +892,7 @@ private fun FriendShelfRow(
         Row(
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            shelf.books.take(4).forEach { item ->
+            visibleBooks.forEach { item ->
                 FriendShelfBookTile(
                     item = item,
                     isReadList = shelf.isReadList,
@@ -1039,6 +1233,11 @@ private fun UpdateItem(
                         R.string.friend_has_read,
                         item.user.usuario.ifBlank { stringResource(R.string.unknown_username) }
                     )
+                    FriendActivityType.LIST_ADDED -> stringResource(
+                        R.string.friend_added_to_list,
+                        item.user.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                        item.listName.orEmpty()
+                    )
                 }
 
                 if (showDeleteDialog) {
@@ -1103,9 +1302,10 @@ private fun UpdateItem(
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
+                val formattedTimestamp = formatActivityTimestamp(item.timestampMillis)
 
                 Text(
-                    text = stringResource(R.string.recently_label),
+                    text = formattedTimestamp,
                     style = MaterialTheme.typography.bodySmall,
                     color = OldIvory.copy(alpha = 0.72f)
                 )
@@ -1137,7 +1337,7 @@ private fun UpdateItem(
                 ActivitySocialActions(
                     item = item,
                     postTitle = title,
-                    postTimestamp = stringResource(R.string.recently_label),
+                    postTimestamp = formattedTimestamp,
                     comments = comments,
                     isLoadingComments = isLoadingComments,
                     isSaving = isSocialActionRunning,
@@ -1282,4 +1482,26 @@ private fun friendProfileStats(booksReadCount: Int, friendsCount: Int): String {
         stringResource(R.string.friends_count, friendsCount)
     }
     return "$booksLabel • $friendsLabel"
+}
+
+@Composable
+private fun formatActivityTimestamp(timestampMillis: Long?): String {
+    if (timestampMillis == null) {
+        return stringResource(R.string.recently_label)
+    }
+
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    val pattern = if (locale.language == "es") {
+        "d 'de' MMM 'a la(s)' HH:mm"
+    } else {
+        "MMM d 'at' HH:mm"
+    }
+
+    return remember(timestampMillis, locale) {
+        SimpleDateFormat(pattern, locale)
+            .format(Date(timestampMillis))
+            .replaceFirstChar { char ->
+                if (char.isLowerCase()) char.titlecase(locale) else char.toString()
+            }
+    }
 }

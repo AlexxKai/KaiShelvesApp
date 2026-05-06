@@ -1122,6 +1122,11 @@ private fun activityTitle(item: FriendActivityItem): String {
         FriendActivityType.WANT_TO_READ -> stringResource(R.string.friend_wants_to_read, userName)
         FriendActivityType.READING -> stringResource(R.string.friend_is_reading, userName)
         FriendActivityType.READ -> stringResource(R.string.friend_has_read, userName)
+        FriendActivityType.LIST_ADDED -> stringResource(
+            R.string.friend_added_to_list,
+            userName,
+            item.listName.orEmpty()
+        )
     }
 }
 
@@ -1132,6 +1137,7 @@ private fun statusLabel(type: FriendActivityType): String {
         FriendActivityType.WANT_TO_READ -> stringResource(R.string.want_to_read)
         FriendActivityType.READING -> stringResource(R.string.currently_reading)
         FriendActivityType.READ -> stringResource(R.string.mark_as_read)
+        FriendActivityType.LIST_ADDED -> stringResource(R.string.list_label)
     }
 }
 

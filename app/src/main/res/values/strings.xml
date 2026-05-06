@@ -3,6 +3,9 @@
 
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="send">Send</string>
+    <string name="open">Open</string>
     <string name="delete">Delete</string>
     <string name="retry">Retry</string>
     <string name="refresh">Refresh</string>
@@ -96,6 +99,15 @@
     <string name="more_option">More</string>
     <string name="report_account">Report this account</string>
     <string name="block_member">Block this member</string>
+    <string name="block_member_title">Block member</string>
+    <string name="block_member_message">You will stop seeing each other\'s profiles anywhere in Kai Shelves. You can unblock this person from Profile &gt; Settings.</string>
+    <string name="unblock_member">Unblock</string>
+    <string name="report_subject">Subject</string>
+    <string name="report_message">Message</string>
+    <string name="report_add_photos">Add photos</string>
+    <string name="report_photos_selected">%1$d photos selected</string>
+    <string name="report_sent_title">Report created</string>
+    <string name="report_sent_message">Your report has been created correctly. You can review its status from your profile.</string>
     <string name="remove_friend_title">Remove friend</string>
     <string name="remove_friend_message">Do you want to remove this friend? You will stop appearing in each other\'s friends lists.</string>
     <string name="currently_reading">Reading</string>
@@ -115,6 +127,8 @@
     <string name="friend_wants_to_read">%1$s wants to read</string>
     <string name="friend_is_reading">%1$s is reading</string>
     <string name="friend_has_read">%1$s has read</string>
+    <string name="friend_added_to_list">%1$s added a book to %2$s</string>
+    <string name="list_label">List</string>
     <string name="recently_label">Recently</string>
     <string name="no_visible_friends">This profile has no visible friends yet.</string>
     <string name="friend_suggestions_subtitle">We show friends of your friends or, if there are no matches, users from the app.</string>
@@ -350,6 +364,8 @@
     <string name="profile_link_login_action">Link email access</string>
     <string name="profile_settings_language">Language</string>
     <string name="profile_settings_session_preferences">Session preferences</string>
+    <string name="profile_settings_social_safety">Social safety</string>
+    <string name="profile_settings_back">Back to settings</string>
     <string name="profile_search_intro_animation">Search intro animation</string>
     <string name="profile_search_intro_animation_body">Show the opening animation before the genre cards in Search.</string>
     <string name="profile_privacy_visibility">Visibility</string>
@@ -371,6 +387,16 @@
     <string name="profile_personalized_suggestions">Personalized suggestions</string>
     <string name="profile_personalized_suggestions_body">Use your reading preferences to improve recommendations inside Kai Shelves.</string>
     <string name="profile_privacy_local_notice">These controls are centralized here now. Some options are prepared locally and can be connected to persistence as the related features are refined.</string>
+    <string name="profile_blocked_people">Blocked people</string>
+    <string name="profile_blocked_people_body">Review profiles you have blocked and unblock them when you want.</string>
+    <string name="profile_no_blocked_people">You have not blocked anyone.</string>
+    <string name="profile_report_review">Report review</string>
+    <string name="profile_report_review_body">Follow the status of the reports you have sent.</string>
+    <string name="profile_no_reports">You have not sent any reports yet.</string>
+    <string name="profile_reported_member">Reported member: %1$s</string>
+    <string name="report_status_pending">Pending review</string>
+    <string name="report_status_needs_info">Needs more information</string>
+    <string name="report_status_resolved">Resolved</string>
     <string name="private_profile_title">Private profile</string>
     <string name="private_profile_message">This profile is private. Send a friend request to connect with this reader.</string>
     <string name="login_screen_title">Kai Shelves</string>

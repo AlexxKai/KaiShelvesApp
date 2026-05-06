@@ -20,6 +20,8 @@ import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.S
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_UNFINISHED_ID
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_WANT_TO_READ_ID
 
+private const val LAST_QUARTER_MILLIS = 90L * 24L * 60L * 60L * 1000L
+
 enum class SuggestionSource {
     FRIEND_OF_FRIEND,
     RANDOM
@@ -54,7 +56,8 @@ enum class FriendActivityType {
     FRIENDSHIP,
     WANT_TO_READ,
     READING,
-    READ
+    READ,
+    LIST_ADDED
 }
 
 data class FriendActivityItem(
@@ -63,6 +66,7 @@ data class FriendActivityItem(
     val user: Usuario,
     val timestampMillis: Long? = null,
     val relatedUserName: String? = null,
+    val listName: String? = null,
     val book: Libro? = null,
     val readBook: LibroLeido? = null,
     val social: ActivitySocialSummary = ActivitySocialSummary()
@@ -128,6 +132,29 @@ data class FriendProfileData(
     val updates: List<FriendActivityItem>
 )
 
+data class BlockedMember(
+    val user: Usuario,
+    val blockedAtMillis: Long? = null
+)
+
+enum class AccountReportStatus {
+    PENDING,
+    NEEDS_INFO,
+    RESOLVED
+}
+
+data class AccountReport(
+    val id: String = "",
+    val reportedUser: Usuario = Usuario(),
+    val subject: String = "",
+    val message: String = "",
+    val photoUris: List<String> = emptyList(),
+    val status: AccountReportStatus = AccountReportStatus.PENDING,
+    val adminMessage: String = "",
+    val createdAtMillis: Long? = null,
+    val updatedAtMillis: Long? = null
+)
+
 class FriendsRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
@@ -143,6 +170,7 @@ class FriendsRepository(
 
     private fun friendsCollection(uid: String) = usersCollection().document(uid).collection("friends")
     private fun readsCollection(uid: String) = usersCollection().document(uid).collection("leidos")
+    private fun listsCollection(uid: String) = usersCollection().document(uid).collection("listas")
     private fun systemListBooksCollection(uid: String, listId: String) = usersCollection()
         .document(uid)
         .collection("listas")
@@ -165,6 +193,16 @@ class FriendsRepository(
     private fun hiddenActivityUpdatesCollection(uid: String) = usersCollection()
         .document(uid)
         .collection("hidden_activity_updates")
+
+    private fun blockedMembersCollection(uid: String) = usersCollection()
+        .document(uid)
+        .collection("blocked_members")
+
+    private fun reportReviewsCollection(uid: String) = usersCollection()
+        .document(uid)
+        .collection("report_reviews")
+
+    private fun accountReportsCollection() = firestore.collection("accountReports")
 
     private fun DocumentSnapshot.stringValue(vararg keys: String): String {
         return keys.firstNotNullOfOrNull { key ->
@@ -228,7 +266,34 @@ class FriendsRepository(
         }
     }
 
+    private suspend fun blockedUserIds(uid: String): Set<String> {
+        if (uid.isBlank()) return emptySet()
+        return blockedMembersCollection(uid)
+            .get()
+            .await()
+            .documents
+            .map { it.id }
+            .toSet()
+    }
+
+    private suspend fun isBlockedBetween(firstUid: String, secondUid: String): Boolean {
+        if (firstUid.isBlank() || secondUid.isBlank() || firstUid == secondUid) return false
+        val firstBlockedSecond = blockedMembersCollection(firstUid)
+            .document(secondUid)
+            .get()
+            .await()
+            .exists()
+        if (firstBlockedSecond) return true
+
+        return blockedMembersCollection(secondUid)
+            .document(firstUid)
+            .get()
+            .await()
+            .exists()
+    }
+
     private suspend fun canOpenProfile(targetUid: String, viewerUid: String, targetUser: Usuario): Boolean {
+        if (isBlockedBetween(targetUid, viewerUid)) return false
         return targetUid == viewerUid ||
             targetUser.privacySettings.profileVisible ||
             friendsCollection(viewerUid).document(targetUid).get().await().exists()
@@ -286,6 +351,57 @@ class FriendsRepository(
         return runCatching {
             SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(date)?.time
         }.getOrNull()
+    }
+
+    private fun lastQuarterCutoffMillis(): Long {
+        return System.currentTimeMillis() - LAST_QUARTER_MILLIS
+    }
+
+    private fun isWithinLastQuarter(timestampMillis: Long?): Boolean {
+        return timestampMillis != null && timestampMillis >= lastQuarterCutoffMillis()
+    }
+
+    private fun bookUniqueKey(book: Libro): String {
+        return when {
+            book.isbn.isNotBlank() -> "isbn:${book.isbn.trim().lowercase()}"
+            book.id.isNotBlank() -> "id:${book.id.trim().lowercase()}"
+            else -> "title:${book.titulo.trim().lowercase()}|author:${book.autor.trim().lowercase()}"
+        }
+    }
+
+    private fun bookUniqueKey(readBook: LibroLeido): String {
+        return when {
+            readBook.isbn.isNotBlank() -> "isbn:${readBook.isbn.trim().lowercase()}"
+            readBook.id.isNotBlank() -> "id:${readBook.id.trim().lowercase()}"
+            else -> "title:${readBook.titulo.trim().lowercase()}|author:${readBook.autor.trim().lowercase()}"
+        }
+    }
+
+    private suspend fun uniqueBooksInAllListsCount(uid: String): Int {
+        val uniqueKeys = linkedSetOf<String>()
+        val listDocuments = listsCollection(uid).get().await().documents
+        listDocuments.forEach { listDocument ->
+            listDocument.reference
+                .collection("libros")
+                .get()
+                .await()
+                .documents
+                .mapNotNull { it.toObject(Libro::class.java) }
+                .forEach { book ->
+                    uniqueKeys += bookUniqueKey(book)
+                }
+        }
+
+        readsCollection(uid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { it.toObject(LibroLeido::class.java) }
+            .forEach { readBook ->
+                uniqueKeys += bookUniqueKey(readBook)
+            }
+
+        return uniqueKeys.size
     }
 
     private fun sortActivitiesByRecency(items: List<FriendActivityItem>): List<FriendActivityItem> {
@@ -371,6 +487,85 @@ class FriendsRepository(
         return activities.filterNot { it.id in hiddenIds }
     }
 
+    private suspend fun bookListActivities(
+        ownerUid: String,
+        owner: Usuario,
+        viewerUid: String
+    ): List<FriendActivityItem> {
+        val listDocuments = listsCollection(ownerUid).get().await().documents
+        val hasReadListBooks = listDocuments.any { listDocument ->
+            listDocument.id == SYSTEM_LIST_READ_ID &&
+                listDocument.reference.collection("libros").limit(1).get().await().documents.isNotEmpty()
+        }
+
+        val listActivities = listDocuments.flatMap { listDocument ->
+            val listId = listDocument.id
+            val listName = listDocument.getString("name")
+                ?.takeIf { it.isNotBlank() }
+                ?: defaultSystemListTitle(listId)
+            val type = when (listId) {
+                SYSTEM_LIST_WANT_TO_READ_ID -> FriendActivityType.WANT_TO_READ
+                SYSTEM_LIST_READING_ID -> FriendActivityType.READING
+                SYSTEM_LIST_READ_ID -> FriendActivityType.READ
+                else -> FriendActivityType.LIST_ADDED
+            }
+
+            listDocument.reference
+                .collection("libros")
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val timestamp = document.timestampMillis("activityAt")
+                    if (!isWithinLastQuarter(timestamp)) return@mapNotNull null
+                    val book = document.toObject(Libro::class.java) ?: return@mapNotNull null
+                    FriendActivityItem(
+                        id = activityId(
+                            ownerUid = ownerUid,
+                            type = type,
+                            sourceId = "${listId}_${document.id}",
+                            timestampMillis = timestamp
+                        ),
+                        type = type,
+                        user = owner.visibleTo(viewerUid),
+                        timestampMillis = timestamp,
+                        listName = listName,
+                        book = book
+                    )
+                }
+        }
+
+        if (hasReadListBooks) {
+            return listActivities
+        }
+
+        val readActivities = readsCollection(ownerUid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                val readBook = document.toObject(LibroLeido::class.java) ?: return@mapNotNull null
+                val timestamp = document.timestampMillis("activityAt")
+                    ?: parseReadDateToMillis(document.getString("fechaLeido").orEmpty())
+                    ?: parseReadDateToMillis(readBook.fechaLeido)
+                if (!isWithinLastQuarter(timestamp)) return@mapNotNull null
+                FriendActivityItem(
+                    id = activityId(
+                        ownerUid = ownerUid,
+                        type = FriendActivityType.READ,
+                        sourceId = document.id,
+                        timestampMillis = timestamp
+                    ),
+                    type = FriendActivityType.READ,
+                    user = owner.visibleTo(viewerUid),
+                    timestampMillis = timestamp,
+                    readBook = readBook
+                )
+            }
+
+        return listActivities + readActivities
+    }
+
     suspend fun loadSuggestions(): Result<FriendSuggestionsData> {
         return try {
             if (isGuestSessionActive()) {
@@ -391,12 +586,18 @@ class FriendsRepository(
             val currentFriends = friendsSnapshot.documents.map { it.id }.toSet()
             val sentRequestIds = sentRequestsSnapshot.documents.map { it.id }.toSet()
             val receivedRequestIds = receivedRequestsSnapshot.documents.map { it.id }.toSet()
+            val blockedByMe = blockedUserIds(uid)
 
             val candidatesById = linkedMapOf<String, FriendSuggestion>()
             val secondDegreeIds = linkedSetOf<String>()
 
             (sentRequestIds + receivedRequestIds)
-                .filterNot { requestUid -> requestUid == uid || requestUid in currentFriends }
+                .filterNot { requestUid ->
+                    requestUid == uid ||
+                        requestUid in currentFriends ||
+                        requestUid in blockedByMe ||
+                        isBlockedBetween(uid, requestUid)
+                }
                 .forEach { requestUid ->
                     val user = getUserProfile(requestUid)
                     if (user != null) {
@@ -413,7 +614,8 @@ class FriendsRepository(
                     .map { it.id }
                     .filterNot { candidateUid ->
                         candidateUid == uid ||
-                            candidateUid in currentFriends
+                            candidateUid in currentFriends ||
+                            candidateUid in blockedByMe
                     }
                     .forEach { candidateUid ->
                         secondDegreeIds += candidateUid
@@ -427,7 +629,11 @@ class FriendsRepository(
                     .await()
                     .let { snapshotToUser(it, candidateUid) }
 
-                if (user != null && user.privacySettings.friendRequestPermissions) {
+                if (
+                    user != null &&
+                    user.privacySettings.friendRequestPermissions &&
+                    !isBlockedBetween(uid, candidateUid)
+                ) {
                     candidatesById[candidateUid] = FriendSuggestion(
                         user = user.visibleTo(uid),
                         source = SuggestionSource.FRIEND_OF_FRIEND
@@ -443,6 +649,8 @@ class FriendsRepository(
                     if (
                         candidateUid != uid &&
                         candidateUid !in currentFriends &&
+                        candidateUid !in blockedByMe &&
+                        !isBlockedBetween(uid, candidateUid) &&
                         user.privacySettings.friendRequestPermissions
                     ) {
                         candidatesById[candidateUid] = FriendSuggestion(
@@ -558,9 +766,13 @@ class FriendsRepository(
                 .get()
                 .await()
                 .documents
+            val blockedByMe = blockedUserIds(uid)
 
             val friends = friendDocuments.mapNotNull { document ->
                 val friendUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                if (friendUid in blockedByMe || isBlockedBetween(uid, friendUid)) {
+                    return@mapNotNull null
+                }
                 val cachedFriend = snapshotToUser(document, friendUid)
                 val friend = mergeUserProfile(
                     primary = getUserProfile(friendUid),
@@ -570,7 +782,7 @@ class FriendsRepository(
                     ?: return@mapNotNull null
 
                 val booksReadCount = if (friend.privacySettings.readingActivityVisible) {
-                    readsCollection(friendUid).get().await().size()
+                    uniqueBooksInAllListsCount(friendUid)
                 } else {
                     0
                 }
@@ -614,10 +826,14 @@ class FriendsRepository(
                 .get()
                 .await()
                 .documents
+            val blockedByMe = blockedUserIds(uid)
 
             val activities = buildList {
                 friendDocuments.forEach { document ->
                     val friendUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    if (friendUid in blockedByMe || isBlockedBetween(uid, friendUid)) {
+                        return@forEach
+                    }
                     val cachedFriend = snapshotToUser(document, friendUid)
                     val friend = mergeUserProfile(
                         primary = getUserProfile(friendUid),
@@ -628,95 +844,25 @@ class FriendsRepository(
                         return@forEach
                     }
 
-                    add(
-                        FriendActivityItem(
-                            id = activityId(
-                                ownerUid = friendUid,
+                    val friendshipTimestamp = document.timestampMillis("createdAt")
+                    if (friendshipTimestamp == null || isWithinLastQuarter(friendshipTimestamp)) {
+                        add(
+                            FriendActivityItem(
+                                id = activityId(
+                                    ownerUid = friendUid,
+                                    type = FriendActivityType.FRIENDSHIP,
+                                    sourceId = uid,
+                                    timestampMillis = friendshipTimestamp
+                                ),
                                 type = FriendActivityType.FRIENDSHIP,
-                                sourceId = uid,
-                                timestampMillis = document.timestampMillis("createdAt")
-                            ),
-                            type = FriendActivityType.FRIENDSHIP,
-                            user = friend.visibleTo(uid),
-                            timestampMillis = document.timestampMillis("createdAt"),
-                            relatedUserName = currentUserName
-                        )
-                    )
-
-                    val wantToReadDoc = systemListBooksCollection(friendUid, SYSTEM_LIST_WANT_TO_READ_ID)
-                        .get()
-                        .await()
-                        .documents
-                        .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
-
-                    wantToReadDoc?.toObject(Libro::class.java)?.let { book ->
-                        add(
-                            FriendActivityItem(
-                                id = activityId(
-                                    ownerUid = friendUid,
-                                    type = FriendActivityType.WANT_TO_READ,
-                                    sourceId = wantToReadDoc.id,
-                                    timestampMillis = wantToReadDoc.timestampMillis("activityAt")
-                                ),
-                                type = FriendActivityType.WANT_TO_READ,
                                 user = friend.visibleTo(uid),
-                                timestampMillis = wantToReadDoc.timestampMillis("activityAt"),
-                                book = book
+                                timestampMillis = friendshipTimestamp,
+                                relatedUserName = currentUserName
                             )
                         )
                     }
 
-                    val readingDoc = systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
-                        .get()
-                        .await()
-                        .documents
-                        .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
-
-                    readingDoc?.toObject(Libro::class.java)?.let { book ->
-                        add(
-                            FriendActivityItem(
-                                id = activityId(
-                                    ownerUid = friendUid,
-                                    type = FriendActivityType.READING,
-                                    sourceId = readingDoc.id,
-                                    timestampMillis = readingDoc.timestampMillis("activityAt")
-                                ),
-                                type = FriendActivityType.READING,
-                                user = friend.visibleTo(uid),
-                                timestampMillis = readingDoc.timestampMillis("activityAt"),
-                                book = book
-                            )
-                        )
-                    }
-
-                    val readDoc = readsCollection(friendUid)
-                        .get()
-                        .await()
-                        .documents
-                        .maxByOrNull { readDocument ->
-                            readDocument.timestampMillis("activityAt")
-                                ?: parseReadDateToMillis(readDocument.getString("fechaLeido").orEmpty())
-                                ?: Long.MIN_VALUE
-                        }
-
-                    readDoc?.toObject(LibroLeido::class.java)?.let { readBook ->
-                        add(
-                            FriendActivityItem(
-                                id = activityId(
-                                    ownerUid = friendUid,
-                                    type = FriendActivityType.READ,
-                                    sourceId = readDoc.id,
-                                    timestampMillis = readDoc.timestampMillis("activityAt")
-                                        ?: parseReadDateToMillis(readBook.fechaLeido)
-                                ),
-                                type = FriendActivityType.READ,
-                                user = friend.visibleTo(uid),
-                                timestampMillis = readDoc.timestampMillis("activityAt")
-                                    ?: parseReadDateToMillis(readBook.fechaLeido),
-                                readBook = readBook
-                            )
-                        )
-                    }
+                    addAll(bookListActivities(friendUid, friend, uid))
                 }
             }
 
@@ -744,6 +890,10 @@ class FriendsRepository(
 
             val uid = currentUid()
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
+
+            if (friendUid != uid && isBlockedBetween(uid, friendUid)) {
+                return Result.failure(Exception("No puedes ver este perfil"))
+            }
 
             val friend = usersCollection()
                 .document(friendUid)
@@ -807,6 +957,11 @@ class FriendsRepository(
 
             val booksRead = booksReadDocuments
                 .mapNotNull { it.toObject(LibroLeido::class.java) }
+            val uniqueBooksInListsCount = if (canShowReadingActivity) {
+                uniqueBooksInAllListsCount(friendUid)
+            } else {
+                0
+            }
 
             val readingBookDocuments = if (canShowReadingActivity) {
                 systemListBooksCollection(friendUid, SYSTEM_LIST_READING_ID)
@@ -841,6 +996,9 @@ class FriendsRepository(
             val visibleFriendProfiles = friendDocuments
                 .mapNotNull { document ->
                     val previewUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    if (previewUid != uid && isBlockedBetween(uid, previewUid)) {
+                        return@mapNotNull null
+                    }
                     mergeUserProfile(
                         primary = getUserProfile(previewUid),
                         fallback = snapshotToUser(document, previewUid),
@@ -860,91 +1018,28 @@ class FriendsRepository(
 
             val updates = buildList {
                 if (friendDocuments.any { it.id == uid }) {
+                    val friendshipTimestamp = friendDocuments
+                        .firstOrNull { it.id == uid }
+                        ?.timestampMillis("createdAt")
+                    if (friendshipTimestamp == null || isWithinLastQuarter(friendshipTimestamp)) {
                     add(
                         FriendActivityItem(
                             id = activityId(
                                 ownerUid = friendUid,
                                 type = FriendActivityType.FRIENDSHIP,
                                 sourceId = uid,
-                                timestampMillis = friendDocuments
-                                    .firstOrNull { it.id == uid }
-                                    ?.timestampMillis("createdAt")
+                                timestampMillis = friendshipTimestamp
                             ),
                             type = FriendActivityType.FRIENDSHIP,
                             user = resolvedFriend.visibleTo(uid),
-                            timestampMillis = friendDocuments
-                                .firstOrNull { it.id == uid }
-                                ?.timestampMillis("createdAt"),
+                            timestampMillis = friendshipTimestamp,
                             relatedUserName = currentUserName
                         )
                     )
-                }
-
-                wantToReadBookDocuments
-                    .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
-                    ?.let { document ->
-                        val book = document.toObject(Libro::class.java) ?: return@let
-                    add(
-                        FriendActivityItem(
-                            id = activityId(
-                                ownerUid = friendUid,
-                                type = FriendActivityType.WANT_TO_READ,
-                                sourceId = document.id,
-                                timestampMillis = document.timestampMillis("activityAt")
-                            ),
-                            type = FriendActivityType.WANT_TO_READ,
-                            user = resolvedFriend.visibleTo(uid),
-                            timestampMillis = document.timestampMillis("activityAt"),
-                            book = book
-                        )
-                    )
-                }
-
-                readingBookDocuments
-                    .maxByOrNull { it.timestampMillis("activityAt") ?: Long.MIN_VALUE }
-                    ?.let { document ->
-                        val book = document.toObject(Libro::class.java) ?: return@let
-                    add(
-                        FriendActivityItem(
-                            id = activityId(
-                                ownerUid = friendUid,
-                                type = FriendActivityType.READING,
-                                sourceId = document.id,
-                                timestampMillis = document.timestampMillis("activityAt")
-                            ),
-                            type = FriendActivityType.READING,
-                            user = resolvedFriend.visibleTo(uid),
-                            timestampMillis = document.timestampMillis("activityAt"),
-                            book = book
-                        )
-                    )
-                }
-
-                booksReadDocuments
-                    .maxByOrNull { document ->
-                        document.timestampMillis("activityAt")
-                            ?: parseReadDateToMillis(document.getString("fechaLeido").orEmpty())
-                            ?: Long.MIN_VALUE
                     }
-                    ?.let { document ->
-                        val book = document.toObject(LibroLeido::class.java) ?: return@let
-                    add(
-                        FriendActivityItem(
-                            id = activityId(
-                                ownerUid = friendUid,
-                                type = FriendActivityType.READ,
-                                sourceId = document.id,
-                                timestampMillis = document.timestampMillis("activityAt")
-                                    ?: parseReadDateToMillis(book.fechaLeido)
-                            ),
-                            type = FriendActivityType.READ,
-                            user = resolvedFriend.visibleTo(uid),
-                            timestampMillis = document.timestampMillis("activityAt")
-                                ?: parseReadDateToMillis(book.fechaLeido),
-                            readBook = book
-                        )
-                    )
                 }
+
+                addAll(bookListActivities(friendUid, resolvedFriend, uid))
             }
 
             val predefinedShelves = buildList {
@@ -1003,7 +1098,7 @@ class FriendsRepository(
                     isFriend = isFriend,
                     isRequestSent = isRequestSent,
                     isPrivateProfile = false,
-                    booksReadCount = booksRead.size,
+                    booksReadCount = uniqueBooksInListsCount,
                     friendsCount = visibleFriendProfiles.size,
                     readingBooks = readingBooks.take(6),
                     wantToReadBooks = wantToReadBooks.take(6),
@@ -1051,6 +1146,205 @@ class FriendsRepository(
                 .await()
 
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun blockMember(targetUid: String): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesion para bloquear perfiles"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            if (targetUid.isBlank() || targetUid == uid) {
+                return Result.failure(Exception("No se pudo identificar el perfil"))
+            }
+
+            val targetUser = getUserProfile(targetUid) ?: Usuario(uid = targetUid)
+            val currentUser = getUserProfile(uid) ?: Usuario(uid = uid)
+            val batch = firestore.batch()
+            batch.set(
+                blockedMembersCollection(uid).document(targetUid),
+                mapOf(
+                    "uid" to targetUser.uid,
+                    "usuario" to targetUser.usuario,
+                    "email" to targetUser.email,
+                    "photoUrl" to targetUser.photoUrl,
+                    "blockedAt" to FieldValue.serverTimestamp()
+                )
+            )
+            batch.delete(friendsCollection(uid).document(targetUid))
+            batch.delete(friendsCollection(targetUid).document(uid))
+            batch.delete(sentRequestsCollection(uid).document(targetUid))
+            batch.delete(receivedRequestsCollection(uid).document(targetUid))
+            batch.delete(sentRequestsCollection(targetUid).document(uid))
+            batch.delete(receivedRequestsCollection(targetUid).document(uid))
+            batch.set(
+                usersCollection().document(uid),
+                mapOf(
+                    "uid" to currentUser.uid,
+                    "usuario" to currentUser.usuario,
+                    "email" to currentUser.email,
+                    "photoUrl" to currentUser.photoUrl
+                ),
+                SetOptions.merge()
+            )
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun unblockMember(targetUid: String): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesion para desbloquear perfiles"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            if (targetUid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el perfil"))
+            }
+
+            blockedMembersCollection(uid).document(targetUid).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadBlockedMembers(): Result<List<BlockedMember>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(emptyList())
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            val members = blockedMembersCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val blockedUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    mergeUserProfile(
+                        primary = getUserProfile(blockedUid),
+                        fallback = snapshotToUser(document, blockedUid),
+                        uid = blockedUid
+                    )?.let { user ->
+                        BlockedMember(
+                            user = user,
+                            blockedAtMillis = document.timestampMillis("blockedAt")
+                        )
+                    }
+                }
+
+            Result.success(members)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reportMember(
+        targetUid: String,
+        subject: String,
+        message: String,
+        photoUris: List<String>
+    ): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesion para enviar denuncias"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val trimmedSubject = subject.trim()
+            val trimmedMessage = message.trim()
+            if (targetUid.isBlank() || targetUid == uid) {
+                return Result.failure(Exception("No se pudo identificar el perfil"))
+            }
+            if (trimmedSubject.isBlank() || trimmedMessage.isBlank()) {
+                return Result.failure(Exception("Completa el asunto y el mensaje"))
+            }
+
+            val reporter = getUserProfile(uid) ?: Usuario(uid = uid)
+            val reported = getUserProfile(targetUid) ?: Usuario(uid = targetUid)
+            val reportRef = accountReportsCollection().document()
+            val reportData = mapOf(
+                "id" to reportRef.id,
+                "reporterUid" to uid,
+                "reporterUsuario" to reporter.usuario,
+                "reporterEmail" to reporter.email,
+                "reporterPhotoUrl" to reporter.photoUrl,
+                "reportedUid" to reported.uid,
+                "reportedUsuario" to reported.usuario,
+                "reportedEmail" to reported.email,
+                "reportedPhotoUrl" to reported.photoUrl,
+                "subject" to trimmedSubject,
+                "message" to trimmedMessage,
+                "photoUris" to photoUris.filter { it.isNotBlank() },
+                "status" to AccountReportStatus.PENDING.name,
+                "adminMessage" to "",
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            val batch = firestore.batch()
+            batch.set(reportRef, reportData)
+            batch.set(reportReviewsCollection(uid).document(reportRef.id), reportData)
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadMyReports(): Result<List<AccountReport>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(emptyList())
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+
+            val reports = reportReviewsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .map { document ->
+                    AccountReport(
+                        id = document.getString("id").orEmpty().ifBlank { document.id },
+                        reportedUser = Usuario(
+                            uid = document.getString("reportedUid").orEmpty(),
+                            usuario = document.getString("reportedUsuario").orEmpty(),
+                            email = document.getString("reportedEmail").orEmpty(),
+                            photoUrl = document.getString("reportedPhotoUrl").orEmpty()
+                        ),
+                        subject = document.getString("subject").orEmpty(),
+                        message = document.getString("message").orEmpty(),
+                        photoUris = (document.get("photoUris") as? List<*>)
+                            ?.mapNotNull { it as? String }
+                            .orEmpty(),
+                        status = runCatching {
+                            AccountReportStatus.valueOf(document.getString("status").orEmpty())
+                        }.getOrDefault(AccountReportStatus.PENDING),
+                        adminMessage = document.getString("adminMessage").orEmpty(),
+                        createdAtMillis = document.timestampMillis("createdAt"),
+                        updatedAtMillis = document.timestampMillis("updatedAt")
+                    )
+                }
+                .sortedByDescending { it.createdAtMillis ?: Long.MIN_VALUE }
+
+            Result.success(reports)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1451,7 +1745,8 @@ class FriendsRepository(
                     "uid" to requestUser.uid,
                     "usuario" to requestUser.usuario,
                     "email" to requestUser.email,
-                    "photoUrl" to requestUser.photoUrl
+                    "photoUrl" to requestUser.photoUrl,
+                    "createdAt" to FieldValue.serverTimestamp()
                 )
             )
             batch.set(
@@ -1460,7 +1755,8 @@ class FriendsRepository(
                     "uid" to currentUser.uid,
                     "usuario" to currentUser.usuario,
                     "email" to currentUser.email,
-                    "photoUrl" to currentUser.photoUrl
+                    "photoUrl" to currentUser.photoUrl,
+                    "createdAt" to FieldValue.serverTimestamp()
                 )
             )
             batch.delete(currentReceivedRef)

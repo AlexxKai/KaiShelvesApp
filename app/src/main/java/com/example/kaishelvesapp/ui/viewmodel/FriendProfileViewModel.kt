@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.ActivitySocialSummary
+import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.BlockedMember
 import com.example.kaishelvesapp.data.repository.FriendProfileData
 import com.example.kaishelvesapp.data.repository.FriendsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,12 @@ data class FriendProfileUiState(
     val loadingCommentIds: Set<String> = emptySet(),
     val socialActionIds: Set<String> = emptySet(),
     val deletingActivityIds: Set<String> = emptySet(),
+    val blockedMembers: List<BlockedMember> = emptyList(),
+    val accountReports: List<AccountReport> = emptyList(),
+    val isBlockingMember: Boolean = false,
+    val isLoadingBlockedMembers: Boolean = false,
+    val isLoadingReports: Boolean = false,
+    val isSubmittingReport: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -232,6 +240,139 @@ class FriendProfileViewModel(
             _uiState.value = _uiState.value.copy(
                 socialActionIds = _uiState.value.socialActionIds - activityId
             )
+        }
+    }
+
+    fun blockCurrentProfile(onSuccess: () -> Unit = {}) {
+        val profile = _uiState.value.profile ?: return
+        if (profile.user.uid.isBlank() || _uiState.value.isBlockingMember) return
+
+        _uiState.value = _uiState.value.copy(
+            isBlockingMember = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.blockMember(profile.user.uid)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isBlockingMember = false,
+                        profile = null,
+                        errorMessage = null
+                    )
+                    onSuccess()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isBlockingMember = false,
+                        errorMessage = error.message ?: "No se pudo bloquear este perfil"
+                    )
+                }
+        }
+    }
+
+    fun submitReport(
+        subject: String,
+        message: String,
+        photoUris: List<String>,
+        onSuccess: () -> Unit = {}
+    ) {
+        val profile = _uiState.value.profile ?: return
+        if (_uiState.value.isSubmittingReport) return
+
+        _uiState.value = _uiState.value.copy(
+            isSubmittingReport = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.reportMember(
+                targetUid = profile.user.uid,
+                subject = subject,
+                message = message,
+                photoUris = photoUris
+            )
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingReport = false,
+                        errorMessage = null
+                    )
+                    onSuccess()
+                    loadMyReports()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingReport = false,
+                        errorMessage = error.message ?: "No se pudo enviar la denuncia"
+                    )
+                }
+        }
+    }
+
+    fun loadBlockedMembers() {
+        _uiState.value = _uiState.value.copy(
+            isLoadingBlockedMembers = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.loadBlockedMembers()
+                .onSuccess { members ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingBlockedMembers = false,
+                        blockedMembers = members,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingBlockedMembers = false,
+                        errorMessage = error.message ?: "No se pudieron cargar las personas bloqueadas"
+                    )
+                }
+        }
+    }
+
+    fun unblockMember(uid: String) {
+        if (uid.isBlank()) return
+
+        viewModelScope.launch {
+            repository.unblockMember(uid)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        blockedMembers = _uiState.value.blockedMembers.filterNot { it.user.uid == uid },
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo desbloquear este perfil"
+                    )
+                }
+        }
+    }
+
+    fun loadMyReports() {
+        _uiState.value = _uiState.value.copy(
+            isLoadingReports = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.loadMyReports()
+                .onSuccess { reports ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingReports = false,
+                        accountReports = reports,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingReports = false,
+                        errorMessage = error.message ?: "No se pudieron cargar las denuncias"
+                    )
+                }
         }
     }
 

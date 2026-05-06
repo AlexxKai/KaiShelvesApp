@@ -82,6 +82,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
+import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.AccountReportStatus
+import com.example.kaishelvesapp.data.repository.BlockedMember
 import com.example.kaishelvesapp.data.repository.LoginProviderState
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.GothicBackground
@@ -139,6 +142,7 @@ fun ProfileScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
+    var selectedSettingsPanel by remember { mutableStateOf(ProfileSettingsPanel.Main) }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
     var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
@@ -203,6 +207,10 @@ fun ProfileScreen(
         val currentUid = uiState.user?.uid.orEmpty()
         if (!isGuest && selectedProfileTab == ProfileTab.MyProfile && currentUid.isNotBlank()) {
             myProfileViewModel.loadProfile(currentUid)
+        }
+        if (!isGuest && selectedProfileTab == ProfileTab.Settings) {
+            myProfileViewModel.loadBlockedMembers()
+            myProfileViewModel.loadMyReports()
         }
     }
 
@@ -487,6 +495,8 @@ fun ProfileScreen(
 
                                         ProfileTab.Settings -> {
                                             ProfileSettingsContent(
+                                                selectedPanel = selectedSettingsPanel,
+                                                onSelectedPanelChange = { selectedSettingsPanel = it },
                                                 onSelectLanguage = { language ->
                                                     activity?.let {
                                                         LanguageManager.setLanguage(it, language)
@@ -498,6 +508,11 @@ fun ProfileScreen(
                                                         privacySettings.copy(searchIntroAnimationEnabled = it)
                                                     )
                                                 },
+                                                blockedMembers = myProfileState.blockedMembers,
+                                                reports = myProfileState.accountReports,
+                                                isLoadingBlockedMembers = myProfileState.isLoadingBlockedMembers,
+                                                isLoadingReports = myProfileState.isLoadingReports,
+                                                onUnblockMember = myProfileViewModel::unblockMember,
                                                 onLogout = onLogout
                                             )
                                         }
@@ -567,6 +582,12 @@ private enum class ProfileTab {
 
     val isGuestRestricted: Boolean
         get() = this == MyProfile || this == Privacy
+}
+
+private enum class ProfileSettingsPanel {
+    Main,
+    BlockedMembers,
+    ReportReview
 }
 
 @Composable
@@ -1074,11 +1095,47 @@ private fun PasswordLoginDialog(
 
 @Composable
 private fun ProfileSettingsContent(
+    selectedPanel: ProfileSettingsPanel,
+    onSelectedPanelChange: (ProfileSettingsPanel) -> Unit,
     onSelectLanguage: (String) -> Unit,
     searchIntroAnimationEnabled: Boolean,
     onSearchIntroAnimationEnabledChange: (Boolean) -> Unit,
+    blockedMembers: List<BlockedMember>,
+    reports: List<AccountReport>,
+    isLoadingBlockedMembers: Boolean,
+    isLoadingReports: Boolean,
+    onUnblockMember: (String) -> Unit,
     onLogout: () -> Unit
 ) {
+    when (selectedPanel) {
+        ProfileSettingsPanel.BlockedMembers -> {
+            ProfileSettingsBackButton(
+                text = stringResource(R.string.profile_settings_back),
+                onClick = { onSelectedPanelChange(ProfileSettingsPanel.Main) }
+            )
+            BlockedMembersSettingsSection(
+                blockedMembers = blockedMembers,
+                isLoading = isLoadingBlockedMembers,
+                onUnblockMember = onUnblockMember
+            )
+            return
+        }
+
+        ProfileSettingsPanel.ReportReview -> {
+            ProfileSettingsBackButton(
+                text = stringResource(R.string.profile_settings_back),
+                onClick = { onSelectedPanelChange(ProfileSettingsPanel.Main) }
+            )
+            ReportReviewSettingsSection(
+                reports = reports,
+                isLoading = isLoadingReports
+            )
+            return
+        }
+
+        ProfileSettingsPanel.Main -> Unit
+    }
+
     ProfileSectionBlock(title = stringResource(R.string.profile_settings_language)) {
         LanguageSection(
             onSelectLanguage = onSelectLanguage
@@ -1094,6 +1151,25 @@ private fun ProfileSettingsContent(
         )
     }
 
+    ProfileSectionBlock(title = stringResource(R.string.profile_settings_social_safety)) {
+        ProfileSettingsActionRow(
+            title = stringResource(R.string.profile_blocked_people),
+            body = stringResource(R.string.profile_blocked_people_body),
+            onClick = { onSelectedPanelChange(ProfileSettingsPanel.BlockedMembers) }
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ProfileSettingsActionRow(
+            title = stringResource(R.string.profile_report_review),
+            body = stringResource(R.string.profile_report_review_body),
+            onClick = { onSelectedPanelChange(ProfileSettingsPanel.ReportReview) }
+        )
+    }
+
     Button(
         onClick = onLogout,
         modifier = Modifier.fillMaxWidth(),
@@ -1101,6 +1177,210 @@ private fun ProfileSettingsContent(
     ) {
         Text(stringResource(R.string.logout))
     }
+}
+
+@Composable
+private fun ProfileSettingsBackButton(
+    text: String,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.padding(bottom = 12.dp),
+        border = BorderStroke(1.dp, TarnishedGold)
+    ) {
+        Text(text = text, color = TarnishedGold)
+    }
+}
+
+@Composable
+private fun ProfileSettingsActionRow(
+    title: String,
+    body: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = OldIvory
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.74f)
+            )
+        }
+        OutlinedButton(
+            onClick = onClick,
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            Text(text = stringResource(R.string.open), color = TarnishedGold)
+        }
+    }
+}
+
+@Composable
+private fun BlockedMembersSettingsSection(
+    blockedMembers: List<BlockedMember>,
+    isLoading: Boolean,
+    onUnblockMember: (String) -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_blocked_people)) {
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = TarnishedGold)
+                }
+            }
+
+            blockedMembers.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.profile_no_blocked_people),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.8f)
+                )
+            }
+
+            else -> {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    blockedMembers.forEach { member ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            KaiUserAvatar(
+                                displayName = member.user.usuario.ifBlank { member.user.email },
+                                imageUrl = member.user.photoUrl,
+                                modifier = Modifier.size(48.dp),
+                                size = 48.dp
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = member.user.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = OldIvory
+                                )
+                                Text(
+                                    text = member.user.email.ifBlank { stringResource(R.string.no_email_available) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OldIvory.copy(alpha = 0.66f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { onUnblockMember(member.user.uid) },
+                                border = BorderStroke(1.dp, TarnishedGold)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.unblock_member),
+                                    color = TarnishedGold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportReviewSettingsSection(
+    reports: List<AccountReport>,
+    isLoading: Boolean
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_report_review)) {
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = TarnishedGold)
+                }
+            }
+
+            reports.isEmpty() -> {
+                Text(
+                    text = stringResource(R.string.profile_no_reports),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.8f)
+                )
+            }
+
+            else -> {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    reports.forEach { report ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(
+                                    width = 1.dp,
+                                    color = TarnishedGold.copy(alpha = 0.22f),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = report.subject,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = OldIvory
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.profile_reported_member,
+                                    report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) }
+                                ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = OldIvory.copy(alpha = 0.76f)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = reportStatusLabel(report.status),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = TarnishedGold
+                            )
+                            if (report.adminMessage.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = report.adminMessage,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = OldIvory.copy(alpha = 0.84f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun reportStatusLabel(status: AccountReportStatus): String {
+    return stringResource(
+        when (status) {
+            AccountReportStatus.PENDING -> R.string.report_status_pending
+            AccountReportStatus.NEEDS_INFO -> R.string.report_status_needs_info
+            AccountReportStatus.RESOLVED -> R.string.report_status_resolved
+        }
+    )
 }
 
 @Composable
