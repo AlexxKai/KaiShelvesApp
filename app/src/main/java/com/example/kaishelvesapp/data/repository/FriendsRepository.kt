@@ -11,6 +11,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -180,6 +181,14 @@ data class AccountReport(
     val createdAtMillis: Long? = null,
     val updatedAtMillis: Long? = null
 )
+
+private class CompositeListenerRegistration(
+    private val registrations: List<ListenerRegistration>
+) : ListenerRegistration {
+    override fun remove() {
+        registrations.forEach { it.remove() }
+    }
+}
 
 class FriendsRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -1693,6 +1702,57 @@ class FriendsRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    fun observeActivityNotificationChanges(onChange: () -> Unit): ListenerRegistration? {
+        if (isGuestSessionActive()) {
+            return null
+        }
+
+        val uid = currentUid() ?: return null
+        val socialListener = activitySocialCollection().addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            val hasOwnActivityChange = snapshot
+                ?.documentChanges
+                ?.any { change -> activityOwnerUid(change.document.id) == uid } == true
+            if (hasOwnActivityChange) {
+                onChange()
+            }
+        }
+        val likesListener = firestore.collectionGroup("likes").addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            val hasOwnLikeChange = snapshot
+                ?.documentChanges
+                ?.any { change ->
+                    val activityId = change.document.reference.parent.parent?.id.orEmpty()
+                    activityOwnerUid(activityId) == uid
+                } == true
+            if (hasOwnLikeChange) {
+                onChange()
+            }
+        }
+        val commentsListener = firestore.collectionGroup("comments").addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            val hasOwnCommentChange = snapshot
+                ?.documentChanges
+                ?.any { change ->
+                    val activityId = change.document.reference.parent.parent?.id.orEmpty()
+                    activityOwnerUid(activityId) == uid
+                } == true
+            if (hasOwnCommentChange) {
+                onChange()
+            }
+        }
+        val readsListener = activityNotificationReadsCollection(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            if (snapshot?.documentChanges?.isNotEmpty() == true) {
+                onChange()
+            }
+        }
+
+        return CompositeListenerRegistration(
+            listOf(socialListener, likesListener, commentsListener, readsListener)
+        )
     }
 
     suspend fun markActivityNotificationRead(notificationId: String): Result<Unit> {

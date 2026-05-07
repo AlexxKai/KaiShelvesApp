@@ -19,7 +19,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -44,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
@@ -83,6 +91,8 @@ private enum class NotificationCenterTab {
 @Composable
 fun NotificationCenterScreen(
     viewModel: FriendRequestsViewModel,
+    initialSelectedNotificationId: String? = null,
+    onInitialSelectedNotificationHandled: () -> Unit = {},
     onBack: () -> Unit,
     onOpenFriendProfile: (String) -> Unit = {},
     onRequestsChanged: () -> Unit = {},
@@ -100,6 +110,15 @@ fun NotificationCenterScreen(
     LaunchedEffect(Unit) {
         viewModel.loadReceivedRequests()
         viewModel.loadActivityNotifications()
+    }
+
+    LaunchedEffect(initialSelectedNotificationId) {
+        val notificationId = initialSelectedNotificationId?.takeIf { it.isNotBlank() }
+            ?: return@LaunchedEffect
+        selectedTab = NotificationCenterTab.NOTIFICATIONS
+        selectedNotificationId = notificationId
+        viewModel.loadActivityNotifications()
+        onInitialSelectedNotificationHandled()
     }
 
     selectedNotificationId
@@ -401,29 +420,36 @@ private fun ActivityNotificationCard(
         colors = CardDefaults.cardColors(containerColor = OldIvory.copy(alpha = cardAlpha)),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = if (notification.isRead) 0.14f else 0.22f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            KaiUserAvatar(
-                displayName = notification.user.usuario.ifBlank { notification.user.email },
-                imageUrl = notification.user.photoUrl,
-                size = 44.dp
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NotificationTypeIcon(
+                    icon = notificationIcon(notification.type),
+                    tint = notificationIconTint(notification.type),
+                    background = notificationIconTint(notification.type).copy(alpha = 0.13f)
+                )
 
-            Spacer(modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.size(12.dp))
 
-            Text(
-                text = notificationMessage(notification),
-                style = MaterialTheme.typography.titleMedium,
-                color = DeepWalnut,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+                Text(
+                    text = notificationMessage(notification),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = DeepWalnut,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            NotificationActivityPreview(item = notification.activity)
         }
     }
 }
@@ -474,11 +500,27 @@ private fun NotificationInteractionHeader(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        KaiUserAvatar(
-            displayName = notification.user.usuario.ifBlank { notification.user.email },
-            imageUrl = notification.user.photoUrl,
-            size = 42.dp
-        )
+        Box {
+            KaiUserAvatar(
+                displayName = notification.user.usuario.ifBlank { notification.user.email },
+                imageUrl = notification.user.photoUrl,
+                size = 42.dp
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(18.dp)
+                    .background(notificationIconTint(notification.type), RoundedCornerShape(999.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = notificationIcon(notification.type),
+                    contentDescription = null,
+                    tint = OldIvory,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.size(12.dp))
 
@@ -611,6 +653,124 @@ private fun notificationMessage(notification: ActivityNotificationItem): String 
 }
 
 @Composable
+private fun NotificationTypeIcon(
+    icon: ImageVector,
+    tint: Color,
+    background: Color
+) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .background(background, RoundedCornerShape(999.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(19.dp)
+        )
+    }
+}
+
+private fun notificationIcon(type: ActivityNotificationType): ImageVector {
+    return when (type) {
+        ActivityNotificationType.LIKE -> Icons.Filled.Favorite
+        ActivityNotificationType.COMMENT -> Icons.Filled.ChatBubbleOutline
+    }
+}
+
+private fun notificationIconTint(type: ActivityNotificationType): Color {
+    return when (type) {
+        ActivityNotificationType.LIKE -> BloodWine
+        ActivityNotificationType.COMMENT -> Color(0xFF0E7C86)
+    }
+}
+
+@Composable
+private fun NotificationActivityPreview(item: FriendActivityItem) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DeepWalnut.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        when (item.type) {
+            FriendActivityType.FRIENDSHIP -> {
+                KaiUserAvatar(
+                    displayName = item.relatedUserName.orEmpty().ifBlank { stringResource(R.string.unknown_username) },
+                    imageUrl = "",
+                    size = 36.dp
+                )
+            }
+            else -> {
+                val book = activityBookInfo(item)
+                if (book != null) {
+                    BookCover(
+                        imageUrl = book.imageUrl,
+                        title = book.title,
+                        modifier = Modifier.size(width = 32.dp, height = 46.dp)
+                    )
+                } else {
+                    NotificationTypeIcon(
+                        icon = publicationIcon(item.type),
+                        tint = publicationIconTint(item.type),
+                        background = publicationIconTint(item.type).copy(alpha = 0.12f)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.size(10.dp))
+
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = activityTitle(item),
+                style = MaterialTheme.typography.bodySmall,
+                color = DeepWalnut,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            activityBookInfo(item)?.let { book ->
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = book.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DeepWalnut.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun publicationIcon(type: FriendActivityType): ImageVector {
+    return when (type) {
+        FriendActivityType.FRIENDSHIP -> Icons.Filled.PersonAdd
+        FriendActivityType.WANT_TO_READ -> Icons.Filled.BookmarkBorder
+        FriendActivityType.READING -> Icons.Filled.AutoStories
+        FriendActivityType.READ -> Icons.Filled.CheckCircleOutline
+        FriendActivityType.LIST_ADDED -> Icons.AutoMirrored.Filled.FormatListBulleted
+    }
+}
+
+private fun publicationIconTint(type: FriendActivityType): Color {
+    return when (type) {
+        FriendActivityType.FRIENDSHIP -> Color(0xFF0E7C86)
+        FriendActivityType.WANT_TO_READ -> TarnishedGold
+        FriendActivityType.READING -> Color(0xFF0E7C86)
+        FriendActivityType.READ -> BloodWine
+        FriendActivityType.LIST_ADDED -> DeepWalnut
+    }
+}
+
+@Composable
 private fun activityTitle(item: FriendActivityItem): String {
     val userName = item.user.usuario.ifBlank { stringResource(R.string.unknown_username) }
     return when (item.type) {
@@ -691,6 +851,14 @@ private fun FriendRequestCard(
             }
 
             Spacer(modifier = Modifier.size(12.dp))
+
+            NotificationTypeIcon(
+                icon = Icons.Filled.PersonAdd,
+                tint = Color(0xFF0E7C86),
+                background = Color(0xFF0E7C86).copy(alpha = 0.13f)
+            )
+
+            Spacer(modifier = Modifier.size(10.dp))
 
             Column(
                 modifier = Modifier.weight(1f)

@@ -1,11 +1,13 @@
 package com.example.kaishelvesapp
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.kaishelvesapp.data.local.AppContextProvider
@@ -15,18 +17,32 @@ import com.example.kaishelvesapp.ui.navigation.AppNavigation
 import com.example.kaishelvesapp.ui.theme.KaiShelvesAppTheme
 
 class MainActivity : AppCompatActivity() {
+    private val activityNotificationToOpen = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppContextProvider.initialize(applicationContext)
         DeviceNotificationManager.ensureChannels(this)
         requestNotificationPermissionIfNeeded()
+        activityNotificationToOpen.value = intent.activityNotificationId()
         setContent {
             KaiShelvesAppTheme {
                 GothicBackground {
-                    AppNavigation()
+                    AppNavigation(
+                        activityNotificationToOpen = activityNotificationToOpen.value,
+                        onActivityNotificationOpenConsumed = {
+                            activityNotificationToOpen.value = null
+                        }
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        activityNotificationToOpen.value = intent.activityNotificationId()
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -44,5 +60,10 @@ class MainActivity : AppCompatActivity() {
                 1001
             )
         }
+    }
+
+    private fun Intent.activityNotificationId(): String? {
+        return getStringExtra(DeviceNotificationManager.EXTRA_ACTIVITY_NOTIFICATION_ID)
+            ?.takeIf { it.isNotBlank() }
     }
 }

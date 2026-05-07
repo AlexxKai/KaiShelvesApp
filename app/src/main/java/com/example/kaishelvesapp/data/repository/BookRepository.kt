@@ -32,7 +32,8 @@ class BookRepository(
 
     data class BookSearchResult(
         val totalItems: Int,
-        val books: List<Libro>
+        val books: List<Libro>,
+        val hasMore: Boolean = false
     )
 
     enum class BookSearchSort {
@@ -89,6 +90,16 @@ class BookRepository(
         if (book.fechaPublicacion != 0) score += 2
 
         return score
+    }
+
+    private fun searchResultKey(book: Libro): String {
+        val title = book.titulo.trim().lowercase(Locale.ROOT)
+        val author = book.autor.trim().lowercase(Locale.ROOT)
+        return if (title.isNotBlank() && author.isNotBlank()) {
+            "$title-$author"
+        } else {
+            book.id.ifBlank { book.isbn.ifBlank { "$title-$author" } }
+        }
     }
 
     private fun searchResultComparator(sort: BookSearchSort): Comparator<Pair<Libro, Int>> {
@@ -306,7 +317,9 @@ class BookRepository(
 
     suspend fun searchBooksForResults(
         query: String,
-        sort: BookSearchSort = BookSearchSort.NEWEST
+        sort: BookSearchSort = BookSearchSort.NEWEST,
+        startIndex: Int = 0,
+        maxResults: Int = 40
     ): Result<BookSearchResult> {
         return try {
             val cleanQuery = query.trim()
@@ -333,7 +346,8 @@ class BookRepository(
                         runCatching {
                             searchGoogleBooks(
                                 query = googleQuery,
-                                maxResults = 40,
+                                maxResults = maxResults,
+                                startIndex = startIndex,
                                 orderBy = if (sort == BookSearchSort.NEWEST) "newest" else null
                             )
                         }.getOrNull()
@@ -350,24 +364,21 @@ class BookRepository(
                 .flatMap { it.items }
                 .map { it.toLibro() }
                 .filter { it.titulo.isNotBlank() || it.autor.isNotBlank() }
-                .distinctBy { libro ->
-                    libro.id.ifBlank {
-                        libro.isbn.ifBlank {
-                            "${libro.titulo.lowercase(Locale.ROOT)}-${libro.autor.lowercase(Locale.ROOT)}"
-                        }
-                    }
-                }
+                .distinctBy(::searchResultKey)
                 .map { libro -> libro to searchRelevanceScore(libro, queryTokens, cleanQuery) }
                 .filter { (_, score) -> score > 0 || looksLikeIsbn(cleanQuery) }
                 .sortedWith(searchResultComparator(sort))
                 .map { it.first }
                 .take(80)
 
-            val totalItems = responses.maxOfOrNull { it.totalItems } ?: libros.size
+            val hasMore = responses.any { response ->
+                response.items.isNotEmpty() && startIndex + maxResults < response.totalItems
+            }
             Result.success(
                 BookSearchResult(
-                    totalItems = totalItems.coerceAtLeast(libros.size),
-                    books = libros
+                    totalItems = libros.size,
+                    books = libros,
+                    hasMore = hasMore
                 )
             )
         } catch (e: Exception) {

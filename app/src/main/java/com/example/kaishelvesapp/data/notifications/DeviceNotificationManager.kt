@@ -3,9 +3,12 @@ package com.example.kaishelvesapp.data.notifications
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import com.example.kaishelvesapp.MainActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -14,19 +17,28 @@ import com.example.kaishelvesapp.R
 object DeviceNotificationManager {
 
     const val ACCOUNT_CHANNEL_ID = "account_updates"
+    const val ACTIVITY_CHANNEL_ID = "activity_updates"
+    const val EXTRA_ACTIVITY_NOTIFICATION_ID = "activity_notification_id"
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        val channel = NotificationChannel(
+        val accountChannel = NotificationChannel(
             ACCOUNT_CHANNEL_ID,
             "Actualizaciones de cuenta",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = "Notificaciones sobre cambios importantes en la cuenta"
         }
-        manager.createNotificationChannel(channel)
+        val activityChannel = NotificationChannel(
+            ACTIVITY_CHANNEL_ID,
+            "Interacciones sociales",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Notificaciones de me gusta y comentarios en tus publicaciones"
+        }
+        manager.createNotificationChannels(listOf(accountChannel, activityChannel))
     }
 
     fun canPostNotifications(context: Context): Boolean {
@@ -65,5 +77,45 @@ object DeviceNotificationManager {
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
         return true
+    }
+
+    fun showActivityNotification(
+        context: Context,
+        notificationId: String,
+        title: String,
+        body: String
+    ): Boolean {
+        ensureChannels(context)
+        if (!canPostNotifications(context)) {
+            return false
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_ACTIVITY_NOTIFICATION_ID, notificationId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, ACTIVITY_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(notificationId.hashCode(), notification)
+        return true
+    }
+
+    fun cancelActivityNotification(context: Context, notificationId: String) {
+        NotificationManagerCompat.from(context).cancel(notificationId.hashCode())
     }
 }

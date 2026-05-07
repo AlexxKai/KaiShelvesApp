@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -30,6 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,10 +44,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +71,8 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.SearchResultsSortMode
 import com.example.kaishelvesapp.ui.viewmodel.SearchResultsViewModel
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +82,35 @@ fun SearchResultsScreen(
     onBookClick: (Libro) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val showScrollToTopButton = !uiState.isLoading &&
+        uiState.errorMessage == null &&
+        (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240)
+
+    LaunchedEffect(
+        listState,
+        uiState.libros.size,
+        uiState.canLoadMore,
+        uiState.isLoading,
+        uiState.isLoadingMore
+    ) {
+        snapshotFlow {
+            if (!uiState.canLoadMore || uiState.isLoading || uiState.isLoadingMore || uiState.libros.isEmpty()) {
+                false
+            } else {
+                val lastVisibleItemIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val totalItemsCount = listState.layoutInfo.totalItemsCount
+                totalItemsCount > 0 && lastVisibleItemIndex >= totalItemsCount - 4
+            }
+        }
+            .distinctUntilChanged()
+            .collect { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    viewModel.loadMore()
+                }
+            }
+    }
 
     Scaffold(
         containerColor = Obsidian,
@@ -81,6 +122,20 @@ fun SearchResultsScreen(
                 onClear = viewModel::clearSearchQuery,
                 onBack = onBack
             )
+        },
+        floatingActionButton = {
+            if (showScrollToTopButton) {
+                FloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    containerColor = DeepWalnut,
+                    contentColor = TarnishedGold
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ArrowUpward,
+                        contentDescription = stringResource(R.string.scroll_to_top)
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -117,6 +172,8 @@ fun SearchResultsScreen(
                         totalResults = uiState.totalResults,
                         submittedQuery = uiState.submittedQuery,
                         sortMode = uiState.sortMode,
+                        listState = listState,
+                        isLoadingMore = uiState.isLoadingMore,
                         onSortModeChange = viewModel::onSortModeChange,
                         onBookClick = onBookClick
                     )
@@ -126,6 +183,7 @@ fun SearchResultsScreen(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun SearchResultsTopBar(
     query: String,
@@ -134,6 +192,14 @@ private fun SearchResultsTopBar(
     onClear: () -> Unit,
     onBack: () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    fun submitSearch() {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        onSearch()
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = DeepWalnut,
@@ -193,7 +259,7 @@ private fun SearchResultsTopBar(
                 ),
                 textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() })
+                keyboardActions = KeyboardActions(onSearch = { submitSearch() })
             )
         }
     }
@@ -205,10 +271,13 @@ private fun SearchResultsList(
     totalResults: Int,
     submittedQuery: String,
     sortMode: SearchResultsSortMode,
+    listState: LazyListState,
+    isLoadingMore: Boolean,
     onSortModeChange: (SearchResultsSortMode) -> Unit,
     onBookClick: (Libro) -> Unit
 ) {
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -247,6 +316,22 @@ private fun SearchResultsList(
                 libro = book,
                 onClick = { onBookClick(book) }
             )
+        }
+
+        if (isLoadingMore) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 22.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = TarnishedGold,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+            }
         }
     }
 }

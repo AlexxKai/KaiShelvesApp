@@ -108,7 +108,9 @@ fun friendListDetailRoute(friendUid: String, listId: String): String =
 
 @Composable
 fun AppNavigation(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    activityNotificationToOpen: String? = null,
+    onActivityNotificationOpenConsumed: () -> Unit = {}
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
@@ -141,6 +143,7 @@ fun AppNavigation(
     }
     var showGuestRestrictedNotice by remember { mutableStateOf(false) }
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
+    var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
 
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
@@ -187,6 +190,25 @@ fun AppNavigation(
                 popUpTo(0) { inclusive = true }
             }
         }
+    }
+
+    LaunchedEffect(authState.isLoggedIn, authState.user?.uid, authState.user?.isGuest) {
+        if (authState.isLoggedIn && authState.user?.isGuest != true) {
+            friendRequestsViewModel.loadReceivedRequests()
+            friendRequestsViewModel.loadActivityNotifications()
+            friendRequestsViewModel.observeActivityNotificationChanges()
+        }
+    }
+
+    LaunchedEffect(activityNotificationToOpen, authState.isLoggedIn, authState.user?.isGuest) {
+        val notificationId = activityNotificationToOpen?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (!authState.isLoggedIn || authState.user?.isGuest == true) return@LaunchedEffect
+
+        pendingActivityNotificationToOpen = notificationId
+        if (currentRoute != Routes.NOTIFICATION_CENTER) {
+            navController.navigate(Routes.NOTIFICATION_CENTER)
+        }
+        onActivityNotificationOpenConsumed()
     }
 
     LaunchedEffect(currentRoute, helpChatState.isActive, catalogState.selectedBook?.titulo) {
@@ -766,6 +788,10 @@ fun AppNavigation(
         composable(Routes.NOTIFICATION_CENTER) {
             NotificationCenterScreen(
                 viewModel = friendRequestsViewModel,
+                initialSelectedNotificationId = pendingActivityNotificationToOpen,
+                onInitialSelectedNotificationHandled = {
+                    pendingActivityNotificationToOpen = null
+                },
                 onBack = { navController.popBackStack() },
                 onOpenFriendProfile = { friendUid ->
                     navController.navigate(friendProfileRoute(friendUid))

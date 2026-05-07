@@ -2,11 +2,15 @@ package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.kaishelvesapp.data.local.AppContextProvider
 import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.repository.ActivityNotificationItem
+import com.example.kaishelvesapp.data.repository.ActivityNotificationType
 import com.example.kaishelvesapp.data.repository.ActivitySocialSummary
 import com.example.kaishelvesapp.data.repository.FriendsRepository
+import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +28,7 @@ data class FriendRequestsUiState(
     val successMessage: String? = null
 ) {
     val pendingCount: Int
-        get() = receivedRequests.size
+        get() = receivedRequests.size + unreadNotifications.size
     val unreadNotifications: List<ActivityNotificationItem>
         get() = notifications.filterNot { it.isRead }
     val readNotifications: List<ActivityNotificationItem>
@@ -37,10 +41,20 @@ class FriendRequestsViewModel(
 
     private val _uiState = MutableStateFlow(FriendRequestsUiState())
     val uiState: StateFlow<FriendRequestsUiState> = _uiState.asStateFlow()
+    private var activityNotificationsListener: ListenerRegistration? = null
+    private var hasLoadedActivityNotificationsOnce = false
+    private val locallyNotifiedActivityNotificationIds = mutableSetOf<String>()
 
     init {
         loadReceivedRequests()
         loadActivityNotifications()
+        observeActivityNotificationChanges()
+    }
+
+    override fun onCleared() {
+        activityNotificationsListener?.remove()
+        activityNotificationsListener = null
+        super.onCleared()
     }
 
     fun clearError() {
@@ -84,6 +98,7 @@ class FriendRequestsViewModel(
         viewModelScope.launch {
             repository.loadActivityNotifications()
                 .onSuccess { notifications ->
+                    notifyNewActivityNotifications(notifications)
                     _uiState.value = _uiState.value.copy(
                         isLoadingNotifications = false,
                         notifications = notifications,
@@ -96,6 +111,13 @@ class FriendRequestsViewModel(
                         errorMessage = error.message ?: "No se pudieron cargar las notificaciones"
                     )
                 }
+        }
+    }
+
+    fun observeActivityNotificationChanges() {
+        activityNotificationsListener?.remove()
+        activityNotificationsListener = repository.observeActivityNotificationChanges {
+            loadActivityNotifications()
         }
     }
 
@@ -231,6 +253,12 @@ class FriendRequestsViewModel(
 
         viewModelScope.launch {
             repository.markActivityNotificationRead(notificationId)
+                .onSuccess {
+                    DeviceNotificationManager.cancelActivityNotification(
+                        context = AppContextProvider.requireContext(),
+                        notificationId = notificationId
+                    )
+                }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         notifications = _uiState.value.notifications.map {
@@ -254,5 +282,50 @@ class FriendRequestsViewModel(
                 }
             }
         )
+    }
+
+    private fun notifyNewActivityNotifications(notifications: List<ActivityNotificationItem>) {
+        val unreadNotifications = notifications.filterNot { it.isRead }
+        if (!hasLoadedActivityNotificationsOnce) {
+            locallyNotifiedActivityNotificationIds += unreadNotifications.map { it.id }
+            hasLoadedActivityNotificationsOnce = true
+            return
+        }
+
+        unreadNotifications
+            .filterNot { it.id in locallyNotifiedActivityNotificationIds }
+            .forEach { notification ->
+                val posted = DeviceNotificationManager.showActivityNotification(
+                    context = AppContextProvider.requireContext(),
+                    notificationId = notification.id,
+                    title = notificationDeviceTitle(notification),
+                    body = notificationDeviceBody(notification)
+                )
+                if (posted) {
+                    locallyNotifiedActivityNotificationIds += notification.id
+                }
+            }
+
+        locallyNotifiedActivityNotificationIds.retainAll(unreadNotifications.map { it.id }.toSet())
+    }
+
+    private fun notificationDeviceTitle(notification: ActivityNotificationItem): String {
+        return when (notification.type) {
+            ActivityNotificationType.LIKE -> "Nuevo me gusta"
+            ActivityNotificationType.COMMENT -> "Nuevo comentario"
+        }
+    }
+
+    private fun notificationDeviceBody(notification: ActivityNotificationItem): String {
+        val userName = notification.user.usuario
+            .ifBlank { notification.user.email }
+            .ifBlank { "Alguien" }
+        return when (notification.type) {
+            ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicacion"
+            ActivityNotificationType.COMMENT -> {
+                val text = notification.text.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                "$userName ha comentado en tu publicacion$text"
+            }
+        }
     }
 }
