@@ -76,7 +76,8 @@ fun BookShelfActions(
     book: Libro,
     modifier: Modifier = Modifier,
     viewModelKeyPrefix: String = "book_shelf",
-    compact: Boolean = false
+    compact: Boolean = false,
+    onOrganizationChanged: () -> Unit = {}
 ) {
     val safeBookId = book.id.ifBlank { book.isbn }
     val detailViewModel: BookDetailViewModel = viewModel(key = "${viewModelKeyPrefix}_$safeBookId")
@@ -90,6 +91,12 @@ fun BookShelfActions(
     LaunchedEffect(safeBookId) {
         detailViewModel.cargarListasParaLibro(safeBookId)
         detailViewModel.cargarEstadoLectura(safeBookId)
+    }
+
+    LaunchedEffect(uiState.successMessageRes) {
+        if (uiState.successMessageRes == R.string.book_lists_updated) {
+            onOrganizationChanged()
+        }
     }
 
     if (showOrganizerDialog) {

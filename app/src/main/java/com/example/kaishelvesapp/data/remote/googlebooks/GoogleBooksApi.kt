@@ -11,6 +11,7 @@ interface GoogleBooksApi {
         @Query("maxResults") maxResults: Int = 40,
         @Query("startIndex") startIndex: Int = 0,
         @Query("printType") printType: String = "books",
+        @Query("projection") projection: String = "full",
         @Query("orderBy") orderBy: String? = null,
         @Query("langRestrict") langRestrict: String? = null
     ): GoogleBooksResponse

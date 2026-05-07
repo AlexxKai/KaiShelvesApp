@@ -33,6 +33,10 @@ data class GoogleBookVolumeInfo(
     val categories: List<String>? = null,
     @SerializedName("pageCount")
     val pageCount: Int? = null,
+    @SerializedName("averageRating")
+    val averageRating: Double? = null,
+    @SerializedName("ratingsCount")
+    val ratingsCount: Int? = null,
     @SerializedName("imageLinks")
     val imageLinks: GoogleBookImageLinks? = null
 )

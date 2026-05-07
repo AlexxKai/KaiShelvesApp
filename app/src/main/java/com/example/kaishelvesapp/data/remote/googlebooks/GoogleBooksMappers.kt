@@ -58,6 +58,8 @@ fun GoogleBookItem.toLibro(fallbackGenero: String = ""): Libro {
         },
         fechaPublicacion = parsePublishedYear(info?.publishedDate),
         paginas = info?.pageCount ?: 0,
+        averageRating = info?.averageRating ?: 0.0,
+        ratingsCount = info?.ratingsCount ?: 0,
         imagen = normalizeImageUrl(
             info?.imageLinks?.thumbnail
                 ?: info?.imageLinks?.smallThumbnail

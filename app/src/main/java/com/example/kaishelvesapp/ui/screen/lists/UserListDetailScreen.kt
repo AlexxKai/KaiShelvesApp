@@ -453,6 +453,7 @@ fun UserListDetailScreen(
                             isDragging = isDragging,
                             draggingOffset = if (isDragging) draggingTranslationY else 0f,
                             onOpen = { onBookClick(item.book) },
+                            onOrganizationChanged = { viewModel.loadListDetail(listId) },
                             dragHandleModifier = if (isPendingList && isPendingEditMode) {
                                 Modifier.pointerInput(bookId, visibleBooks.size) {
                                     detectDragGesturesAfterLongPress(
@@ -832,6 +833,7 @@ private fun ListBookCard(
     isDragging: Boolean,
     draggingOffset: Float,
     onOpen: () -> Unit,
+    onOrganizationChanged: () -> Unit,
     dragHandleModifier: Modifier = Modifier
 ) {
     val libro = item.book
@@ -946,7 +948,8 @@ private fun ListBookCard(
 
                 BookShelfActions(
                     book = libro,
-                    viewModelKeyPrefix = "list_detail_shelf"
+                    viewModelKeyPrefix = "list_detail_shelf",
+                    onOrganizationChanged = onOrganizationChanged
                 )
             }
         }

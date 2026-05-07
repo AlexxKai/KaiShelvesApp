@@ -196,6 +196,10 @@
     <string name="catalog_subtitle">Busca entre volúmenes, autores y géneros.</string>
     <string name="search_by_title_author_publisher">Buscar por título, autor, editorial o ISBN</string>
     <string name="search_by_title_author_isbn">Buscar por título, autor o ISBN</string>
+    <string name="search_results_count">%1$d resultados para \"%2$s\"</string>
+    <string name="sort_newest">Más recientes</string>
+    <string name="sort_best_rated">Mejor valorados</string>
+    <string name="google_books_rating_summary">%1$s · %2$d valoraciones</string>
     <string name="no_books_found">No se han encontrado volúmenes</string>
     <string name="unknown_title">Título desconocido</string>
     <string name="year">Año</string>

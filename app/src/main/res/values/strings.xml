@@ -196,6 +196,10 @@
     <string name="catalog_subtitle">Search among volumes, authors and genres.</string>
     <string name="search_by_title_author_publisher">Search by title, author, publisher or ISBN</string>
     <string name="search_by_title_author_isbn">Search by title, author or ISBN</string>
+    <string name="search_results_count">%1$d results for \"%2$s\"</string>
+    <string name="sort_newest">Newest</string>
+    <string name="sort_best_rated">Best rated</string>
+    <string name="google_books_rating_summary">%1$s · %2$d ratings</string>
     <string name="no_books_found">No volumes found</string>
     <string name="unknown_title">Unknown title</string>
     <string name="year">Year</string>

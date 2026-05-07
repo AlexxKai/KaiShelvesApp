@@ -10,6 +10,8 @@ import com.example.kaishelvesapp.data.remote.googlebooks.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import retrofit2.HttpException
@@ -27,6 +29,16 @@ class BookRepository(
 
     private val api = GoogleBooksClient.api
     private val publicApi = GoogleBooksClient.publicApi
+
+    data class BookSearchResult(
+        val totalItems: Int,
+        val books: List<Libro>
+    )
+
+    enum class BookSearchSort {
+        NEWEST,
+        RATING
+    }
 
     private fun safeBookDocId(rawId: String): String {
         return rawId
@@ -53,6 +65,45 @@ class BookRepository(
     private fun looksLikeIsbn(rawValue: String): Boolean {
         val normalized = normalizeIsbnQuery(rawValue)
         return normalized.length == 10 || normalized.length == 13
+    }
+
+    private fun searchRelevanceScore(book: Libro, queryTokens: List<String>, rawQuery: String): Int {
+        if (queryTokens.isEmpty()) return 1
+
+        val normalizedQuery = rawQuery.lowercase(Locale.ROOT)
+        val title = book.titulo.lowercase(Locale.ROOT)
+        val author = book.autor.lowercase(Locale.ROOT)
+        val publisher = book.editorial.lowercase(Locale.ROOT)
+        val isbn = book.isbn.lowercase(Locale.ROOT)
+        val searchableText = "$title $author $publisher $isbn"
+        val matchedTokens = queryTokens.count { token -> token in searchableText }
+
+        if (matchedTokens == 0) return 0
+
+        var score = matchedTokens * 12
+        if (normalizedQuery in author) score += 60
+        if (normalizedQuery in title) score += 45
+        if (queryTokens.all { token -> token in author }) score += 35
+        if (queryTokens.all { token -> token in title }) score += 25
+        if (book.imagen.isNotBlank()) score += 4
+        if (book.fechaPublicacion != 0) score += 2
+
+        return score
+    }
+
+    private fun searchResultComparator(sort: BookSearchSort): Comparator<Pair<Libro, Int>> {
+        return when (sort) {
+            BookSearchSort.NEWEST -> compareByDescending<Pair<Libro, Int>> { it.first.fechaPublicacion }
+                .thenByDescending { it.second }
+                .thenByDescending { it.first.averageRating }
+                .thenBy { it.first.titulo.lowercase(Locale.ROOT) }
+
+            BookSearchSort.RATING -> compareByDescending<Pair<Libro, Int>> { it.first.averageRating }
+                .thenByDescending { it.first.ratingsCount }
+                .thenByDescending { it.second }
+                .thenByDescending { it.first.fechaPublicacion }
+                .thenBy { it.first.titulo.lowercase(Locale.ROOT) }
+        }
     }
 
     private fun currentGoogleBooksLanguage(): String? {
@@ -248,6 +299,77 @@ class BookRepository(
                 .localizeForCurrentLanguage()
 
             Result.success(libros)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchBooksForResults(
+        query: String,
+        sort: BookSearchSort = BookSearchSort.NEWEST
+    ): Result<BookSearchResult> {
+        return try {
+            val cleanQuery = query.trim()
+            if (cleanQuery.isBlank()) {
+                return Result.success(BookSearchResult(totalItems = 0, books = emptyList()))
+            }
+
+            val isbnQuery = normalizeIsbnQuery(cleanQuery)
+            val googleQueries = if (looksLikeIsbn(cleanQuery)) {
+                listOf("isbn:$isbnQuery")
+            } else {
+                val escapedQuery = cleanQuery.replace("\"", "")
+                listOf(
+                    "\"$escapedQuery\"",
+                    "inauthor:\"$escapedQuery\"",
+                    "intitle:\"$escapedQuery\"",
+                    cleanQuery
+                )
+            }
+
+            val responses = coroutineScope {
+                googleQueries.map { googleQuery ->
+                    async {
+                        runCatching {
+                            searchGoogleBooks(
+                                query = googleQuery,
+                                maxResults = 40,
+                                orderBy = if (sort == BookSearchSort.NEWEST) "newest" else null
+                            )
+                        }.getOrNull()
+                    }
+                }.mapNotNull { it.await() }
+            }
+
+            val queryTokens = cleanQuery
+                .lowercase(Locale.ROOT)
+                .split(Regex("\\s+"))
+                .filter { it.length > 1 }
+
+            val libros = responses
+                .flatMap { it.items }
+                .map { it.toLibro() }
+                .filter { it.titulo.isNotBlank() || it.autor.isNotBlank() }
+                .distinctBy { libro ->
+                    libro.id.ifBlank {
+                        libro.isbn.ifBlank {
+                            "${libro.titulo.lowercase(Locale.ROOT)}-${libro.autor.lowercase(Locale.ROOT)}"
+                        }
+                    }
+                }
+                .map { libro -> libro to searchRelevanceScore(libro, queryTokens, cleanQuery) }
+                .filter { (_, score) -> score > 0 || looksLikeIsbn(cleanQuery) }
+                .sortedWith(searchResultComparator(sort))
+                .map { it.first }
+                .take(80)
+
+            val totalItems = responses.maxOfOrNull { it.totalItems } ?: libros.size
+            Result.success(
+                BookSearchResult(
+                    totalItems = totalItems.coerceAtLeast(libros.size),
+                    books = libros
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }

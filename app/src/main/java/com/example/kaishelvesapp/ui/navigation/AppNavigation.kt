@@ -28,6 +28,7 @@ import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.HelpChatOverlay
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
+import com.example.kaishelvesapp.ui.screen.catalog.SearchResultsScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendListDetailScreen
@@ -65,6 +66,7 @@ import com.example.kaishelvesapp.ui.viewmodel.ForYouViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HelpChatViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
+import com.example.kaishelvesapp.ui.viewmodel.SearchResultsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 
@@ -74,6 +76,7 @@ object Routes {
     const val EMAIL_VERIFICATION = "email_verification"
     const val HOME = "home"
     const val SEARCH = "search"
+    const val SEARCH_RESULTS = "search_results"
     const val DISCOVER = "discover"
     const val LISTS = "lists"
     const val LIST_DETAIL = "list_detail/{listId}"
@@ -109,6 +112,7 @@ fun AppNavigation(
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
+    val searchResultsViewModel: SearchResultsViewModel = viewModel()
     val readingListViewModel: ReadingListViewModel = viewModel()
     val friendSuggestionsViewModel: FriendSuggestionsViewModel = viewModel()
     val friendProfileViewModel: FriendProfileViewModel = viewModel()
@@ -224,9 +228,10 @@ fun AppNavigation(
     }
 
     fun openCatalogAndSearch() {
-        catalogViewModel.resetGenreFilterForSearch()
-        catalogViewModel.ejecutarBusqueda()
-        navController.navigate(Routes.DISCOVER)
+        val query = catalogState.searchQuery
+        searchResultsViewModel.search(query)
+        catalogViewModel.onSearchQueryChange("")
+        navController.navigate(Routes.SEARCH_RESULTS)
     }
 
     fun searchFromSharedTopBar(query: String) {
@@ -364,6 +369,21 @@ fun AppNavigation(
                 },
                 searchIntroAnimationEnabled = authState.user?.privacySettings?.searchIntroAnimationEnabled != false,
                 onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.SEARCH_RESULTS) {
+            SearchResultsScreen(
+                viewModel = searchResultsViewModel,
+                onBack = {
+                    searchResultsViewModel.clearSearchQuery()
+                    catalogViewModel.onSearchQueryChange("")
+                    navController.popBackStack()
+                },
+                onBookClick = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
+                }
             )
         }
 
@@ -912,6 +932,12 @@ private fun buildHelpScreenContext(
             screenName = "Busqueda",
             description = "Entrada visual para explorar generos y lanzar busquedas en el catalogo.",
             availableActions = listOf("Buscar por titulo o autor", "Escanear ISBN", "Elegir genero", "Abrir un resultado")
+        )
+        Routes.SEARCH_RESULTS -> HelpScreenContext(
+            route = route,
+            screenName = "Resultados de busqueda",
+            description = "Listado dedicado para los resultados de una busqueda de libros.",
+            availableActions = listOf("Volver", "Buscar otro texto", "Borrar el texto", "Anadir un libro a listas")
         )
         Routes.DISCOVER -> HelpScreenContext(
             route = route,

@@ -9,6 +9,8 @@ data class Libro(
     val genero: String = "",
     val fechaPublicacion: Int = 0,
     val paginas: Int = 0,
+    val averageRating: Double = 0.0,
+    val ratingsCount: Int = 0,
     val imagen: String = "",
     val pdf: String = ""
 )
