@@ -87,6 +87,22 @@ data class ActivityComment(
     val timestampMillis: Long? = null
 )
 
+enum class ActivityNotificationType {
+    LIKE,
+    COMMENT
+}
+
+data class ActivityNotificationItem(
+    val id: String,
+    val type: ActivityNotificationType,
+    val activityId: String,
+    val user: Usuario,
+    val activity: FriendActivityItem,
+    val text: String = "",
+    val timestampMillis: Long? = null,
+    val isRead: Boolean = false
+)
+
 data class FriendShelfBookItem(
     val book: Libro,
     val rating: Int? = null
@@ -129,6 +145,7 @@ data class FriendProfileData(
     val user: Usuario,
     val isFriend: Boolean,
     val isRequestSent: Boolean,
+    val isRequestReceived: Boolean = false,
     val isPrivateProfile: Boolean = false,
     val booksReadCount: Int,
     val friendsCount: Int,
@@ -194,7 +211,9 @@ class FriendsRepository(
 
     private fun receivedRequestsCollection(uid: String) = usersCollection().document(uid).collection("friend_requests_received")
 
-    private fun activitySocialDocument(activityId: String) = firestore.collection("activitySocial")
+    private fun activitySocialCollection() = firestore.collection("activitySocial")
+
+    private fun activitySocialDocument(activityId: String) = activitySocialCollection()
         .document(activityId)
 
     private fun activityLikesCollection(activityId: String) = activitySocialDocument(activityId)
@@ -202,6 +221,10 @@ class FriendsRepository(
 
     private fun activityCommentsCollection(activityId: String) = activitySocialDocument(activityId)
         .collection("comments")
+
+    private fun activityNotificationReadsCollection(uid: String) = usersCollection()
+        .document(uid)
+        .collection("activity_notification_reads")
 
     private fun hiddenActivityUpdatesCollection(uid: String) = usersCollection()
         .document(uid)
@@ -544,6 +567,12 @@ class FriendsRepository(
 
     private fun activityOwnerUid(activityId: String): String {
         return activityId.substringBefore("_").trim()
+    }
+
+    private fun notificationId(activityId: String, type: String, sourceId: String): String {
+        return "${activityId}_${type}_${sourceId}"
+            .replace(Regex("[^A-Za-z0-9_-]"), "_")
+            .take(240)
     }
 
     private suspend fun activitySocialInteractionError(activityId: String): String? {
@@ -1035,6 +1064,11 @@ class FriendsRepository(
                 .get()
                 .await()
                 .exists()
+            val isRequestReceived = receivedRequestsCollection(uid)
+                .document(friendUid)
+                .get()
+                .await()
+                .exists()
             val isPrivateProfile = friendUid != uid && !isFriend && !resolvedFriend.privacySettings.profileVisible
 
             if (isPrivateProfile) {
@@ -1043,6 +1077,7 @@ class FriendsRepository(
                         user = resolvedFriend.visibleTo(uid),
                         isFriend = isFriend,
                         isRequestSent = isRequestSent,
+                        isRequestReceived = isRequestReceived,
                         isPrivateProfile = true,
                         booksReadCount = 0,
                         friendsCount = 0,
@@ -1211,6 +1246,7 @@ class FriendsRepository(
                     user = resolvedFriend.visibleTo(uid),
                     isFriend = isFriend,
                     isRequestSent = isRequestSent,
+                    isRequestReceived = isRequestReceived,
                     isPrivateProfile = false,
                     booksReadCount = uniqueBooksInListsCount,
                     friendsCount = visibleFriendProfiles.size,
@@ -1538,6 +1574,145 @@ class FriendsRepository(
                 .sortedBy { it.timestampMillis ?: Long.MAX_VALUE }
 
             Result.success(comments)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadActivityNotifications(): Result<List<ActivityNotificationItem>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(emptyList())
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val readNotificationIds = activityNotificationReadsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .map { it.id }
+                .toSet()
+            val currentUser = getUserProfile(uid) ?: Usuario(uid = uid)
+            val friendshipActivities = friendsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val friendUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                    if (friendUid.isBlank()) return@mapNotNull null
+                    val timestamp = document.timestampMillis("createdAt")
+                    FriendActivityItem(
+                        id = activityId(
+                            ownerUid = uid,
+                            type = FriendActivityType.FRIENDSHIP,
+                            sourceId = friendUid,
+                            timestampMillis = timestamp
+                        ),
+                        type = FriendActivityType.FRIENDSHIP,
+                        user = currentUser.visibleTo(uid),
+                        timestampMillis = timestamp,
+                        relatedUserName = document.getString("usuario").orEmpty()
+                    )
+                }
+            val ownActivities = enrichWithSocial(
+                visibleActivityUpdates(
+                    ownerUid = uid,
+                    activities = friendshipActivities + bookListActivities(uid, currentUser, uid)
+                ),
+                uid
+            ).associateBy { it.id }
+
+            val notifications = activitySocialCollection()
+                .get()
+                .await()
+                .documents
+                .filter { document -> activityOwnerUid(document.id) == uid }
+                .flatMap { document ->
+                    val activityId = document.id
+                    val activity = ownActivities[activityId]
+                        ?: return@flatMap emptyList<ActivityNotificationItem>()
+                    val likes = activityLikesCollection(activityId)
+                        .get()
+                        .await()
+                        .documents
+                        .mapNotNull { likeDocument ->
+                            val actorUid = likeDocument.getString("uid").orEmpty().ifBlank { likeDocument.id }
+                            if (actorUid == uid) return@mapNotNull null
+
+                            val actor = getUserProfile(actorUid) ?: Usuario(
+                                uid = actorUid,
+                                usuario = likeDocument.getString("usuario").orEmpty(),
+                                email = likeDocument.getString("email").orEmpty(),
+                                photoUrl = likeDocument.getString("photoUrl").orEmpty()
+                            )
+
+                            ActivityNotificationItem(
+                                id = notificationId(activityId, "like", likeDocument.id),
+                                type = ActivityNotificationType.LIKE,
+                                activityId = activityId,
+                                user = actor.visibleTo(uid),
+                                activity = activity,
+                                timestampMillis = likeDocument.timestampMillis("createdAt"),
+                                isRead = notificationId(activityId, "like", likeDocument.id) in readNotificationIds
+                            )
+                        }
+
+                    val comments = activityCommentsCollection(activityId)
+                        .get()
+                        .await()
+                        .documents
+                        .mapNotNull { commentDocument ->
+                            val actorUid = commentDocument.getString("uid").orEmpty()
+                            if (actorUid.isBlank() || actorUid == uid) return@mapNotNull null
+
+                            val actor = getUserProfile(actorUid) ?: Usuario(
+                                uid = actorUid,
+                                usuario = commentDocument.getString("usuario").orEmpty(),
+                                email = commentDocument.getString("email").orEmpty(),
+                                photoUrl = commentDocument.getString("photoUrl").orEmpty()
+                            )
+
+                            ActivityNotificationItem(
+                                id = notificationId(activityId, "comment", commentDocument.id),
+                                type = ActivityNotificationType.COMMENT,
+                                activityId = activityId,
+                                user = actor.visibleTo(uid),
+                                activity = activity,
+                                text = commentDocument.getString("text").orEmpty(),
+                                timestampMillis = commentDocument.timestampMillis("createdAt"),
+                                isRead = notificationId(activityId, "comment", commentDocument.id) in readNotificationIds
+                            )
+                        }
+
+                    likes + comments
+                }
+                .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
+
+            Result.success(notifications)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markActivityNotificationRead(notificationId: String): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(Unit)
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            if (notificationId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la notificacion"))
+            }
+
+            activityNotificationReadsCollection(uid)
+                .document(notificationId)
+                .set(mapOf("readAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+                .await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

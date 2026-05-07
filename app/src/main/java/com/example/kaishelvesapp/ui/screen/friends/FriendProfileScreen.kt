@@ -46,6 +46,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +54,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -101,6 +103,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendProfileScreen(
     friendUid: String,
@@ -142,75 +145,92 @@ fun FriendProfileScreen(
             )
         }
         ) { innerPadding ->
-        GothicBackground(
+        PullToRefreshBox(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(innerPadding),
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.loadProfile(friendUid, refresh = true) }
         ) {
-            when {
-                uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = TarnishedGold)
+            GothicBackground(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when {
+                    uiState.isLoading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = TarnishedGold)
+                        }
                     }
-                }
 
-                uiState.profile != null -> {
-                    FriendProfileContent(
-                        profile = uiState.profile!!,
-                        isRemovingFriend = uiState.isRemovingFriend,
-                        isSendingRequest = uiState.isSendingRequest,
-                        isBlockingMember = uiState.isBlockingMember,
-                        isSubmittingReport = uiState.isSubmittingReport,
-                        onRemoveFriend = {
-                            viewModel.removeFriend(friendUid) {
-                                onFriendshipChanged()
-                            }
-                        },
-                        onSendFriendRequest = {
-                            viewModel.sendFriendRequest {
-                                onFriendshipChanged()
-                            }
-                        },
-                        onCancelSentFriendRequest = {
-                            viewModel.cancelSentFriendRequest {
-                                onFriendshipChanged()
-                            }
-                        },
-                        onBlockMember = {
-                            viewModel.blockCurrentProfile {
-                                onFriendshipChanged()
-                                onBack()
-                            }
-                        },
-                        onSubmitReport = viewModel::submitReport,
-                        onOpenFriendLists = onOpenFriendLists,
-                        onOpenFriendProfile = onOpenFriendProfile,
-                        onOpenBook = onOpenBook,
-                        commentsByActivityId = uiState.commentsByActivityId,
-                        loadingCommentIds = uiState.loadingCommentIds,
-                        socialActionIds = uiState.socialActionIds,
-                        onToggleLike = viewModel::toggleLike,
-                        onLoadComments = viewModel::loadComments,
-                        onAddComment = viewModel::addComment
-                    )
-                }
-
-                else -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = uiState.errorMessage ?: stringResource(R.string.friend_profile_load_error),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = OldIvory,
-                            textAlign = TextAlign.Center
+                    uiState.profile != null -> {
+                        FriendProfileContent(
+                            profile = uiState.profile!!,
+                            isRemovingFriend = uiState.isRemovingFriend,
+                            isSendingRequest = uiState.isSendingRequest,
+                            isRespondingRequest = uiState.isRespondingRequest,
+                            isBlockingMember = uiState.isBlockingMember,
+                            isSubmittingReport = uiState.isSubmittingReport,
+                            onRemoveFriend = {
+                                viewModel.removeFriend(friendUid) {
+                                    onFriendshipChanged()
+                                }
+                            },
+                            onSendFriendRequest = {
+                                viewModel.sendFriendRequest {
+                                    onFriendshipChanged()
+                                }
+                            },
+                            onCancelSentFriendRequest = {
+                                viewModel.cancelSentFriendRequest {
+                                    onFriendshipChanged()
+                                }
+                            },
+                            onAcceptFriendRequest = {
+                                viewModel.acceptFriendRequest {
+                                    onFriendshipChanged()
+                                }
+                            },
+                            onRejectFriendRequest = {
+                                viewModel.rejectFriendRequest {
+                                    onFriendshipChanged()
+                                }
+                            },
+                            onBlockMember = {
+                                viewModel.blockCurrentProfile {
+                                    onFriendshipChanged()
+                                    onBack()
+                                }
+                            },
+                            onSubmitReport = viewModel::submitReport,
+                            onOpenFriendLists = onOpenFriendLists,
+                            onOpenFriendProfile = onOpenFriendProfile,
+                            onOpenBook = onOpenBook,
+                            commentsByActivityId = uiState.commentsByActivityId,
+                            loadingCommentIds = uiState.loadingCommentIds,
+                            socialActionIds = uiState.socialActionIds,
+                            onToggleLike = viewModel::toggleLike,
+                            onLoadComments = viewModel::loadComments,
+                            onAddComment = viewModel::addComment
                         )
+                    }
+
+                    else -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = uiState.errorMessage ?: stringResource(R.string.friend_profile_load_error),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = OldIvory,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
@@ -325,11 +345,14 @@ fun FriendProfileContent(
     profile: FriendProfileData,
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
+    isRespondingRequest: Boolean = false,
     isBlockingMember: Boolean = false,
     isSubmittingReport: Boolean = false,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onCancelSentFriendRequest: () -> Unit = {},
+    onAcceptFriendRequest: () -> Unit = {},
+    onRejectFriendRequest: () -> Unit = {},
     onBlockMember: () -> Unit = {},
     onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenFriendLists: (String, String) -> Unit,
@@ -371,13 +394,17 @@ fun FriendProfileContent(
             FriendProfileMenuRow(
                 isFriend = profile.isFriend,
                 isRequestSent = profile.isRequestSent,
+                isRequestReceived = profile.isRequestReceived,
                 isRemovingFriend = isRemovingFriend,
                 isSendingRequest = isSendingRequest,
+                isRespondingRequest = isRespondingRequest,
                 isBlockingMember = isBlockingMember,
                 isSubmittingReport = isSubmittingReport,
                 onRemoveFriend = onRemoveFriend,
                 onSendFriendRequest = onSendFriendRequest,
                 onCancelSentFriendRequest = onCancelSentFriendRequest,
+                onAcceptFriendRequest = onAcceptFriendRequest,
+                onRejectFriendRequest = onRejectFriendRequest,
                 onBlockMember = onBlockMember,
                 onSubmitReport = onSubmitReport
             )
@@ -489,13 +516,17 @@ private fun FriendProfileHero(
 private fun FriendProfileMenuRow(
     isFriend: Boolean,
     isRequestSent: Boolean,
+    isRequestReceived: Boolean,
     isRemovingFriend: Boolean,
     isSendingRequest: Boolean,
+    isRespondingRequest: Boolean,
     isBlockingMember: Boolean,
     isSubmittingReport: Boolean,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onCancelSentFriendRequest: () -> Unit,
+    onAcceptFriendRequest: () -> Unit,
+    onRejectFriendRequest: () -> Unit,
     onBlockMember: () -> Unit,
     onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit
 ) {
@@ -619,42 +650,88 @@ private fun FriendProfileMenuRow(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.clickable(
-                enabled = if (isFriend) !isRemovingFriend else !isSendingRequest
+        if (!isFriend && isRequestReceived) {
+            Row(
+                modifier = Modifier.clickable(
+                    enabled = !isRespondingRequest,
+                    onClick = onAcceptFriendRequest
+                ),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isFriend) {
-                    showRemoveDialog = true
-                } else if (isRequestSent) {
-                    onCancelSentFriendRequest()
-                } else {
-                    onSendFriendRequest()
-                }
-            },
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (isFriend) Icons.Filled.Check else Icons.Filled.PersonAddAlt1,
-                contentDescription = null,
-                tint = if (isFriend) OldIvory else Color(0xFF66D6D6),
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (isFriend) {
-                    stringResource(R.string.friends)
-                } else if (isRequestSent) {
-                    stringResource(R.string.friend_request_pending)
-                } else {
-                    stringResource(R.string.add_friend_short)
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = null,
+                    tint = Color(0xFF66D6D6),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.accept_request),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF66D6D6)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(18.dp))
+
+            Row(
+                modifier = Modifier.clickable(
+                    enabled = !isRespondingRequest,
+                    onClick = onRejectFriendRequest
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = null,
+                    tint = OldIvory.copy(alpha = 0.82f),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.cancel),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = OldIvory.copy(alpha = 0.82f)
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.clickable(
+                    enabled = if (isFriend) !isRemovingFriend else !isSendingRequest
+                ) {
+                    if (isFriend) {
+                        showRemoveDialog = true
+                    } else if (isRequestSent) {
+                        onCancelSentFriendRequest()
+                    } else {
+                        onSendFriendRequest()
+                    }
                 },
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isRequestSent) {
-                    OldIvory.copy(alpha = 0.72f)
-                } else {
-                    Color(0xFF66D6D6)
-                }
-            )
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isFriend) Icons.Filled.Check else Icons.Filled.PersonAddAlt1,
+                    contentDescription = null,
+                    tint = if (isFriend) OldIvory else Color(0xFF66D6D6),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isFriend) {
+                        stringResource(R.string.friends)
+                    } else if (isRequestSent) {
+                        stringResource(R.string.friend_request_pending)
+                    } else {
+                        stringResource(R.string.add_friend_short)
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isRequestSent) {
+                        OldIvory.copy(alpha = 0.72f)
+                    } else {
+                        Color(0xFF66D6D6)
+                    }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(18.dp))

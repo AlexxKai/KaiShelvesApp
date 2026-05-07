@@ -747,6 +747,9 @@ fun AppNavigation(
             NotificationCenterScreen(
                 viewModel = friendRequestsViewModel,
                 onBack = { navController.popBackStack() },
+                onOpenFriendProfile = { friendUid ->
+                    navController.navigate(friendProfileRoute(friendUid))
+                },
                 onRequestsChanged = {
                     friendRequestsViewModel.loadReceivedRequests()
                     friendsViewModel.loadFriends()

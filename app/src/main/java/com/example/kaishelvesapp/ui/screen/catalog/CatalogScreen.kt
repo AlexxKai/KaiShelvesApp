@@ -453,15 +453,15 @@ private fun BookCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     if (libro.autor.isNotBlank()) {
-                        Text("${stringResource(R.string.author)}: ${libro.autor}", color = OldIvory)
+                        Text(libro.autor, color = OldIvory)
                     }
 
                     if (libro.fechaPublicacion != 0) {
-                        Text("${stringResource(R.string.year)}: ${libro.fechaPublicacion}", color = OldIvory)
+                        Text(libro.fechaPublicacion.toString(), color = OldIvory)
                     }
 
                     if (libro.genero.isNotBlank()) {
-                        Text("${stringResource(R.string.genre)}: ${libro.genero}", color = OldIvory)
+                        Text(libro.genero, color = OldIvory)
                     }
                 }
             }

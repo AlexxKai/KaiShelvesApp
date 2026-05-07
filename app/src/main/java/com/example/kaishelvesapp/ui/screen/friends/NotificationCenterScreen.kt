@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -31,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,12 +46,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Usuario
+import com.example.kaishelvesapp.data.repository.ActivityNotificationItem
+import com.example.kaishelvesapp.data.repository.ActivityNotificationType
+import com.example.kaishelvesapp.data.repository.FriendActivityItem
+import com.example.kaishelvesapp.data.repository.FriendActivityType
+import com.example.kaishelvesapp.ui.components.ActivitySocialActions
+import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiSection
 import com.example.kaishelvesapp.ui.components.KaiTopBar
@@ -60,6 +70,9 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private enum class NotificationCenterTab {
     NOTIFICATIONS,
@@ -71,15 +84,37 @@ private enum class NotificationCenterTab {
 fun NotificationCenterScreen(
     viewModel: FriendRequestsViewModel,
     onBack: () -> Unit,
+    onOpenFriendProfile: (String) -> Unit = {},
     onRequestsChanged: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableStateOf(NotificationCenterTab.REQUESTS) }
+    var selectedNotificationId by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val closeSelectedNotification = {
+        selectedNotificationId?.let(viewModel::markNotificationAsRead)
+        selectedNotificationId = null
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadReceivedRequests()
+        viewModel.loadActivityNotifications()
+    }
+
+    selectedNotificationId
+        ?.let { notificationId -> uiState.notifications.firstOrNull { it.id == notificationId } }
+        ?.let { notification ->
+        ActivityNotificationDialog(
+            notification = notification,
+            comments = uiState.commentsByActivityId[notification.activityId].orEmpty(),
+            isLoadingComments = notification.activityId in uiState.loadingCommentIds,
+            isSaving = notification.activityId in uiState.socialActionIds,
+            onDismiss = closeSelectedNotification,
+            onToggleLike = viewModel::toggleLike,
+            onLoadComments = viewModel::loadComments,
+            onAddComment = viewModel::addComment
+        )
     }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
@@ -139,9 +174,57 @@ fun NotificationCenterScreen(
 
             when (selectedTab) {
                 NotificationCenterTab.NOTIFICATIONS -> {
-                    NotificationPlaceholder(
-                        text = stringResource(R.string.notifications_coming_soon)
-                    )
+                    when {
+                        uiState.isLoadingNotifications -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = TarnishedGold)
+                            }
+                        }
+
+                        uiState.notifications.isEmpty() -> {
+                            NotificationPlaceholder(
+                                text = stringResource(R.string.notifications_coming_soon)
+                            )
+                        }
+
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 24.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (uiState.unreadNotifications.isNotEmpty()) {
+                                    items(
+                                        items = uiState.unreadNotifications,
+                                        key = { it.id }
+                                    ) { notification ->
+                                        ActivityNotificationCard(
+                                            notification = notification,
+                                            onClick = { selectedNotificationId = notification.id }
+                                        )
+                                    }
+                                }
+
+                                if (uiState.readNotifications.isNotEmpty()) {
+                                    item {
+                                        NotificationHistoryHeader()
+                                    }
+                                    items(
+                                        items = uiState.readNotifications,
+                                        key = { it.id }
+                                    ) { notification ->
+                                        ActivityNotificationCard(
+                                            notification = notification,
+                                            onClick = { selectedNotificationId = notification.id }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 NotificationCenterTab.MESSAGES -> {
@@ -174,6 +257,9 @@ fun NotificationCenterScreen(
                             ) { request ->
                                 FriendRequestCard(
                                     request = request,
+                                    onOpenProfile = {
+                                        onOpenFriendProfile(request.uid)
+                                    },
                                     onAccept = {
                                         viewModel.acceptRequest(request, onSuccess = onRequestsChanged)
                                     },
@@ -236,7 +322,7 @@ private fun NotificationTabItem(
         Text(
             text = label,
             color = if (selected) OldIvory else OldIvory.copy(alpha = 0.72f),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp, lineHeight = 15.sp),
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -276,8 +362,307 @@ private fun NotificationPlaceholder(
 }
 
 @Composable
+private fun NotificationHistoryHeader() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Antiguas",
+            style = MaterialTheme.typography.titleMedium,
+            color = TarnishedGold,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(TarnishedGold.copy(alpha = 0.24f), RoundedCornerShape(999.dp))
+        )
+    }
+}
+
+@Composable
+private fun ActivityNotificationCard(
+    notification: ActivityNotificationItem,
+    onClick: () -> Unit
+) {
+    val cardAlpha = if (notification.isRead) 0.82f else 0.985f
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = OldIvory.copy(alpha = cardAlpha)),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = if (notification.isRead) 0.14f else 0.22f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            KaiUserAvatar(
+                displayName = notification.user.usuario.ifBlank { notification.user.email },
+                imageUrl = notification.user.photoUrl,
+                size = 44.dp
+            )
+
+            Spacer(modifier = Modifier.size(12.dp))
+
+            Text(
+                text = notificationMessage(notification),
+                style = MaterialTheme.typography.titleMedium,
+                color = DeepWalnut,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivityNotificationDialog(
+    notification: ActivityNotificationItem,
+    comments: List<com.example.kaishelvesapp.data.repository.ActivityComment>,
+    isLoadingComments: Boolean,
+    isSaving: Boolean,
+    onDismiss: () -> Unit,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            NotificationInteractionHeader(notification = notification)
+        },
+        text = {
+            OriginalActivityCard(
+                item = notification.activity,
+                comments = comments,
+                isLoadingComments = isLoadingComments,
+                isSaving = isSaving,
+                onToggleLike = onToggleLike,
+                onLoadComments = onLoadComments,
+                onAddComment = onAddComment
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.ok))
+            }
+        },
+        containerColor = Obsidian,
+        titleContentColor = OldIvory,
+        textContentColor = OldIvory.copy(alpha = 0.9f)
+    )
+}
+
+@Composable
+private fun NotificationInteractionHeader(
+    notification: ActivityNotificationItem
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        KaiUserAvatar(
+            displayName = notification.user.usuario.ifBlank { notification.user.email },
+            imageUrl = notification.user.photoUrl,
+            size = 42.dp
+        )
+
+        Spacer(modifier = Modifier.size(12.dp))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = notificationMessage(notification),
+                style = MaterialTheme.typography.titleMedium,
+                color = OldIvory,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            if (notification.type == ActivityNotificationType.COMMENT && notification.text.isNotBlank()) {
+                Text(
+                    text = "\"${notification.text}\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory,
+                    fontStyle = FontStyle.Italic,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .background(TarnishedGold.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OriginalActivityCard(
+    item: FriendActivityItem,
+    comments: List<com.example.kaishelvesapp.data.repository.ActivityComment>,
+    isLoadingComments: Boolean,
+    isSaving: Boolean,
+    onToggleLike: (String) -> Unit,
+    onLoadComments: (String) -> Unit,
+    onAddComment: (String, String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DeepWalnut.copy(alpha = 0.92f)),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                KaiUserAvatar(
+                    displayName = item.user.usuario.ifBlank { item.user.email },
+                    imageUrl = item.user.photoUrl,
+                    size = 38.dp
+                )
+
+                Spacer(modifier = Modifier.size(10.dp))
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = activityTitle(item),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = OldIvory,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = formatNotificationActivityTimestamp(item.timestampMillis),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OldIvory.copy(alpha = 0.74f)
+                    )
+                }
+            }
+
+            activityBookInfo(item)?.let { book ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = book.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TarnishedGold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.size(12.dp))
+
+                    BookCover(
+                        imageUrl = book.imageUrl,
+                        title = book.title,
+                        modifier = Modifier.size(width = 42.dp, height = 62.dp)
+                    )
+                }
+            }
+
+            ActivitySocialActions(
+                item = item,
+                postTitle = activityTitle(item),
+                postTimestamp = formatNotificationActivityTimestamp(item.timestampMillis),
+                comments = comments,
+                isLoadingComments = isLoadingComments,
+                isSaving = isSaving,
+                onToggleLike = onToggleLike,
+                onLoadComments = onLoadComments,
+                onAddComment = onAddComment
+            )
+        }
+    }
+}
+
+@Composable
+private fun notificationMessage(notification: ActivityNotificationItem): String {
+    val userName = notification.user.usuario
+        .ifBlank { notification.user.email }
+        .ifBlank { stringResource(R.string.unknown_username) }
+    return when (notification.type) {
+        ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicaci\u00f3n"
+        ActivityNotificationType.COMMENT -> "$userName ha comentado en tu publicaci\u00f3n."
+    }
+}
+
+@Composable
+private fun activityTitle(item: FriendActivityItem): String {
+    val userName = item.user.usuario.ifBlank { stringResource(R.string.unknown_username) }
+    return when (item.type) {
+        FriendActivityType.FRIENDSHIP -> item.relatedUserName
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "$userName y $it ahora son amigos" }
+            ?: "$userName tiene una nueva amistad"
+        FriendActivityType.WANT_TO_READ -> "$userName quiere leer"
+        FriendActivityType.READING -> "$userName esta leyendo"
+        FriendActivityType.READ -> "$userName ha leido"
+        FriendActivityType.LIST_ADDED -> "$userName ha actualizado una lista"
+    }
+}
+
+private data class NotificationActivityBookInfo(
+    val title: String,
+    val imageUrl: String
+)
+
+private fun activityBookInfo(item: FriendActivityItem): NotificationActivityBookInfo? {
+    item.book?.let { book ->
+        return NotificationActivityBookInfo(
+            title = book.titulo.takeIf { it.isNotBlank() } ?: book.isbn,
+            imageUrl = book.imagen
+        )
+    }
+
+    item.readBook?.let { book ->
+        return NotificationActivityBookInfo(
+            title = book.titulo.takeIf { it.isNotBlank() } ?: book.isbn,
+            imageUrl = book.imagen
+        )
+    }
+
+    return null
+}
+
+@Composable
+private fun formatNotificationActivityTimestamp(timestampMillis: Long?): String {
+    if (timestampMillis == null) {
+        return stringResource(R.string.recently_label)
+    }
+
+    return remember(timestampMillis) {
+        SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+    }
+}
+
+@Composable
 private fun FriendRequestCard(
     request: Usuario,
+    onOpenProfile: () -> Unit,
     onAccept: () -> Unit,
     onReject: () -> Unit
 ) {
@@ -293,10 +678,17 @@ private fun FriendRequestCard(
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            KaiUserAvatar(
-                displayName = request.usuario.ifBlank { request.email },
-                imageUrl = request.photoUrl
-            )
+            Box(
+                modifier = Modifier.clickable(
+                    enabled = request.uid.isNotBlank(),
+                    onClick = onOpenProfile
+                )
+            ) {
+                KaiUserAvatar(
+                    displayName = request.usuario.ifBlank { request.email },
+                    imageUrl = request.photoUrl
+                )
+            }
 
             Spacer(modifier = Modifier.size(12.dp))
 

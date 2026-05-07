@@ -15,8 +15,10 @@ import kotlinx.coroutines.launch
 
 data class FriendProfileUiState(
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val isRemovingFriend: Boolean = false,
     val isSendingRequest: Boolean = false,
+    val isRespondingRequest: Boolean = false,
     val profile: FriendProfileData? = null,
     val commentsByActivityId: Map<String, List<ActivityComment>> = emptyMap(),
     val loadingCommentIds: Set<String> = emptySet(),
@@ -38,19 +40,25 @@ class FriendProfileViewModel(
     private val _uiState = MutableStateFlow(FriendProfileUiState())
     val uiState: StateFlow<FriendProfileUiState> = _uiState.asStateFlow()
 
-    fun loadProfile(friendUid: String) {
+    fun loadProfile(friendUid: String, refresh: Boolean = false) {
         if (friendUid.isBlank()) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
+                isRefreshing = false,
+                isRespondingRequest = false,
                 errorMessage = "No se pudo identificar al amigo"
             )
             return
         }
 
+        val currentState = _uiState.value
+        val canRefreshInPlace = refresh && currentState.profile != null
         _uiState.value = _uiState.value.copy(
-            isLoading = true,
+            isLoading = !canRefreshInPlace,
+            isRefreshing = canRefreshInPlace,
             isRemovingFriend = false,
             isSendingRequest = false,
+            isRespondingRequest = false,
             errorMessage = null
         )
 
@@ -59,8 +67,10 @@ class FriendProfileViewModel(
                 .onSuccess { profile ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         isRemovingFriend = false,
                         isSendingRequest = false,
+                        isRespondingRequest = false,
                         profile = profile,
                         errorMessage = null
                     )
@@ -68,8 +78,10 @@ class FriendProfileViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        isRefreshing = false,
                         isRemovingFriend = false,
                         isSendingRequest = false,
+                        isRespondingRequest = false,
                         errorMessage = error.message ?: "No se pudo cargar el perfil del amigo"
                     )
                 }
@@ -110,7 +122,7 @@ class FriendProfileViewModel(
 
     fun sendFriendRequest(onSuccess: () -> Unit = {}) {
         val profile = _uiState.value.profile ?: return
-        if (profile.isFriend || profile.isRequestSent) return
+        if (profile.isFriend || profile.isRequestSent || profile.isRequestReceived) return
 
         _uiState.value = _uiState.value.copy(
             isSendingRequest = true,
@@ -159,6 +171,63 @@ class FriendProfileViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isSendingRequest = false,
+                        errorMessage = error.message ?: "No se pudo cancelar la solicitud"
+                    )
+                }
+        }
+    }
+
+    fun acceptFriendRequest(onSuccess: () -> Unit = {}) {
+        val profile = _uiState.value.profile ?: return
+        if (profile.isFriend || !profile.isRequestReceived || _uiState.value.isRespondingRequest) return
+
+        _uiState.value = _uiState.value.copy(
+            isRespondingRequest = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.acceptFriendRequest(profile.user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isRespondingRequest = false,
+                        errorMessage = null
+                    )
+                    onSuccess()
+                    loadProfile(profile.user.uid)
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isRespondingRequest = false,
+                        errorMessage = error.message ?: "No se pudo aceptar la solicitud"
+                    )
+                }
+        }
+    }
+
+    fun rejectFriendRequest(onSuccess: () -> Unit = {}) {
+        val profile = _uiState.value.profile ?: return
+        if (profile.isFriend || !profile.isRequestReceived || _uiState.value.isRespondingRequest) return
+
+        _uiState.value = _uiState.value.copy(
+            isRespondingRequest = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.rejectFriendRequest(profile.user)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isRespondingRequest = false,
+                        profile = profile.copy(isRequestReceived = false),
+                        errorMessage = null
+                    )
+                    onSuccess()
+                    loadProfile(profile.user.uid)
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isRespondingRequest = false,
                         errorMessage = error.message ?: "No se pudo cancelar la solicitud"
                     )
                 }
