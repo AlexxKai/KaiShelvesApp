@@ -41,6 +41,7 @@ import com.example.kaishelvesapp.ui.screen.help.HelpScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
+import com.example.kaishelvesapp.ui.screen.library.PdfConverterScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
 import com.example.kaishelvesapp.ui.screen.login.EmailVerificationScreen
@@ -94,6 +95,7 @@ object Routes {
     const val FRIEND_LIST_DETAIL = "friend_list_detail/{friendUid}/{listId}"
     const val NOTIFICATION_CENTER = "notification_center"
     const val GROUPS = "groups"
+    const val FILE_CONVERTER = "file_converter"
     const val CHALLENGES = "challenges"
     const val FOR_YOU = "for_you"
     const val HELP = "help"
@@ -243,6 +245,7 @@ fun AppNavigation(
             KaiSection.LIBRARY -> navController.navigate(Routes.LIBRARY)
             KaiSection.FRIENDS -> navController.navigate(Routes.FRIENDS)
             KaiSection.GROUPS -> navController.navigate(Routes.GROUPS)
+            KaiSection.FILE_CONVERTER -> navController.navigate(Routes.FILE_CONVERTER)
             KaiSection.CHALLENGES -> navController.navigate(Routes.CHALLENGES)
             KaiSection.FOR_YOU -> navController.navigate(Routes.FOR_YOU)
             KaiSection.HELP -> navController.navigate(Routes.HELP)
@@ -830,6 +833,25 @@ fun AppNavigation(
             )
         }
 
+        composable(Routes.FILE_CONVERTER) {
+            PdfConverterScreen(
+                userName = authState.user?.usuario,
+                profileImageUrl = authState.user?.photoUrl,
+                onGoToProfile = {
+                    navController.navigate(Routes.PROFILE)
+                },
+                onGoToSettingsPrivacy = {
+                    navController.navigate(Routes.SETTINGS_PRIVACY)
+                },
+                onLogout = ::logoutToLogin,
+                pendingRequestCount = friendRequestsState.pendingCount,
+                onOpenNotifications = {
+                    navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                onSectionSelected = { navigateSection(it) }
+            )
+        }
+
         composable(Routes.CHALLENGES) {
             PlaceholderScreen(
                 title = "Desafíos de lectura",
@@ -1042,6 +1064,12 @@ private fun buildHelpScreenContext(
             screenName = "Grupos",
             description = "Seccion preparada para grupos de lectura.",
             availableActions = listOf("Cambiar a otra seccion", "Buscar libros", "Abrir menu lateral")
+        )
+        Routes.FILE_CONVERTER -> HelpScreenContext(
+            route = route,
+            screenName = "Conversor PDF",
+            description = "Seccion preparada para convertir archivos antes de leerlos como PDF.",
+            availableActions = listOf("Abrir menu lateral", "Volver a Biblioteca", "Buscar libros")
         )
         Routes.CHALLENGES -> HelpScreenContext(
             route = route,

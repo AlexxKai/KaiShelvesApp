@@ -46,6 +46,7 @@ enum class KaiSection {
     STATS,
     FRIENDS,
     GROUPS,
+    FILE_CONVERTER,
     CHALLENGES,
     FOR_YOU,
     HELP

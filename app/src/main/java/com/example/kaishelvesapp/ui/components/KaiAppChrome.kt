@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocalLibrary
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -393,6 +394,13 @@ fun KaiNavigationDrawerContent(
                                 onSectionSelected(KaiSection.GROUPS)
                             }
                         }
+                    )
+
+                    KaiDrawerItem(
+                        label = stringResource(R.string.file_converter),
+                        selected = currentSection == KaiSection.FILE_CONVERTER,
+                        leadingIcon = { Icon(Icons.Filled.PictureAsPdf, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.FILE_CONVERTER) }
                     )
 
                     KaiDrawerItem(
