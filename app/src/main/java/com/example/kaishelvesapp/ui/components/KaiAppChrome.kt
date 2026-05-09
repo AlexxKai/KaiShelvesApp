@@ -342,6 +342,13 @@ fun KaiNavigationDrawerContent(
                     )
 
                     KaiDrawerItem(
+                        label = stringResource(R.string.file_converter),
+                        selected = currentSection == KaiSection.FILE_CONVERTER,
+                        leadingIcon = { Icon(Icons.Filled.PictureAsPdf, contentDescription = null, tint = TarnishedGold) },
+                        onClick = { onSectionSelected(KaiSection.FILE_CONVERTER) }
+                    )
+
+                    KaiDrawerItem(
                         label = stringResource(R.string.reading_statistics),
                         selected = currentSection == KaiSection.STATS,
                         leadingIcon = { Icon(Icons.Filled.BarChart, contentDescription = null, tint = TarnishedGold) },
@@ -394,13 +401,6 @@ fun KaiNavigationDrawerContent(
                                 onSectionSelected(KaiSection.GROUPS)
                             }
                         }
-                    )
-
-                    KaiDrawerItem(
-                        label = stringResource(R.string.file_converter),
-                        selected = currentSection == KaiSection.FILE_CONVERTER,
-                        leadingIcon = { Icon(Icons.Filled.PictureAsPdf, contentDescription = null, tint = TarnishedGold) },
-                        onClick = { onSectionSelected(KaiSection.FILE_CONVERTER) }
                     )
 
                     KaiDrawerItem(

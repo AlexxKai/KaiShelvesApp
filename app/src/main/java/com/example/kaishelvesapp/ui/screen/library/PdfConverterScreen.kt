@@ -4,7 +4,10 @@ import android.content.Context
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.text.Html
 import android.text.Layout
+import android.text.Spanned
+import android.text.SpannedString
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.provider.OpenableColumns
@@ -307,13 +310,13 @@ private fun convertDocumentToPdf(
     sourceUri: Uri,
     targetUri: Uri
 ): Result<Unit> = runCatching {
-    val text = extractConvertibleText(context, sourceUri)
-    require(text.isNotBlank()) { context.getString(R.string.pdf_converter_empty_error) }
+    val blocks = extractConvertibleBlocks(context, sourceUri)
+    require(blocks.any { it.text.isNotBlank() }) { context.getString(R.string.pdf_converter_empty_error) }
 
     context.contentResolver.openOutputStream(targetUri)?.use { output ->
         val document = PdfDocument()
         try {
-            writeTextToPdf(document, text)
+            writeBlocksToPdf(document, blocks)
             document.writeTo(output)
         } finally {
             document.close()
@@ -321,9 +324,9 @@ private fun convertDocumentToPdf(
     } ?: error(context.getString(R.string.pdf_converter_error))
 }
 
-private fun writeTextToPdf(
+private fun writeBlocksToPdf(
     document: PdfDocument,
-    text: String
+    blocks: List<PdfTextBlock>
 ) {
     val pageWidth = 595
     val pageHeight = 842
@@ -333,7 +336,6 @@ private fun writeTextToPdf(
         color = android.graphics.Color.BLACK
         textSize = 13f
     }
-    val paragraphs = text.split(Regex("\\n{2,}")).map { it.trim() }.filter { it.isNotBlank() }
     var pageNumber = 1
     var page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create())
     var y = margin
@@ -345,31 +347,67 @@ private fun writeTextToPdf(
         y = margin
     }
 
-    paragraphs.forEach { paragraph ->
+    blocks.filter { it.text.isNotBlank() }.forEach { block ->
+        val text = block.text.trimTrailingWhitespace()
         val layout = StaticLayout.Builder
-            .obtain(paragraph, 0, paragraph.length, textPaint, textWidth)
+            .obtain(text, 0, text.length, textPaint, textWidth)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(4f, 1f)
             .setIncludePad(false)
             .build()
-        if (y + layout.height > pageHeight - margin && y > margin) finishPage()
-        page.canvas.save()
-        page.canvas.translate(margin.toFloat(), y.toFloat())
-        layout.draw(page.canvas)
-        page.canvas.restore()
-        y += layout.height + 18
+
+        var firstLine = 0
+        while (firstLine < layout.lineCount) {
+            val remainingHeight = pageHeight - margin - y
+            if (remainingHeight <= textPaint.textSize && y > margin) {
+                finishPage()
+                continue
+            }
+
+            var lastLineExclusive = firstLine
+            while (
+                lastLineExclusive < layout.lineCount &&
+                layout.getLineBottom(lastLineExclusive) - layout.getLineTop(firstLine) <= remainingHeight
+            ) {
+                lastLineExclusive++
+            }
+
+            if (lastLineExclusive == firstLine) {
+                finishPage()
+                continue
+            }
+
+            val clipTop = layout.getLineTop(firstLine)
+            val clipBottom = layout.getLineBottom(lastLineExclusive - 1)
+            page.canvas.save()
+            page.canvas.translate(margin.toFloat(), y.toFloat() - clipTop)
+            page.canvas.clipRect(0, clipTop, textWidth, clipBottom)
+            layout.draw(page.canvas)
+            page.canvas.restore()
+
+            y += clipBottom - clipTop
+            firstLine = lastLineExclusive
+            if (firstLine < layout.lineCount) finishPage()
+        }
+        y += block.spacingAfter
+        if (y > pageHeight - margin) finishPage()
     }
 
     document.finishPage(page)
 }
 
-private fun extractConvertibleText(context: Context, uri: Uri): String {
+private data class PdfTextBlock(
+    val text: CharSequence,
+    val spacingAfter: Int = 18
+)
+
+private fun extractConvertibleBlocks(context: Context, uri: Uri): List<PdfTextBlock> {
     val name = displayNameForUri(context, uri).lowercase(Locale.ROOT)
     return when {
-        name.endsWith(".epub") -> extractEpubText(context, uri)
-        name.endsWith(".fb2") -> readUriText(context, uri).let(::stripDocumentTags)
-        else -> readUriText(context, uri)
-    }.trim()
+        name.endsWith(".epub") -> extractEpubBlocks(context, uri)
+        name.endsWith(".fb2") -> listOf(PdfTextBlock(fb2ToSpanned(readUriText(context, uri))))
+        else -> listOf(PdfTextBlock(SpannedString(readUriText(context, uri).trim())))
+    }
 }
 
 private fun readUriText(context: Context, uri: Uri): String {
@@ -378,16 +416,18 @@ private fun readUriText(context: Context, uri: Uri): String {
     }.orEmpty()
 }
 
-private fun extractEpubText(context: Context, uri: Uri): String {
+private fun extractEpubBlocks(context: Context, uri: Uri): List<PdfTextBlock> {
     val rootFilePath = readConverterZipEntry(context, uri, "META-INF/container.xml")
         ?.decodeToString()
         ?.let(::parseConverterRootFilePath)
-        ?: return ""
-    val opf = readConverterZipEntry(context, uri, rootFilePath)?.decodeToString() ?: return ""
+        ?: return emptyList()
+    val opf = readConverterZipEntry(context, uri, rootFilePath)?.decodeToString() ?: return emptyList()
     return parseConverterEpubReadingPaths(opf)
         .map { href -> resolveConverterZipPath(rootFilePath, href) }
         .mapNotNull { path -> readConverterZipEntry(context, uri, path)?.decodeToString() }
-        .joinToString("\n\n", transform = ::stripDocumentTags)
+        .map(::htmlToSpanned)
+        .filter { it.isNotBlank() }
+        .map { PdfTextBlock(it) }
 }
 
 private fun readConverterZipEntry(context: Context, uri: Uri, targetPath: String): ByteArray? {
@@ -458,21 +498,55 @@ private fun resolveConverterZipPath(rootFilePath: String, href: String): String 
     return parts.joinToString("/")
 }
 
-private fun stripDocumentTags(raw: String): String {
-    return raw
+private fun htmlToSpanned(raw: String): Spanned {
+    val body = raw
         .replace(Regex("(?is)<(script|style).*?</\\1>"), " ")
-        .replace(Regex("(?i)</(p|div|br|h[1-6]|li|section|chapter)>"), "\n")
-        .replace(Regex("(?s)<[^>]+>"), " ")
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-        .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
-        .replace(Regex("\\n\\s+"), "\n")
-        .replace(Regex("\\n{3,}"), "\n\n")
-        .trim()
+        .replace(Regex("(?is)<head.*?</head>"), " ")
+        .replace(Regex("(?is)<img\\b[^>]*>"), " ")
+        .replace(Regex("(?i)<br\\s*/?>"), "<br>")
+    return Html.fromHtml(body, Html.FROM_HTML_MODE_COMPACT)
+}
+
+private fun fb2ToSpanned(raw: String): Spanned {
+    val body = Regex("(?is)<body\\b[^>]*>(.*?)</body>")
+        .find(raw)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?: raw
+    val html = body
+        .replace(Regex("(?is)<binary.*?</binary>"), " ")
+        .replace(Regex("(?is)<section\\b[^>]*>"), "<div>")
+        .replace(Regex("(?is)</section>"), "</div>")
+        .replace(Regex("(?is)<title\\b[^>]*>"), "<h2>")
+        .replace(Regex("(?is)</title>"), "</h2>")
+        .replace(Regex("(?is)<subtitle\\b[^>]*>"), "<h3>")
+        .replace(Regex("(?is)</subtitle>"), "</h3>")
+        .replace(Regex("(?is)<p\\b[^>]*>"), "<p>")
+        .replace(Regex("(?is)<empty-line\\s*/?>"), "<br>")
+        .replace(Regex("(?is)<emphasis\\b[^>]*>"), "<i>")
+        .replace(Regex("(?is)</emphasis>"), "</i>")
+        .replace(Regex("(?is)<strong\\b[^>]*>"), "<b>")
+        .replace(Regex("(?is)</strong>"), "</b>")
+        .replace(Regex("(?is)<strikethrough\\b[^>]*>"), "<s>")
+        .replace(Regex("(?is)</strikethrough>"), "</s>")
+        .replace(Regex("(?is)<v\\b[^>]*>"), "<p>")
+        .replace(Regex("(?is)</v>"), "</p>")
+        .replace(Regex("(?is)<poem\\b[^>]*>|</poem>|<stanza\\b[^>]*>|</stanza>"), "<br>")
+        .replace(Regex("(?is)<image\\b[^>]*/?>"), " ")
+    return htmlToSpanned(html)
+}
+
+private fun CharSequence.trimTrailingWhitespace(): CharSequence {
+    var end = length
+    while (end > 0 && this[end - 1].isWhitespace()) end--
+    return subSequence(0, end)
+}
+
+private fun CharSequence.isNotBlank(): Boolean {
+    for (index in indices) {
+        if (!this[index].isWhitespace()) return true
+    }
+    return false
 }
 
 private fun displayNameForUri(context: Context, uri: Uri): String {
