@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.DeviceFileRepository
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
+import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,7 @@ class DeviceLibraryViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     private val repository = DeviceFileRepository(application.applicationContext)
+    private val libraryRepository = DeviceLibraryRepository(application.applicationContext)
     private val preferences = application.getSharedPreferences("device_library", Application.MODE_PRIVATE)
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState: StateFlow<DeviceLibraryUiState> = _uiState.asStateFlow()
@@ -95,7 +97,10 @@ class DeviceLibraryViewModel(
             runCatching {
                 val folderUri = state.selectedFolderUri?.let(Uri::parse)
                     ?: return@runCatching emptyList()
-                repository.listFolderFiles(folderUri)
+                repository.listFolderFiles(folderUri).also { files ->
+                    // Registra los libros escaneados para que progreso y anotaciones tengan un origen comun.
+                    libraryRepository.registerScannedBooks(files)
+                }
             }.onSuccess { files ->
                 _uiState.update {
                     it.copy(

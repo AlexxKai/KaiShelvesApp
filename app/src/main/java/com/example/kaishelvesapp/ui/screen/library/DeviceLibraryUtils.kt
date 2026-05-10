@@ -139,6 +139,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
@@ -295,6 +296,7 @@ fun saveDeviceBookReadingProgress(
         .putInt("${deviceBookProgressKey(file)}_page_count", safePageCount)
         .putInt("${deviceBookProgressKey(file)}_percent", readingProgressForPage(safePage, safePageCount))
         .apply()
+    DeviceLibraryRepository(context).saveProgress(file, safePage, safePageCount)
 }
 
 fun readingProgressForPage(
