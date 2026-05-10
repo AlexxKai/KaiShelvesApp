@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.detail
+﻿package com.example.kaishelvesapp.ui.screen.detail
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -1604,3 +1604,4 @@ private fun DetailRow(
         )
     }
 }
+

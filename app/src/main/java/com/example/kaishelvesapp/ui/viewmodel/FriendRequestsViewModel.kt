@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.viewmodel
+﻿package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -264,7 +264,7 @@ class FriendRequestsViewModel(
                         notifications = _uiState.value.notifications.map {
                             if (it.id == notificationId) it.copy(isRead = false) else it
                         },
-                        errorMessage = error.message ?: "No se pudo marcar la notificacion como leida"
+                        errorMessage = error.message ?: "No se pudo marcar la notificación como leída"
                     )
                 }
         }
@@ -321,11 +321,12 @@ class FriendRequestsViewModel(
             .ifBlank { notification.user.email }
             .ifBlank { "Alguien" }
         return when (notification.type) {
-            ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicacion"
+            ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicación"
             ActivityNotificationType.COMMENT -> {
                 val text = notification.text.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
-                "$userName ha comentado en tu publicacion$text"
+                "$userName ha comentado en tu publicación$text"
             }
         }
     }
 }
+

@@ -347,7 +347,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_PENDING_ID,
             name = "Pendientes",
-            description = "Libros que quieres ordenar a tu manera para retomarlos despues.",
+            description = "Libros que quieres ordenar a tu manera para retomarlos después.",
             position = 3,
             isSystem = true,
             systemKey = SYSTEM_LIST_PENDING_KEY

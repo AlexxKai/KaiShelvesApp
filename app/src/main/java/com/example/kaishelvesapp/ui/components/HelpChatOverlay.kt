@@ -204,7 +204,7 @@ fun HelpChatPanel(
                                 color = TarnishedGold
                             )
                             Text(
-                                text = "Preparando guia...",
+                                text = "Preparando guía...",
                                 modifier = Modifier.padding(start = 8.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OldIvory.copy(alpha = 0.82f)

@@ -43,7 +43,7 @@ class HelpChatViewModel(
                     HelpChatMessage(
                         id = nextMessageId++,
                         author = HelpMessageAuthor.ASSISTANT,
-                        text = "Hola, soy la ayuda de KaiShelves. Dime que necesitas hacer en esta pantalla y te guio paso a paso.",
+                        text = "Hola, soy la ayuda de KaiShelves. Dime qué necesitas hacer en esta pantalla y te guío paso a paso.",
                         suggestedAction = state.screenContext.availableActions.firstOrNull(),
                         confidence = 1f
                     )
@@ -143,7 +143,7 @@ fun defaultHelpScreenContext(): HelpScreenContext {
     return HelpScreenContext(
         route = "unknown",
         screenName = "KaiShelves",
-        description = "Pantalla general de la aplicacion.",
-        availableActions = listOf("Abre el menu lateral para cambiar de seccion.")
+        description = "Pantalla general de la aplicación.",
+        availableActions = listOf("Abre el menú lateral para cambiar de sección.")
     )
 }

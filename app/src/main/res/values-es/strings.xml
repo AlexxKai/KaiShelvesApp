@@ -1,4 +1,4 @@
-<resources>
+﻿<resources>
     <string name="app_name">Kai Shelves</string>
 
     <string name="back">Volver</string>
@@ -47,7 +47,7 @@
     <string name="main_hall_description">La madera oscura cruje en silencio; entre polvo dorado y lomos cerrados, cada volumen guarda una pista esperando ser descubierta.</string>
     <string name="library_intro_dismiss_hint">Pulsa fuera de las cortinas para abrirlas.</string>
 
-    <string name="catalog">Catalogo</string>
+    <string name="catalog">Catálogo</string>
     <string name="lists">Listas</string>
     <string name="my_books">Mis libros</string>
     <string name="discover">Descubre</string>
@@ -156,13 +156,25 @@
     <string name="device_reader_pdf_error">Este PDF no se pudo renderizar dentro de Kai Shelves.</string>
     <string name="device_reader_text_error">Este libro no contiene texto legible para el lector interno.</string>
     <string name="device_reader_unsupported_title">Lector interno no disponible</string>
-    <string name="device_reader_unsupported_body">Kai Shelves puede mostrar este archivo %1$s en la biblioteca, pero este formato aun no se puede leer internamente.</string>
+    <string name="device_reader_unsupported_body">Kai Shelves puede mostrar este archivo %1$s en la biblioteca, pero este formato aún no se puede leer internamente.</string>
     <string name="device_reader_pdf_only_body">Para reducir fallos de renderizado, el lector interno ahora solo abre PDF. Convierte este archivo %1$s a PDF desde el Conversor PDF antes de leerlo.</string>
+    <string name="reader_tab_chapters">Capítulos</string>
+    <string name="reader_tab_bookmarks">Marcadores</string>
+    <string name="reader_tab_images">Imágenes</string>
+    <string name="reader_settings">Ajustes</string>
+    <string name="reader_cover">Cubierta</string>
+    <string name="reader_no_chapters">No hay capítulos detectados en este libro.</string>
+    <string name="reader_no_bookmark">No hay marcador de página</string>
+    <string name="reader_add_bookmark_hint">Toca agregar nuevo para guardar la página actual.</string>
+    <string name="reader_add_new">AGREGAR NUEVO</string>
+    <string name="reader_page_progress">Página %1$d/%2$d</string>
+    <string name="reader_detected_cover">imagen detectada: cubierta</string>
+    <string name="reader_detected_image">imagen detectada: %1$s</string>
     <string name="groups">Grupos</string>
     <string name="file_converter">Conversor PDF</string>
     <string name="pdf_converter_title">Convertir a PDF</string>
     <string name="pdf_converter_subtitle">Prepara archivos PDF legibles para el lector interno.</string>
-    <string name="pdf_converter_body">Elige un archivo TXT, EPUB o FB2 y Kai Shelves creara una copia PDF sencilla que podras abrir desde tu biblioteca del dispositivo.</string>
+    <string name="pdf_converter_body">Elige un archivo TXT, EPUB o FB2 y Kai Shelves creará una copia PDF sencilla que podrás abrir desde tu biblioteca del dispositivo.</string>
     <string name="pdf_converter_choose_file">Elegir archivo</string>
     <string name="pdf_converter_convert">Crear PDF</string>
     <string name="pdf_converter_success">PDF creado correctamente</string>
@@ -444,3 +456,5 @@
     <string name="guest_merge_action_keep_cloud">Conservar los datos de la cuenta</string>
     <string name="guest_merge_action_replace_cloud">Reemplazar los datos de la cuenta con los datos locales</string>
 </resources>
+
+

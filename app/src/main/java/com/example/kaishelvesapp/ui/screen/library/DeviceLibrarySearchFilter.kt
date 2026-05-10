@@ -193,7 +193,7 @@ fun LibrarySelectorMenu(fileCount: Int) {
                     "Autor",
                     "Etiqueta",
                     "Carpetas",
-                    "Mi clasificaciÃ³n  â€º"
+                    "Mi clasificación  ›"
                 ).forEach { label ->
                     Text(
                         text = label,
@@ -230,8 +230,8 @@ fun LibrarySelectorMenu(fileCount: Int) {
                     ) {
                         Text(
                             text = buildString {
-                                repeat(stars) { append("â˜…") }
-                                repeat(5 - stars) { append("â˜†") }
+                                repeat(stars) { append("★") }
+                                repeat(5 - stars) { append("☆") }
                             },
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleMedium,
@@ -403,7 +403,7 @@ fun DeviceLibrarySearchPanel(
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.DeleteOutline,
-                                contentDescription = "Eliminar busqueda reciente",
+                                contentDescription = "Eliminar búsqueda reciente",
                                 tint = OldIvory.copy(alpha = 0.78f),
                                 modifier = Modifier.size(19.dp)
                             )
@@ -499,7 +499,7 @@ fun DeviceLibraryFilterPanel(
                         }
                     }
                     FilterOptionRow(
-                        "TÃ­tulo del libro",
+                        "Título del libro",
                         selected = sortOption == DeviceLibrarySortOption.Title,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.Title) }
@@ -557,7 +557,7 @@ fun DeviceLibraryFilterPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "DisposiciÃ³n",
+                    "Disposición",
                     modifier = Modifier.widthIn(min = 86.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = OldIvory
@@ -673,4 +673,6 @@ fun LayoutSegmentButton(
         )
     }
 }
+
+
 

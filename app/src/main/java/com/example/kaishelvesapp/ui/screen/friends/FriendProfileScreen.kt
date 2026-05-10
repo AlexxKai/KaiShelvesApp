@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.friends
+﻿package com.example.kaishelvesapp.ui.screen.friends
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1582,3 +1582,4 @@ private fun formatActivityTimestamp(timestampMillis: Long?): String {
             }
     }
 }
+

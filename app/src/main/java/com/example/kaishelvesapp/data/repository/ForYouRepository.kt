@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.data.repository
+﻿package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.model.Libro
 import kotlinx.coroutines.async
@@ -76,7 +76,7 @@ class ForYouRepository(
             .map { (genre) ->
                 RecommendationSeed(
                     query = "subject:$genre",
-                    reason = "Mismo genero"
+                    reason = "Mismo género"
                 )
             }
 
@@ -136,3 +136,4 @@ private data class RecommendationSeed(
     val query: String,
     val reason: String
 )
+

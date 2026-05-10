@@ -371,7 +371,7 @@ fun DeviceLibraryScreen(
                         showImportBooksDialog = false
                         Toast.makeText(
                             context,
-                            "ImportaciÃ³n configurada",
+                            "Importación configurada",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -628,5 +628,6 @@ private fun DeviceLibraryTopBarOptionsMenu(
         )
     }
 }
+
 
 

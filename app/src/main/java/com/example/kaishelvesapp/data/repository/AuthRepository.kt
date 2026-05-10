@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.data.repository
+﻿package com.example.kaishelvesapp.data.repository
 
 import android.net.Uri
 import com.example.kaishelvesapp.data.local.GuestLocalStore
@@ -325,12 +325,12 @@ class AuthRepository(
             val firebaseUser = auth.currentUser
             if (firebaseUser == null) {
                 val guestProfile = GuestLocalStore.getActiveProfile()
-                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                    ?: return Result.failure(Exception("No hay sesión iniciada"))
                 return Result.success(guestProfile)
             }
 
             val uid = firebaseUser?.uid
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             val snapshot = firestore.collection("usuarios")
                 .document(uid)
@@ -409,11 +409,11 @@ class AuthRepository(
     suspend fun checkEmailVerification(): Result<AuthOperationResult> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             currentUser.reload().await()
             val reloadedUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val usuario = getOrCreateUserProfile(reloadedUser)
 
             if (requiresEmailVerification(reloadedUser)) {
@@ -470,7 +470,7 @@ class AuthRepository(
             val currentUser = auth.currentUser
             if (currentUser == null) {
                 val currentProfile = GuestLocalStore.getActiveProfile()
-                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                    ?: return Result.failure(Exception("No hay sesión iniciada"))
                 val resolvedPhotoUrl = when {
                     selectedPhotoUri.isBlank() -> currentProfile.photoUrl
                     selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(
@@ -540,7 +540,7 @@ class AuthRepository(
             }
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val updatedUser = currentProfile.copy(privacySettings = privacySettings)
 
             firestore.collection("usuarios")
@@ -560,7 +560,7 @@ class AuthRepository(
     suspend fun savePasswordLogin(email: String, password: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val credentialEmail = email.trim()
 
             if (credentialEmail.isBlank()) {
@@ -572,7 +572,7 @@ class AuthRepository(
             }
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             if (hasPasswordLogin()) {
                 if (!currentUser.email.equals(credentialEmail, ignoreCase = true)) {
@@ -614,7 +614,7 @@ class AuthRepository(
     ): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val credentialEmail = email.trim()
 
             if (credentialEmail.isBlank()) {
@@ -622,11 +622,11 @@ class AuthRepository(
             }
 
             if (currentPassword.isBlank()) {
-                return Result.failure(Exception("La contrasena actual no puede estar vacia"))
+                return Result.failure(Exception("La contraseña actual no puede estar vacía"))
             }
 
             if (newPassword.length < 6) {
-                return Result.failure(Exception("La contrasena debe tener al menos 6 caracteres"))
+                return Result.failure(Exception("La contraseña debe tener al menos 6 caracteres"))
             }
 
             val credential = EmailAuthProvider.getCredential(credentialEmail, currentPassword)
@@ -634,7 +634,7 @@ class AuthRepository(
             currentUser.updatePassword(newPassword).await()
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             firestore.collection("usuarios")
                 .document(currentUser.uid)
@@ -656,7 +656,7 @@ class AuthRepository(
     suspend fun unlinkLoginProvider(providerId: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val providerStates = getLoginProviders()
             val targetProvider = providerStates.firstOrNull { it.providerId == providerId }
                 ?: return Result.failure(Exception("Proveedor no disponible"))
@@ -685,7 +685,7 @@ class AuthRepository(
             }
 
             val updatedUser = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             Result.success(updatedUser)
         } catch (e: Exception) {
             Result.failure(e)
@@ -792,7 +792,7 @@ class AuthRepository(
             .documents
 
         if (usernameMatches.size > 1) {
-            return Result.failure(Exception("Hay varios usuarios con ese nombre. Inicia sesion con tu correo"))
+            return Result.failure(Exception("Hay varios usuarios con ese nombre. Inicia sesión con tu correo"))
         }
 
         val matchedEmail = usernameMatches
@@ -1420,7 +1420,7 @@ class AuthRepository(
     private suspend fun requireAdminAccess() {
         val firebaseUser = auth.currentUser
         val currentUid = firebaseUser?.uid
-            ?: throw Exception("No hay sesion iniciada")
+            ?: throw Exception("No hay sesión iniciada")
         val currentUserSnapshot = firestore.collection("usuarios")
             .document(currentUid)
             .get()
@@ -1464,7 +1464,7 @@ class AuthRepository(
             val reservedUid = usernameSnapshot.getString("uid").orEmpty()
 
             if (usernameSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != user.uid) {
-                throw IllegalStateException("El nombre de usuario ya esta en uso")
+                throw IllegalStateException("El nombre de usuario ya está en uso")
             }
 
             transaction.set(userRef, user, SetOptions.merge())
@@ -1499,7 +1499,7 @@ class AuthRepository(
 
         val reservedUid = reservedSnapshot.getString("uid").orEmpty()
         if (reservedSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != currentUid) {
-            throw Exception("El nombre de usuario ya esta en uso")
+            throw Exception("El nombre de usuario ya está en uso")
         }
 
         val legacyConflict = firestore.collection("usuarios")
@@ -1512,7 +1512,7 @@ class AuthRepository(
             }
 
         if (legacyConflict != null) {
-            throw Exception("El nombre de usuario ya esta en uso")
+            throw Exception("El nombre de usuario ya está en uso")
         }
     }
 
@@ -1633,3 +1633,5 @@ class AuthRepository(
         )
     }
 }
+
+

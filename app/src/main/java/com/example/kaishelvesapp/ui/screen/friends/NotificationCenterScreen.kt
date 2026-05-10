@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.friends
+﻿package com.example.kaishelvesapp.ui.screen.friends
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -779,8 +779,8 @@ private fun activityTitle(item: FriendActivityItem): String {
             ?.let { "$userName y $it ahora son amigos" }
             ?: "$userName tiene una nueva amistad"
         FriendActivityType.WANT_TO_READ -> "$userName quiere leer"
-        FriendActivityType.READING -> "$userName esta leyendo"
-        FriendActivityType.READ -> "$userName ha leido"
+        FriendActivityType.READING -> "$userName está leyendo"
+        FriendActivityType.READ -> "$userName ha leído"
         FriendActivityType.LIST_ADDED -> "$userName ha actualizado una lista"
     }
 }
@@ -924,3 +924,4 @@ private fun FriendRequestCard(
         }
     }
 }
+

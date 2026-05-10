@@ -154,7 +154,7 @@ fun HelpScreen(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Inicia el chat para recibir guia contextual sobre la pantalla en la que estes.",
+                            text = "Inicia el chat para recibir guía contextual sobre la pantalla en la que estés.",
                             modifier = Modifier.padding(top = 8.dp),
                             style = MaterialTheme.typography.bodyLarge,
                             color = OldIvory,

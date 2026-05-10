@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.data.repository
+﻿package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.Usuario
@@ -730,7 +730,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             val friendsSnapshot = friendsCollection(uid).get().await()
             val sentRequestsSnapshot = sentRequestsCollection(uid).get().await()
@@ -832,7 +832,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val currentUser = usersCollection()
                 .document(uid)
                 .get()
@@ -888,7 +888,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             if (targetUser.uid.isBlank() || targetUser.uid == uid) {
                 return Result.failure(Exception("Usuario no valido"))
@@ -964,7 +964,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             val currentUserName = usersCollection()
                 .document(uid)
@@ -1288,10 +1288,10 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val ownerUid = activityOwnerUid(activityId)
             if (activityId.isBlank() || ownerUid != uid) {
-                return Result.failure(Exception("No se pudo eliminar esta actualizacion"))
+                return Result.failure(Exception("No se pudo eliminar esta actualización"))
             }
 
             hiddenActivityUpdatesCollection(uid)
@@ -1313,11 +1313,11 @@ class FriendsRepository(
     suspend fun blockMember(targetUid: String): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.failure(Exception("Inicia sesion para bloquear perfiles"))
+                return Result.failure(Exception("Inicia sesión para bloquear perfiles"))
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             if (targetUid.isBlank() || targetUid == uid) {
                 return Result.failure(Exception("No se pudo identificar el perfil"))
             }
@@ -1362,11 +1362,11 @@ class FriendsRepository(
     suspend fun unblockMember(targetUid: String): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.failure(Exception("Inicia sesion para desbloquear perfiles"))
+                return Result.failure(Exception("Inicia sesión para desbloquear perfiles"))
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             if (targetUid.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar el perfil"))
             }
@@ -1385,7 +1385,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             val members = blockedMembersCollection(uid)
                 .get()
@@ -1419,11 +1419,11 @@ class FriendsRepository(
     ): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.failure(Exception("Inicia sesion para enviar denuncias"))
+                return Result.failure(Exception("Inicia sesión para enviar denuncias"))
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val trimmedSubject = subject.trim()
             val trimmedMessage = message.trim()
             if (targetUid.isBlank() || targetUid == uid) {
@@ -1473,7 +1473,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             val reports = reportReviewsCollection(uid)
                 .get()
@@ -1512,13 +1512,13 @@ class FriendsRepository(
     suspend fun toggleActivityLike(activityId: String): Result<ActivitySocialSummary> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.failure(Exception("Inicia sesion para indicar que te gusta una publicacion"))
+                return Result.failure(Exception("Inicia sesión para indicar que te gusta una publicación"))
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             if (activityId.isBlank()) {
-                return Result.failure(Exception("No se pudo identificar la publicacion"))
+                return Result.failure(Exception("No se pudo identificar la publicación"))
             }
             activitySocialInteractionError(activityId)?.let { error ->
                 return Result.failure(Exception(error))
@@ -1558,7 +1558,7 @@ class FriendsRepository(
             val currentUid = currentUid()
 
             if (activityId.isBlank()) {
-                return Result.failure(Exception("No se pudo identificar la publicacion"))
+                return Result.failure(Exception("No se pudo identificar la publicación"))
             }
 
             val comments = activityCommentsCollection(activityId)
@@ -1595,7 +1595,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val readNotificationIds = activityNotificationReadsCollection(uid)
                 .get()
                 .await()
@@ -1762,9 +1762,9 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             if (notificationId.isBlank()) {
-                return Result.failure(Exception("No se pudo identificar la notificacion"))
+                return Result.failure(Exception("No se pudo identificar la notificación"))
             }
 
             activityNotificationReadsCollection(uid)
@@ -1781,14 +1781,14 @@ class FriendsRepository(
     suspend fun addActivityComment(activityId: String, text: String): Result<Pair<ActivitySocialSummary, List<ActivityComment>>> {
         return try {
             if (isGuestSessionActive()) {
-                return Result.failure(Exception("Inicia sesion para comentar una publicacion"))
+                return Result.failure(Exception("Inicia sesión para comentar una publicación"))
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val trimmedText = text.trim()
             if (activityId.isBlank()) {
-                return Result.failure(Exception("No se pudo identificar la publicacion"))
+                return Result.failure(Exception("No se pudo identificar la publicación"))
             }
             if (trimmedText.isBlank()) {
                 return Result.failure(Exception("Escribe un comentario"))
@@ -1862,7 +1862,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val friend = getUserProfile(friendUid)
                 ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
             if (!canOpenReadingActivity(friendUid, uid, friend)) {
@@ -1926,7 +1926,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesiÃƒÂ³n iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val friend = getUserProfile(friendUid)
                 ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
             if (!canOpenReadingActivity(friendUid, uid, friend)) {
@@ -1950,7 +1950,7 @@ class FriendsRepository(
             }
 
             val uid = currentUid()
-                ?: return Result.failure(Exception("No hay sesiÃ³n iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val friend = getUserProfile(friendUid)
                 ?: return Result.failure(Exception("No se pudo cargar el perfil del usuario"))
             if (!canOpenReadingActivity(friendUid, uid, friend)) {
@@ -2187,3 +2187,5 @@ class FriendsRepository(
         }
     }
 }
+
+

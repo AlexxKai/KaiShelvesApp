@@ -467,7 +467,7 @@ class FriendProfileViewModel(
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "No se pudo eliminar la actualizacion"
+                        errorMessage = error.message ?: "No se pudo eliminar la actualización"
                     )
                 }
 

@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.navigation
+﻿package com.example.kaishelvesapp.ui.navigation
 
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
@@ -973,36 +973,36 @@ private fun buildHelpScreenContext(
             route = route,
             screenName = "Inicio",
             description = "Actividad principal del usuario, accesos a red lectora y libros recientes.",
-            availableActions = listOf("Abrir notificaciones", "Buscar libros", "Ir al perfil", "Abrir el menu lateral")
+            availableActions = listOf("Abrir notificaciones", "Buscar libros", "Ir al perfil", "Abrir el menú lateral")
         )
         Routes.SEARCH -> HelpScreenContext(
             route = route,
-            screenName = "Busqueda",
-            description = "Entrada visual para explorar generos y lanzar busquedas en el catalogo.",
-            availableActions = listOf("Buscar por titulo o autor", "Escanear ISBN", "Elegir genero", "Abrir un resultado")
+            screenName = "Búsqueda",
+            description = "Entrada visual para explorar géneros y lanzar búsquedas en el catálogo.",
+            availableActions = listOf("Buscar por título o autor", "Escanear ISBN", "Elegir género", "Abrir un resultado")
         )
         Routes.SEARCH_RESULTS -> HelpScreenContext(
             route = route,
-            screenName = "Resultados de busqueda",
-            description = "Listado dedicado para los resultados de una busqueda de libros.",
-            availableActions = listOf("Volver", "Buscar otro texto", "Borrar el texto", "Anadir un libro a listas")
+            screenName = "Resultados de búsqueda",
+            description = "Listado dedicado para los resultados de una búsqueda de libros.",
+            availableActions = listOf("Volver", "Buscar otro texto", "Borrar el texto", "Añadir un libro a listas")
         )
         Routes.DISCOVER -> HelpScreenContext(
             route = route,
             screenName = "Descubrir",
-            description = "Catalogo de libros y resultados de busqueda.",
-            availableActions = listOf("Filtrar por genero", "Buscar en la barra superior", "Escanear ISBN", "Abrir detalle de libro")
+            description = "Catálogo de libros y resultados de búsqueda.",
+            availableActions = listOf("Filtrar por género", "Buscar en la barra superior", "Escanear ISBN", "Abrir detalle de libro")
         )
         Routes.DETAIL -> HelpScreenContext(
             route = route,
             screenName = "Detalle de libro",
             description = "Ficha del libro seleccionado${selectedBookTitle?.let { ": $it" }.orEmpty()}.",
-            availableActions = listOf("Volver", "Marcar como leido", "Ir a listas", "Revisar informacion del libro")
+            availableActions = listOf("Volver", "Marcar como leído", "Ir a listas", "Revisar información del libro")
         )
         Routes.READING_LIST, Routes.LISTS -> HelpScreenContext(
             route = route,
             screenName = "Mis libros",
-            description = "Gestion de lecturas, libros guardados y listas personales.",
+            description = "Gestión de lecturas, libros guardados y listas personales.",
             availableActions = listOf("Abrir una lista", "Buscar libros", "Escanear ISBN", "Revisar libros guardados")
         )
         Routes.LIST_DETAIL -> HelpScreenContext(
@@ -1013,26 +1013,26 @@ private fun buildHelpScreenContext(
         )
         Routes.READING_STATS -> HelpScreenContext(
             route = route,
-            screenName = "Estadisticas",
+            screenName = "Estadísticas",
             description = "Resumen de progreso lector y actividad de lectura.",
-            availableActions = listOf("Revisar progreso", "Buscar nuevo libro", "Cambiar de seccion desde el menu")
+            availableActions = listOf("Revisar progreso", "Buscar nuevo libro", "Cambiar de sección desde el menú")
         )
         Routes.LIBRARY -> HelpScreenContext(
             route = route,
             screenName = "Biblioteca del dispositivo",
-            description = "Gestion de biblioteca local y archivos disponibles en el telefono.",
-            availableActions = listOf("Buscar libros", "Escanear ISBN", "Gestionar portadas", "Abrir menu lateral")
+            description = "Gestión de biblioteca local y archivos disponibles en el teléfono.",
+            availableActions = listOf("Buscar libros", "Escanear ISBN", "Gestionar portadas", "Abrir menú lateral")
         )
         Routes.PROFILE -> HelpScreenContext(
             route = route,
             screenName = "Perfil",
             description = "Datos del usuario, privacidad, actividad y conexiones.",
-            availableActions = listOf("Abrir privacidad", "Ver amigos", "Abrir libros", "Cerrar sesion desde el menu")
+            availableActions = listOf("Abrir privacidad", "Ver amigos", "Abrir libros", "Cerrar sesión desde el menú")
         )
         Routes.SETTINGS_PRIVACY -> HelpScreenContext(
             route = route,
             screenName = "Privacidad y ajustes",
-            description = "Configuracion de privacidad y opciones de la cuenta.",
+            description = "Configuración de privacidad y opciones de la cuenta.",
             availableActions = listOf("Cambiar preferencias", "Volver al perfil", "Abrir panel de administrador si corresponde")
         )
         Routes.FRIENDS -> HelpScreenContext(
@@ -1044,7 +1044,7 @@ private fun buildHelpScreenContext(
         Routes.FRIEND_PROFILE -> HelpScreenContext(
             route = route,
             screenName = "Perfil de amigo",
-            description = "Perfil publico de otro lector y su actividad visible.",
+            description = "Perfil público de otro lector y su actividad visible.",
             availableActions = listOf("Volver", "Abrir listas del amigo", "Abrir libros visibles")
         )
         Routes.FRIEND_LISTS, Routes.FRIEND_LIST_DETAIL -> HelpScreenContext(
@@ -1062,25 +1062,25 @@ private fun buildHelpScreenContext(
         Routes.GROUPS -> HelpScreenContext(
             route = route,
             screenName = "Grupos",
-            description = "Seccion preparada para grupos de lectura.",
-            availableActions = listOf("Cambiar a otra seccion", "Buscar libros", "Abrir menu lateral")
+            description = "Sección preparada para grupos de lectura.",
+            availableActions = listOf("Cambiar a otra sección", "Buscar libros", "Abrir menú lateral")
         )
         Routes.FILE_CONVERTER -> HelpScreenContext(
             route = route,
             screenName = "Conversor PDF",
-            description = "Seccion preparada para convertir archivos antes de leerlos como PDF.",
-            availableActions = listOf("Abrir menu lateral", "Volver a Biblioteca", "Buscar libros")
+            description = "Sección preparada para convertir archivos antes de leerlos como PDF.",
+            availableActions = listOf("Abrir menú lateral", "Volver a Biblioteca", "Buscar libros")
         )
         Routes.CHALLENGES -> HelpScreenContext(
             route = route,
-            screenName = "Desafios de lectura",
-            description = "Seccion preparada para retos, objetivos y progreso lector.",
-            availableActions = listOf("Cambiar a Estadisticas", "Buscar libros", "Abrir menu lateral")
+            screenName = "Desafíos de lectura",
+            description = "Sección preparada para retos, objetivos y progreso lector.",
+            availableActions = listOf("Cambiar a Estadísticas", "Buscar libros", "Abrir menú lateral")
         )
         Routes.FOR_YOU -> HelpScreenContext(
             route = route,
             screenName = "Para ti",
-            description = "Recomendaciones y seleccion personalizada segun ajustes de privacidad.",
+            description = "Recomendaciones y selección personalizada según ajustes de privacidad.",
             availableActions = listOf("Abrir un libro", "Activar recomendaciones desde privacidad", "Buscar libros")
         )
         Routes.HELP -> HelpScreenContext(
@@ -1092,8 +1092,9 @@ private fun buildHelpScreenContext(
         else -> HelpScreenContext(
             route = route,
             screenName = "KaiShelves",
-            description = "Pantalla de la aplicacion KaiShelves.",
-            availableActions = listOf("Abrir el menu lateral", "Buscar libros", "Ir a Ayuda")
+            description = "Pantalla de la aplicación KaiShelves.",
+            availableActions = listOf("Abrir el menú lateral", "Buscar libros", "Ir a Ayuda")
         )
     }
 }
+

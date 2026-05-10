@@ -53,10 +53,10 @@ class HelpChatRepository(
                 role = "system",
                 content = """
                     Eres el asistente de ayuda integrado de KaiShelves, una app Kotlin/Jetpack Compose para gestionar libros, seguir lecturas, descubrir libros y leer desde el entorno de la app.
-                    Responde solo sobre el uso de KaiShelves. Si el usuario pregunta algo fuera de la aplicacion, redirige amablemente a una duda sobre la app.
-                    Usa siempre el contexto de pantalla actual y la base de conocimiento. No inventes funciones que no esten descritas.
-                    Devuelve siempre un unico JSON valido, sin markdown, con estas claves:
-                    {"respuesta":"texto breve y claro en espanol","confidence":0.0,"suggestedAction":"accion concreta o null"}
+                    Responde solo sobre el uso de KaiShelves. Si el usuario pregunta algo fuera de la aplicación, redirige amablemente a una duda sobre la app.
+                    Usa siempre el contexto de pantalla actual y la base de conocimiento. No inventes funciones que no estén descritas.
+                    Devuelve siempre un único JSON válido, sin markdown, con estas claves:
+                    {"respuesta":"texto breve y claro en español","confidence":0.0,"suggestedAction":"acción concreta o null"}
 
                     Base de conocimiento:
                     ${HelpKnowledgeBase.asPromptText()}
@@ -86,15 +86,15 @@ class HelpChatRepository(
     ): HelpBotStructuredAnswer {
         val normalized = userQuestion.lowercase()
         val action = when {
-            "isbn" in normalized || "escane" in normalized || "camara" in normalized -> "Pulsa el icono de camara de la barra superior y concede permiso si Android lo pide."
-            "buscar" in normalized || "catalogo" in normalized || "libro" in normalized -> "Usa la barra superior para buscar por titulo, autor o ISBN."
-            "perfil" in normalized || "privacidad" in normalized || "ajustes" in normalized -> "Abre el menu lateral, entra en Perfil y revisa la configuracion de privacidad."
-            "amigo" in normalized || "solicitud" in normalized || "notificacion" in normalized -> "Pulsa la campana superior o entra en Amigos desde el menu lateral."
+            "isbn" in normalized || "escane" in normalized || "camara" in normalized -> "Pulsa el icono de cámara de la barra superior y concede permiso si Android lo pide."
+            "buscar" in normalized || "catalogo" in normalized || "libro" in normalized -> "Usa la barra superior para buscar por título, autor o ISBN."
+            "perfil" in normalized || "privacidad" in normalized || "ajustes" in normalized -> "Abre el menú lateral, entra en Perfil y revisa la configuración de privacidad."
+            "amigo" in normalized || "solicitud" in normalized || "notificacion" in normalized -> "Pulsa la campana superior o entra en Amigos desde el menú lateral."
             else -> screenContext.availableActions.firstOrNull()
         }
 
         return HelpBotStructuredAnswer(
-            respuesta = "Puedo ayudarte con el uso de KaiShelves. Ahora estas en ${screenContext.screenName}: ${screenContext.description}",
+            respuesta = "Puedo ayudarte con el uso de KaiShelves. Ahora estás en ${screenContext.screenName}: ${screenContext.description}",
             confidence = 0.62f,
             suggestedAction = action
         )

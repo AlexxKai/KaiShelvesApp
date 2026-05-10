@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.viewmodel
+﻿package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -838,7 +838,7 @@ class AuthViewModel(
                 AuthMessage.EmailAlreadyInUse
             }
 
-            message.contains("nombre de usuario ya esta en uso", ignoreCase = true) ||
+            message.contains("nombre de usuario ya está en uso", ignoreCase = true) ||
                 message.contains("nombre de usuario ya está en uso", ignoreCase = true) ||
                 message.contains("username is already in use", ignoreCase = true) -> {
                 AuthMessage.UsernameAlreadyInUse
@@ -986,7 +986,7 @@ private enum class AuthMessage(
         english = "User registration failed"
     ),
     EmailNotVerified(
-        spanish = "El email todavia no esta verificado",
+        spanish = "El email todavía no está verificado",
         english = "The email is not verified yet"
     ),
     EmailVerificationSent(
@@ -1118,3 +1118,4 @@ private enum class AuthMessage(
         english = "Check your connection and try again"
     )
 }
+

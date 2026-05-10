@@ -851,7 +851,7 @@ fun DeviceLibraryBookInfoDialog(
                     )
                 }
                 Text(
-                    text = "InformaciÃ³n del libro",
+                    text = "Información del libro",
                     style = MaterialTheme.typography.titleLarge,
                     color = OldIvory,
                     fontWeight = FontWeight.SemiBold,
@@ -883,7 +883,7 @@ fun DeviceLibraryBookInfoDialog(
 
                     Column(modifier = Modifier.weight(1f)) {
                         DeviceBookInfoField(
-                            label = "TÃ­tulo del libro",
+                            label = "Título del libro",
                             value = editableTitle,
                             onValueChange = { editableTitle = it },
                             textStyle = MaterialTheme.typography.titleLarge.copy(
@@ -946,7 +946,7 @@ fun DeviceLibraryBookInfoDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 DeviceBookInfoField(
-                    label = "DescripciÃ³n",
+                    label = "Descripción",
                     value = editableDescription,
                     onValueChange = { editableDescription = it },
                     minLines = 6,
@@ -975,7 +975,7 @@ fun DeviceLibraryBookInfoDialog(
                         color = OldIvory
                     )
                     DeviceBookInfoField(
-                        label = "CategorÃ­a (opcional)",
+                        label = "Categoría (opcional)",
                         value = category,
                         onValueChange = { category = it },
                         modifier = Modifier.weight(1f),
@@ -1038,7 +1038,7 @@ fun DeviceLibraryBookInfoDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Hora de importaciÃ³n: $importedAt",
+                    text = "Hora de importación: $importedAt",
                     style = MaterialTheme.typography.bodyMedium,
                     color = OldIvory.copy(alpha = 0.86f),
                     fontWeight = FontWeight.SemiBold
@@ -1239,7 +1239,7 @@ fun DeviceLibraryBookOptionsMenu(
         HorizontalDivider(color = OldIvory.copy(alpha = 0.16f))
 
         DeviceLibraryBookOptionItem(
-            text = "InformaciÃ³n del libro",
+            text = "Información del libro",
             onClick = onShowBookInfo
         )
         DeviceLibraryBookOptionItem(
@@ -1750,5 +1750,6 @@ fun DeviceLibraryMessage(
         }
     }
 }
+
 
 

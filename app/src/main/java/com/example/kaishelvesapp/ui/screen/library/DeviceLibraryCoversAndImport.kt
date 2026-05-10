@@ -346,7 +346,7 @@ fun DefaultCoverScreen(
                 onClick = { albumLauncher.launch("image/*") },
                 modifier = Modifier.border(1.dp, OldIvory.copy(alpha = 0.72f), RoundedCornerShape(2.dp))
             ) {
-                Text(text = "Ãlbum", color = OldIvory)
+                Text(text = "Álbum", color = OldIvory)
             }
             Text(
                 text = backgroundTreeUri?.let { displayedBackgroundPath } ?: "Seleccionar carpeta",
@@ -697,7 +697,7 @@ fun BackgroundImageSearchDialog(
                     }
                     Text(
                         text = selectedImageUrl?.let { "Imagen seleccionada" }
-                            ?: "Consejo: Realice una pulsaciÃ³n larga para seleccionar una imagen",
+                            ?: "Consejo: Realice una pulsación larga para seleccionar una imagen",
                         modifier = if (selectedImageUrl == null) Modifier.fillMaxWidth() else Modifier,
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF5F5F5F),
@@ -772,11 +772,11 @@ fun ImportBooksDialog(
     }
     val categories = remember {
         listOf(
-            "CategorÃ­a (opcional)",
-            "Sin categorÃ­a",
+            "Categoría (opcional)",
+            "Sin categoría",
             "Leyendo",
             "Pendientes",
-            "LeÃ­dos",
+            "Leídos",
             "Favoritos"
         )
     }
@@ -853,7 +853,7 @@ fun ImportBooksDialog(
                     ImportDialogArrowButton(
                         expanded = showAdvancedOptions,
                         onClick = { showAdvancedOptions = !showAdvancedOptions },
-                        contentDescription = "Mostrar opciones de importaciÃ³n"
+                        contentDescription = "Mostrar opciones de importación"
                     )
                 }
 
@@ -897,7 +897,7 @@ fun ImportBooksDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "TamaÃ±o del archivo >",
+                                text = "Tamaño del archivo >",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = OldIvory
                             )
@@ -942,7 +942,7 @@ fun ImportBooksDialog(
                                     ImportDialogArrowButton(
                                         expanded = showCategoryMenu,
                                         onClick = { showCategoryMenu = !showCategoryMenu },
-                                        contentDescription = "Seleccionar categorÃ­a"
+                                        contentDescription = "Seleccionar categoría"
                                     )
                                 }
                                 DropdownMenu(
@@ -1787,4 +1787,5 @@ fun saveDeviceLibraryLayoutMode(context: Context, layoutMode: DeviceLibraryLayou
 fun Set<String>.toggleItem(item: String, checked: Boolean): Set<String> {
     return if (checked) this + item else this - item
 }
+
 

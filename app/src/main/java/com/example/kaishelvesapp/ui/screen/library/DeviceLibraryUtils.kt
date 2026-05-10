@@ -163,6 +163,7 @@ import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
 import java.net.URL
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 fun isPdf(file: DeviceLibraryFile): Boolean {
@@ -192,6 +193,19 @@ data class DeviceBookDisplayMetadata(
     val title: String = "",
     val author: String = "",
     val description: String = ""
+)
+
+data class EpubChapter(
+    val title: String,
+    val text: String,
+    val href: String
+)
+
+data class EpubReaderContent(
+    val metadata: DeviceBookDisplayMetadata = DeviceBookDisplayMetadata(),
+    val chapters: List<EpubChapter> = emptyList(),
+    val imagePaths: List<String> = emptyList(),
+    val coverPath: String? = null
 )
 
 data class DeviceBookUserMetadata(
@@ -348,6 +362,53 @@ fun extractEpubReadingText(context: Context, uri: Uri): String {
     }.getOrDefault("")
 }
 
+fun extractEpubReaderContent(context: Context, uri: Uri): EpubReaderContent? {
+    return runCatching {
+        val entries = readZipEntries(context, uri)
+        val rootFilePath = entries["META-INF/container.xml"]
+            ?.decodeToString()
+            ?.let(::parseRootFilePath)
+            ?: return@runCatching null
+        val opf = entries[rootFilePath]?.decodeToString()
+            ?: return@runCatching null
+        val packageData = parseEpubPackage(opf)
+        val spinePaths = packageData.readingHrefs.map { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
+        val navPath = packageData.navHref?.let { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
+        val tocEntries = buildEpubTocEntries(
+            navPath = navPath,
+            navHtml = navPath?.let { entries[it]?.decodeToString() },
+            ncxPath = packageData.ncxHref?.let { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) },
+            ncxXml = packageData.ncxHref
+                ?.let { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
+                ?.let { path -> entries[path]?.decodeToString() }
+        )
+        val tocTitlesByPath = tocEntries.associate { it.href.substringBefore('#') to it.title }
+        val chapters = spinePaths.mapIndexedNotNull { index, path ->
+            val html = entries[path]?.decodeToString() ?: return@mapIndexedNotNull null
+            val text = stripXmlToText(html)
+            if (text.isBlank()) return@mapIndexedNotNull null
+            EpubChapter(
+                title = tocTitlesByPath[path]
+                    ?: extractHtmlTitle(html)
+                    ?: "Capítulo ${index + 1}",
+                text = text,
+                href = path
+            )
+        }
+        val coverPath = packageData.coverHref?.let { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
+        val imagePaths = packageData.imageHrefs
+            .map { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
+            .distinct()
+
+        EpubReaderContent(
+            metadata = packageData.metadata,
+            chapters = chapters,
+            imagePaths = imagePaths,
+            coverPath = coverPath
+        )
+    }.getOrNull()
+}
+
 fun extractEpubDisplayMetadata(context: Context, uri: Uri): DeviceBookDisplayMetadata? {
     return runCatching {
         val rootFilePath = readZipEntry(context, uri, "META-INF/container.xml")
@@ -374,6 +435,23 @@ fun readZipEntry(context: Context, uri: Uri, targetPath: String): ByteArray? {
         }
     }
     return null
+}
+
+fun readZipEntries(context: Context, uri: Uri): Map<String, ByteArray> {
+    val entries = linkedMapOf<String, ByteArray>()
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        ZipInputStream(input).use { zip ->
+            var entry: ZipEntry? = zip.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    entries[entry.name] = zip.readBytes()
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+    }
+    return entries
 }
 
 fun parseRootFilePath(containerXml: String): String? {
@@ -463,6 +541,99 @@ fun parseEpubReadingPaths(opfXml: String): List<String> {
     return spinePaths.ifEmpty { readableManifestItems.mapNotNull { id -> manifestItems[id] } }
 }
 
+data class EpubPackageData(
+    val metadata: DeviceBookDisplayMetadata,
+    val readingHrefs: List<String>,
+    val imageHrefs: List<String>,
+    val coverHref: String?,
+    val navHref: String?,
+    val ncxHref: String?
+)
+
+private data class EpubTocEntry(
+    val title: String,
+    val href: String
+)
+
+fun parseEpubPackage(opfXml: String): EpubPackageData {
+    val parser = XmlPullParserFactory.newInstance().newPullParser()
+    parser.setInput(opfXml.reader())
+    val metadata = parseEpubDisplayMetadata(opfXml)
+    val manifestItems = linkedMapOf<String, String>()
+    val itemMediaTypes = linkedMapOf<String, String>()
+    val readableManifestItems = linkedSetOf<String>()
+    val imageHrefs = linkedSetOf<String>()
+    val spineIds = mutableListOf<String>()
+    var coverId: String? = null
+    var coverHref: String? = null
+    var fallbackCoverHref: String? = null
+    var navHref: String? = null
+    var ncxId: String? = null
+    var event = parser.eventType
+
+    while (event != XmlPullParser.END_DOCUMENT) {
+        if (event == XmlPullParser.START_TAG) {
+            when (parser.name.substringAfter(':')) {
+                "meta" -> {
+                    if (parser.getAttributeValue(null, "name") == "cover") {
+                        coverId = parser.getAttributeValue(null, "content")
+                    }
+                }
+                "spine" -> {
+                    ncxId = parser.getAttributeValue(null, "toc")
+                }
+                "item" -> {
+                    val id = parser.getAttributeValue(null, "id").orEmpty()
+                    val href = parser.getAttributeValue(null, "href").orEmpty()
+                    val mediaType = parser.getAttributeValue(null, "media-type").orEmpty()
+                    val properties = parser.getAttributeValue(null, "properties").orEmpty()
+                    if (id.isNotBlank() && href.isNotBlank()) {
+                        manifestItems[id] = href
+                        itemMediaTypes[id] = mediaType
+                        if (mediaType == "application/xhtml+xml" || mediaType == "text/html") {
+                            readableManifestItems.add(id)
+                        }
+                        if (mediaType.startsWith("image/")) {
+                            imageHrefs.add(href)
+                            if (fallbackCoverHref == null && id.contains("cover", ignoreCase = true)) {
+                                fallbackCoverHref = href
+                            }
+                        }
+                        if (properties.split(' ').contains("cover-image")) {
+                            coverHref = href
+                        }
+                        if (properties.split(' ').contains("nav")) {
+                            navHref = href
+                        }
+                    }
+                }
+                "itemref" -> {
+                    val idRef = parser.getAttributeValue(null, "idref").orEmpty()
+                    if (idRef.isNotBlank()) spineIds.add(idRef)
+                }
+            }
+        }
+        event = parser.next()
+    }
+
+    val readingHrefs = spineIds.mapNotNull { id -> manifestItems[id] }
+        .ifEmpty { readableManifestItems.mapNotNull { id -> manifestItems[id] } }
+    val ncxHref = ncxId?.let(manifestItems::get)
+        ?: manifestItems.entries.firstOrNull { (_, href) -> href.endsWith(".ncx", ignoreCase = true) }?.value
+        ?: itemMediaTypes.entries.firstOrNull { (_, mediaType) -> mediaType == "application/x-dtbncx+xml" }
+            ?.key
+            ?.let(manifestItems::get)
+
+    return EpubPackageData(
+        metadata = metadata,
+        readingHrefs = readingHrefs,
+        imageHrefs = imageHrefs.toList(),
+        coverHref = coverHref ?: coverId?.let(manifestItems::get) ?: fallbackCoverHref,
+        navHref = navHref,
+        ncxHref = ncxHref
+    )
+}
+
 fun parseEpubDisplayMetadata(opfXml: String): DeviceBookDisplayMetadata {
     val parser = XmlPullParserFactory.newInstance().newPullParser()
     parser.setInput(opfXml.reader())
@@ -503,6 +674,81 @@ fun parseEpubDisplayMetadata(opfXml: String): DeviceBookDisplayMetadata {
             .replace(Regex("\\s+"), " ")
             .trim()
     )
+}
+
+private fun buildEpubTocEntries(
+    navPath: String?,
+    navHtml: String?,
+    ncxPath: String?,
+    ncxXml: String?
+): List<EpubTocEntry> {
+    val navEntries = navPath
+        ?.takeIf { !navHtml.isNullOrBlank() }
+        ?.let { path -> parseEpubNavEntries(path, navHtml.orEmpty()) }
+        .orEmpty()
+    if (navEntries.isNotEmpty()) return navEntries
+
+    val ncxEntries = ncxPath
+        ?.takeIf { !ncxXml.isNullOrBlank() }
+        ?.let { path -> parseEpubNcxEntries(path, ncxXml.orEmpty()) }
+        .orEmpty()
+    if (ncxEntries.isNotEmpty()) return ncxEntries
+
+    return emptyList()
+}
+
+private fun parseEpubNavEntries(navPath: String, navHtml: String): List<EpubTocEntry> {
+    val linkRegex = Regex("""(?is)<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)</a>""")
+    return linkRegex.findAll(navHtml)
+        .mapNotNull { match ->
+            val href = match.groupValues[1].substringBefore('#')
+            val title = stripXmlToText(match.groupValues[2]).ifBlank { return@mapNotNull null }
+            val resolvedHref = resolveZipPath(navPath, decodeEpubHref(href))
+            EpubTocEntry(title = title, href = resolvedHref)
+        }
+        .distinctBy { it.href }
+        .toList()
+}
+
+private fun parseEpubNcxEntries(ncxPath: String, ncxXml: String): List<EpubTocEntry> {
+    val navPointRegex = Regex("""(?is)<navPoint\b.*?</navPoint>""")
+    val textRegex = Regex("""(?is)<text\b[^>]*>(.*?)</text>""")
+    val srcRegex = Regex("""(?is)<content\b[^>]*src\s*=\s*["']([^"']+)["']""")
+    return navPointRegex.findAll(ncxXml)
+        .mapNotNull { match ->
+            val block = match.value
+            val title = textRegex.find(block)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.let(::stripXmlToText)
+                ?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val href = srcRegex.find(block)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.substringBefore('#')
+                ?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            EpubTocEntry(title = title, href = resolveZipPath(ncxPath, decodeEpubHref(href)))
+        }
+        .distinctBy { it.href }
+        .toList()
+}
+
+fun extractHtmlTitle(html: String): String? {
+    val titleTags = listOf("h1", "h2", "h3", "title")
+    return titleTags.firstNotNullOfOrNull { tag ->
+        Regex("(?is)<$tag\\b[^>]*>(.*?)</$tag>")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let(::stripXmlToText)
+            ?.takeIf { it.isNotBlank() }
+    }
+}
+
+private fun decodeEpubHref(href: String): String {
+    return runCatching { URLDecoder.decode(href, "UTF-8") }.getOrDefault(href)
 }
 
 fun resolveZipPath(rootFilePath: String, href: String): String {

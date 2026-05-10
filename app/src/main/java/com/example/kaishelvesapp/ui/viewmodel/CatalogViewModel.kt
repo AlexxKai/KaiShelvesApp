@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.viewmodel
+﻿package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -205,3 +205,4 @@ class CatalogViewModel(
         }
     }
 }
+
