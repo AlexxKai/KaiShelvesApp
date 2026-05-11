@@ -1,6 +1,11 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
 import android.content.Context
+import android.view.MotionEvent
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -30,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -44,6 +50,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
 @Composable
@@ -87,14 +94,33 @@ data class ReaderEngineDocument(
     val title: String,
     val subtitle: String,
     val pages: List<String>,
+    val pageTitles: List<String?> = emptyList(),
+    val pageKinds: List<ReaderSourcePageKind> = emptyList(),
+    val epubPages: List<ReaderEpubPage> = emptyList(),
+    val epubResources: Map<String, ByteArray> = emptyMap(),
     val chapters: List<ReaderChapter> = emptyList(),
     val imageLabels: List<String> = emptyList(),
     val coverPath: String? = null
 )
 
+data class ReaderEpubPage(
+    val title: String,
+    val href: String,
+    val html: String
+)
+
+enum class ReaderSourcePageKind {
+    Body,
+    Cover,
+    Synopsis,
+    Chapter
+}
+
 data class ReaderChapter(
     val title: String,
-    val sourceIndex: Int
+    val sourceIndex: Int,
+    val level: Int = 0,
+    val groupTitle: String? = null
 )
 
 private sealed interface ReaderEngineLoadState {
@@ -121,7 +147,12 @@ private suspend fun loadReaderEngineDocument(
     when (engineKind) {
         ReaderEngineKind.Epub -> {
             val epubContent = extractEpubReaderContent(context, file.uri) ?: return@withContext null
-            buildEpubEngineDocument(file, epubContent)
+            buildEpubEngineDocument(
+                file = file,
+                epubContent = epubContent,
+                fallbackChapterTitle = { index -> context.getString(R.string.reader_fallback_chapter, index + 1) },
+                synopsisTitle = context.getString(R.string.reader_synopsis)
+            )
         }
         ReaderEngineKind.Txt -> {
             val text = readPlainTextFile(context, file.uri).orEmpty()
@@ -143,22 +174,61 @@ enum class PdfReaderScrollOrientation {
 
 private fun buildEpubEngineDocument(
     file: DeviceLibraryFile,
-    epubContent: EpubReaderContent
+    epubContent: EpubReaderContent,
+    fallbackChapterTitle: (Int) -> String,
+    synopsisTitle: String
 ): ReaderEngineDocument? {
-    val pages = epubContent.chapters
-        .map { chapter -> chapter.text.replace(Regex("\\s+"), " ").trim() }
-        .filter { it.isNotBlank() }
+    val sourcePages = mutableListOf<String>()
+    val pageTitles = mutableListOf<String?>()
+    val pageKinds = mutableListOf<ReaderSourcePageKind>()
+    val readerChapters = mutableListOf<ReaderChapter>()
+    val bookTitle = epubContent.metadata.title.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.')
+    val bookAuthor = epubContent.metadata.author.takeIf { it.isNotBlank() }.orEmpty()
+    val webPageIndicesByHref = epubContent.webPages.mapIndexed { index, page -> page.href to index }.toMap()
+
+    if (epubContent.coverPath != null) {
+        sourcePages += listOf(bookTitle, bookAuthor).filter { it.isNotBlank() }.joinToString("\n").ifBlank { bookTitle }
+        pageTitles += bookTitle
+        pageKinds += ReaderSourcePageKind.Cover
+    }
+    if (epubContent.metadata.description.isNotBlank()) {
+        sourcePages += epubContent.metadata.description
+        pageTitles += synopsisTitle
+        pageKinds += ReaderSourcePageKind.Synopsis
+    }
+    epubContent.chapters.forEachIndexed { index, chapter ->
+        val title = chapter.title.takeIf { it.isNotBlank() } ?: fallbackChapterTitle(index)
+        val body = chapter.text.trim().withoutLeadingTitle(title)
+        if (body.isNotBlank()) {
+            val sourceIndex = sourcePages.size
+            sourcePages += body
+            pageTitles += title
+            pageKinds += ReaderSourcePageKind.Chapter
+            readerChapters += ReaderChapter(
+                title = title,
+                sourceIndex = webPageIndicesByHref[chapter.href] ?: sourceIndex,
+                level = chapter.level,
+                groupTitle = chapter.parentTitle
+            )
+        }
+    }
+    val pages = sourcePages.filter { it.isNotBlank() }
     if (pages.isEmpty()) return null
     return ReaderEngineDocument(
-        title = epubContent.metadata.title.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.'),
-        subtitle = epubContent.metadata.author.takeIf { it.isNotBlank() } ?: readableFileType(file),
+        title = bookTitle,
+        subtitle = bookAuthor.ifBlank { readableFileType(file) },
         pages = pages,
-        chapters = epubContent.chapters.mapIndexed { index, chapter ->
-            ReaderChapter(
-                title = chapter.title.takeIf { it.isNotBlank() } ?: "Capítulo ${index + 1}",
-                sourceIndex = index
+        pageTitles = pageTitles,
+        pageKinds = pageKinds,
+        epubPages = epubContent.webPages.map { page ->
+            ReaderEpubPage(
+                title = page.title,
+                href = page.href,
+                html = page.html
             )
         },
+        epubResources = epubContent.resources,
+        chapters = readerChapters,
         imageLabels = epubContent.imagePaths.map { path -> path.substringAfterLast('/') },
         coverPath = epubContent.coverPath
     )
@@ -170,13 +240,150 @@ private fun buildTextEngineDocument(
     metadata: DeviceBookDisplayMetadata?,
     text: String
 ): ReaderEngineDocument? {
-    val cleanText = text.replace(Regex("\\s+"), " ").trim()
+    val cleanText = text
+        .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
+        .replace(Regex(" *\\n *"), "\n")
+        .replace(Regex("\\n{3,}"), "\n\n")
+        .trim()
     if (cleanText.isBlank()) return null
     return ReaderEngineDocument(
         title = metadata?.title?.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.'),
         subtitle = metadata?.author?.takeIf { it.isNotBlank() } ?: subtitle,
-        pages = listOf(cleanText)
+        pages = listOf(cleanText),
+        pageKinds = listOf(ReaderSourcePageKind.Body)
     )
+}
+
+private fun String.withoutLeadingTitle(title: String): String {
+    val trimmedText = trimStart()
+    val trimmedTitle = title.trim()
+    if (trimmedTitle.isBlank()) return trimmedText
+    return if (trimmedText.startsWith(trimmedTitle, ignoreCase = true)) {
+        trimmedText.drop(trimmedTitle.length).trimStart('\n', ' ', '\t')
+    } else {
+        trimmedText
+    }
+}
+
+@Composable
+private fun EpubWebReaderPage(
+    page: ReaderEpubPage,
+    resources: Map<String, ByteArray>,
+    textSizePercent: Int,
+    onVisibleTextChanged: (String) -> Unit,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    onCenterTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AndroidView(
+        modifier = modifier.background(Color(0xFF202006)),
+        factory = { viewContext ->
+            WebView(viewContext).apply {
+                setBackgroundColor(android.graphics.Color.rgb(32, 32, 6))
+                settings.javaScriptEnabled = false
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                webViewClient = EpubResourceWebViewClient(resources)
+                var downX = 0f
+                var downY = 0f
+                setOnTouchListener { view, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            downX = event.x
+                            downY = event.y
+                            false
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            val movedX = kotlin.math.abs(event.x - downX)
+                            val movedY = kotlin.math.abs(event.y - downY)
+                            if (movedX < 18f && movedY < 18f) {
+                                val width = view.width.toFloat().coerceAtLeast(1f)
+                                when {
+                                    event.x < width * 0.24f -> {
+                                        onPreviousPage()
+                                        true
+                                    }
+                                    event.x > width * 0.76f -> {
+                                        onNextPage()
+                                        true
+                                    }
+                                    else -> {
+                                        onCenterTap()
+                                        true
+                                    }
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                        else -> false
+                    }
+                }
+            }
+        },
+        update = { webView ->
+            val fontScale = readerPdfZoomPercentToScale(textSizePercent)
+            webView.settings.textZoom = (fontScale * 100).roundToInt().coerceIn(70, 220)
+            if (webView.tag != page.href) {
+                webView.tag = page.href
+                onVisibleTextChanged(page.title)
+                webView.loadDataWithBaseURL(
+                    page.epubBaseUrl(),
+                    page.html,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        }
+    )
+}
+
+private class EpubResourceWebViewClient(
+    private val resources: Map<String, ByteArray>
+) : WebViewClient() {
+    override fun shouldInterceptRequest(
+        view: WebView?,
+        request: WebResourceRequest?
+    ): WebResourceResponse? {
+        val uri = request?.url ?: return null
+        if (uri.host != EPUB_WEB_HOST) return null
+        val path = uri.path.orEmpty().trimStart('/')
+        val bytes = resources[path] ?: return null
+        return WebResourceResponse(
+            path.epubMimeType(),
+            if (path.epubMimeType().startsWith("text/") || path.endsWith(".xhtml")) "UTF-8" else null,
+            ByteArrayInputStream(bytes)
+        )
+    }
+}
+
+private const val EPUB_WEB_HOST = "kai-epub.local"
+
+private fun ReaderEpubPage.epubBaseUrl(): String {
+    val directory = href.substringBeforeLast('/', missingDelimiterValue = "")
+    return if (directory.isBlank()) {
+        "https://$EPUB_WEB_HOST/"
+    } else {
+        "https://$EPUB_WEB_HOST/$directory/"
+    }
+}
+
+private fun String.epubMimeType(): String {
+    return when (substringAfterLast('.', "").lowercase()) {
+        "css" -> "text/css"
+        "xhtml", "html", "htm" -> "application/xhtml+xml"
+        "jpg", "jpeg" -> "image/jpeg"
+        "png" -> "image/png"
+        "gif" -> "image/gif"
+        "svg" -> "image/svg+xml"
+        "webp" -> "image/webp"
+        else -> "application/octet-stream"
+    }
 }
 
 @Composable
@@ -254,6 +461,12 @@ private fun ReflowBookReader(
             LaunchedEffect(logicalPageCount) {
                 currentPage = currentPage.coerceIn(0, logicalPageCount.coerceAtLeast(1) - 1)
             }
+            LaunchedEffect(engineKind, loadedDocument.epubPages.size) {
+                if (engineKind == ReaderEngineKind.Epub && loadedDocument.epubPages.isNotEmpty()) {
+                    logicalPageCount = loadedDocument.epubPages.size
+                    sourcePageStartPages = loadedDocument.epubPages.indices.toList().ifEmpty { listOf(0) }
+                }
+            }
             LaunchedEffect(textSizePercent) {
                 saveReaderTextSizePercent(context, textSizePercent)
             }
@@ -320,52 +533,68 @@ private fun ReflowBookReader(
                         .fillMaxSize()
                         .background(Color.Black)
                 ) {
-                    ReflowTextReaderPage(
-                        sourcePages = loadedDocument.pages,
-                        pageIndex = currentPage,
-                        textSizePercent = textSizePercent,
-                        onPageCountChanged = { count -> logicalPageCount = count.coerceAtLeast(1) },
-                        onSourcePageStartPagesChanged = { starts -> sourcePageStartPages = starts.ifEmpty { listOf(0) } },
-                        onVisibleTextChanged = { visiblePageText = it },
-                        onSelectedTextChanged = { selectedText = it },
-                        onPageChanged = { page -> currentPage = page.coerceIn(0, logicalPageCount - 1) },
-                        onPreviousPage = { currentPage = (currentPage - 1).coerceAtLeast(0) },
-                        onNextPage = { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) },
-                        onCenterTap = { controlsVisible = true },
-                        highlights = annotations.filter { it.type == DeviceReaderAnnotationType.Highlight },
-                        onHighlightSelection = { selection, highlightColor ->
-                            annotationRepository.addAnnotation(
-                                file = file,
-                                annotation = DeviceReaderAnnotation(
-                                    type = DeviceReaderAnnotationType.Highlight,
-                                    page = currentPage,
-                                    pageCount = logicalPageCount,
-                                    sourcePage = selection.sourcePage,
-                                    selectionStart = selection.start,
-                                    selectionEnd = selection.end,
-                                    selectedText = selection.text.take(READER_ANNOTATION_TEXT_LIMIT),
-                                    color = highlightColor
+                    if (engineKind == ReaderEngineKind.Epub && loadedDocument.epubPages.isNotEmpty()) {
+                        EpubWebReaderPage(
+                            page = loadedDocument.epubPages[currentPage.coerceIn(0, loadedDocument.epubPages.lastIndex)],
+                            resources = loadedDocument.epubResources,
+                            textSizePercent = textSizePercent,
+                            onVisibleTextChanged = { visiblePageText = it },
+                            onPreviousPage = { currentPage = (currentPage - 1).coerceAtLeast(0) },
+                            onNextPage = { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) },
+                            onCenterTap = { controlsVisible = true },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        ReflowTextReaderPage(
+                            file = file,
+                            sourcePages = loadedDocument.pages,
+                            sourcePageTitles = loadedDocument.pageTitles,
+                            sourcePageKinds = loadedDocument.pageKinds,
+                            pageIndex = currentPage,
+                            textSizePercent = textSizePercent,
+                            onPageCountChanged = { count -> logicalPageCount = count.coerceAtLeast(1) },
+                            onSourcePageStartPagesChanged = { starts -> sourcePageStartPages = starts.ifEmpty { listOf(0) } },
+                            onVisibleTextChanged = { visiblePageText = it },
+                            onSelectedTextChanged = { selectedText = it },
+                            onPageChanged = { page -> currentPage = page.coerceIn(0, logicalPageCount - 1) },
+                            onPreviousPage = { currentPage = (currentPage - 1).coerceAtLeast(0) },
+                            onNextPage = { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) },
+                            onCenterTap = { controlsVisible = true },
+                            highlights = annotations.filter { it.type == DeviceReaderAnnotationType.Highlight },
+                            onHighlightSelection = { selection, highlightColor ->
+                                annotationRepository.addAnnotation(
+                                    file = file,
+                                    annotation = DeviceReaderAnnotation(
+                                        type = DeviceReaderAnnotationType.Highlight,
+                                        page = currentPage,
+                                        pageCount = logicalPageCount,
+                                        sourcePage = selection.sourcePage,
+                                        selectionStart = selection.start,
+                                        selectionEnd = selection.end,
+                                        selectedText = selection.text.take(READER_ANNOTATION_TEXT_LIMIT),
+                                        color = highlightColor
+                                    )
                                 )
-                            )
-                            annotations = annotationRepository.getAnnotations(file)
-                        },
-                        onHighlightUpdate = { annotation, highlightColor ->
-                            annotationRepository.updateAnnotation(
-                                file = file,
-                                annotation = annotation.copy(color = highlightColor)
-                            )
-                            annotations = annotationRepository.getAnnotations(file)
-                        },
-                        onHighlightDelete = { annotation ->
-                            annotationRepository.deleteAnnotation(file, annotation.id)
-                            annotations = annotationRepository.getAnnotations(file)
-                        },
-                        onNoteSelection = { noteText ->
-                            selectedText = noteText.take(READER_ANNOTATION_TEXT_LIMIT)
-                            showNoteDialog = true
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                                annotations = annotationRepository.getAnnotations(file)
+                            },
+                            onHighlightUpdate = { annotation, highlightColor ->
+                                annotationRepository.updateAnnotation(
+                                    file = file,
+                                    annotation = annotation.copy(color = highlightColor)
+                                )
+                                annotations = annotationRepository.getAnnotations(file)
+                            },
+                            onHighlightDelete = { annotation ->
+                                annotationRepository.deleteAnnotation(file, annotation.id)
+                                annotations = annotationRepository.getAnnotations(file)
+                            },
+                            onNoteSelection = { noteText ->
+                                selectedText = noteText.take(READER_ANNOTATION_TEXT_LIMIT)
+                                showNoteDialog = true
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
                     if (blueLightFilterEnabled && blueLightOpacity > 0) {
                         Box(

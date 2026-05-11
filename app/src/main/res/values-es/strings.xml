@@ -174,6 +174,8 @@
     <string name="reader_tab_images">Imágenes</string>
     <string name="reader_settings">Ajustes</string>
     <string name="reader_cover">Cubierta</string>
+    <string name="reader_synopsis">Sinopsis</string>
+    <string name="reader_fallback_chapter">Capítulo %1$d</string>
     <string name="reader_no_chapters">No hay capítulos detectados en este libro.</string>
     <string name="reader_no_bookmark">No hay marcador de página</string>
     <string name="reader_add_bookmark_hint">Toca agregar nuevo para guardar la página actual.</string>

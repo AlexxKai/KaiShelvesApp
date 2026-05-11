@@ -198,12 +198,22 @@ data class DeviceBookDisplayMetadata(
 data class EpubChapter(
     val title: String,
     val text: String,
-    val href: String
+    val href: String,
+    val level: Int = 0,
+    val parentTitle: String? = null
+)
+
+data class EpubWebPage(
+    val title: String,
+    val href: String,
+    val html: String
 )
 
 data class EpubReaderContent(
     val metadata: DeviceBookDisplayMetadata = DeviceBookDisplayMetadata(),
     val chapters: List<EpubChapter> = emptyList(),
+    val webPages: List<EpubWebPage> = emptyList(),
+    val resources: Map<String, ByteArray> = emptyMap(),
     val imagePaths: List<String> = emptyList(),
     val coverPath: String? = null
 )
@@ -383,16 +393,31 @@ fun extractEpubReaderContent(context: Context, uri: Uri): EpubReaderContent? {
                 ?.let { path -> entries[path]?.decodeToString() }
         )
         val tocTitlesByPath = tocEntries.associate { it.href.substringBefore('#') to it.title }
+        val tocParentsByPath = tocEntries.parentTitlesByPath()
         val chapters = spinePaths.mapIndexedNotNull { index, path ->
             val html = entries[path]?.decodeToString() ?: return@mapIndexedNotNull null
             val text = stripXmlToText(html)
             if (text.isBlank()) return@mapIndexedNotNull null
+            val tocEntry = tocEntries.firstOrNull { it.href.substringBefore('#') == path }
             EpubChapter(
                 title = tocTitlesByPath[path]
                     ?: extractHtmlTitle(html)
-                    ?: "Capítulo ${index + 1}",
+                    ?: "",
                 text = text,
-                href = path
+                href = path,
+                level = tocEntry?.level ?: 0,
+                parentTitle = tocParentsByPath[path]
+            )
+        }
+        val webPages = spinePaths.mapIndexedNotNull { index, path ->
+            val html = entries[path]?.decodeToString() ?: return@mapIndexedNotNull null
+            EpubWebPage(
+                title = tocTitlesByPath[path]
+                    ?: extractHtmlTitle(html)
+                    ?: packageData.metadata.title.takeIf { index == 0 && it.isNotBlank() }
+                    ?: "",
+                href = path,
+                html = html.withKaiReaderViewport()
             )
         }
         val coverPath = packageData.coverHref?.let { href -> resolveZipPath(rootFilePath, decodeEpubHref(href)) }
@@ -403,6 +428,8 @@ fun extractEpubReaderContent(context: Context, uri: Uri): EpubReaderContent? {
         EpubReaderContent(
             metadata = packageData.metadata,
             chapters = chapters,
+            webPages = webPages,
+            resources = entries,
             imagePaths = imagePaths,
             coverPath = coverPath
         )
@@ -552,7 +579,8 @@ data class EpubPackageData(
 
 private data class EpubTocEntry(
     val title: String,
-    val href: String
+    val href: String,
+    val level: Int = 0
 )
 
 fun parseEpubPackage(opfXml: String): EpubPackageData {
@@ -669,8 +697,7 @@ fun parseEpubDisplayMetadata(opfXml: String): DeviceBookDisplayMetadata {
     return DeviceBookDisplayMetadata(
         title = title,
         author = author,
-        description = description
-            .replace(Regex("<[^>]+>"), " ")
+        description = stripXmlToText(description)
             .replace(Regex("\\s+"), " ")
             .trim()
     )
@@ -704,9 +731,9 @@ private fun parseEpubNavEntries(navPath: String, navHtml: String): List<EpubTocE
             val href = match.groupValues[1].substringBefore('#')
             val title = stripXmlToText(match.groupValues[2]).ifBlank { return@mapNotNull null }
             val resolvedHref = resolveZipPath(navPath, decodeEpubHref(href))
-            EpubTocEntry(title = title, href = resolvedHref)
+            EpubTocEntry(title = title, href = resolvedHref, level = navLevelBefore(navHtml, match.range.first))
         }
-        .distinctBy { it.href }
+        .distinctBy { it.href to it.level }
         .toList()
 }
 
@@ -733,6 +760,31 @@ private fun parseEpubNcxEntries(ncxPath: String, ncxXml: String): List<EpubTocEn
         }
         .distinctBy { it.href }
         .toList()
+}
+
+private fun navLevelBefore(navHtml: String, index: Int): Int {
+    val prefix = navHtml.take(index)
+    val openedLists = Regex("""(?is)<(ol|ul)\b""").findAll(prefix).count()
+    val closedLists = Regex("""(?is)</(ol|ul)>""").findAll(prefix).count()
+    return (openedLists - closedLists - 1).coerceAtLeast(0)
+}
+
+private fun List<EpubTocEntry>.parentTitlesByPath(): Map<String, String> {
+    val parentsByLevel = linkedMapOf<Int, String>()
+    val parentsByPath = linkedMapOf<String, String>()
+    forEach { entry ->
+        parentsByLevel.keys.filter { it >= entry.level }.forEach(parentsByLevel::remove)
+        if (entry.level == 0) {
+            parentsByLevel[entry.level] = entry.title
+        } else {
+            val parentTitle = parentsByLevel.entries.lastOrNull { it.key < entry.level }?.value
+            if (!parentTitle.isNullOrBlank()) {
+                parentsByPath[entry.href.substringBefore('#')] = parentTitle
+            }
+            parentsByLevel[entry.level] = entry.title
+        }
+    }
+    return parentsByPath
 }
 
 fun extractHtmlTitle(html: String): String? {
@@ -776,17 +828,72 @@ fun readPlainTextFile(context: Context, uri: Uri): String? {
 fun stripXmlToText(raw: String): String {
     return raw
         .replace(Regex("(?is)<(script|style).*?</\\1>"), " ")
-        .replace(Regex("(?i)</(p|div|br|h[1-6]|li|section|chapter)>"), "\n")
+        .replace(Regex("(?is)<img\\b[^>]*>")) { match -> imageTagText(match.value) }
+        .replace(Regex("(?i)<br\\s*/?>"), "\n")
+        .replace(Regex("(?i)<li\\b[^>]*>"), "\n• ")
+        .replace(Regex("(?i)</(p|div|h[1-6]|li|section|chapter|blockquote|tr)>"), "\n")
+        .replace(Regex("(?i)<(p|div|h[1-6]|li|section|chapter|blockquote|tr)\\b[^>]*>"), "\n")
         .replace(Regex("(?s)<[^>]+>"), " ")
         .replace("&nbsp;", " ")
+        .replace("&ndash;", "–")
+        .replace("&mdash;", "—")
+        .replace("&hellip;", "…")
+        .replace("&laquo;", "«")
+        .replace("&raquo;", "»")
+        .replace("&ldquo;", "“")
+        .replace("&rdquo;", "”")
+        .replace("&lsquo;", "‘")
+        .replace("&rsquo;", "’")
         .replace("&amp;", "&")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
+        .replace(Regex("""&#(\d+);""")) { match ->
+            match.groupValues[1].toIntOrNull()?.let { code -> code.toChar().toString() } ?: match.value
+        }
+        .replace(Regex("""&#x([0-9a-fA-F]+);""")) { match ->
+            match.groupValues[1].toIntOrNull(16)?.let { code -> code.toChar().toString() } ?: match.value
+        }
         .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
-        .replace(Regex("\\n\\s+"), "\n")
+        .replace(Regex(" *\\n *"), "\n")
         .replace(Regex("\\n{3,}"), "\n\n")
         .trim()
+}
+
+private fun imageTagText(tag: String): String {
+    val alt = tag.attributeValue("alt").takeIf { it.isNotBlank() }
+    val title = tag.attributeValue("title").takeIf { it.isNotBlank() }
+    val srcName = tag.attributeValue("src")
+        .substringBefore('#')
+        .substringAfterLast('/')
+        .takeIf { it.isNotBlank() }
+    return "\n${alt ?: title ?: srcName.orEmpty()}\n"
+}
+
+private fun String.withKaiReaderViewport(): String {
+    val viewport = """<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />"""
+    val readerCss = """
+        <style type="text/css">
+        html, body { background:#202006; color:#d4d0b8; }
+        body { padding: 0.4em 0.75em 2.2em; }
+        img { max-width:100%; height:auto; }
+        .cubierta img { width:100%; height:auto; max-height:88vh; object-fit:contain; }
+        </style>
+    """.trimIndent()
+    return if (contains("</head>", ignoreCase = true)) {
+        replace(Regex("(?i)</head>"), "$viewport\n$readerCss\n</head>")
+    } else {
+        "$viewport\n$readerCss\n$this"
+    }
+}
+
+private fun String.attributeValue(name: String): String {
+    val regex = Regex("""(?is)\b$name\s*=\s*["']([^"']*)["']""")
+    return regex.find(this)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.let(::stripXmlToText)
+        .orEmpty()
 }
 

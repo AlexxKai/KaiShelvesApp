@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Image as ImageIcon
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -46,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
@@ -367,6 +369,8 @@ fun ReflowReaderChaptersTab(
     onPageSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var expandedGroups by remember(document.chapters) { mutableStateOf(emptySet<String>()) }
+    val chapterGroups = remember(document.chapters) { document.chapters.toReaderChapterGroups() }
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
@@ -402,24 +406,131 @@ fun ReflowReaderChaptersTab(
                     modifier = Modifier.padding(start = 18.dp, top = 12.dp)
                 )
             }
-        } else {
+        } else if (chapterGroups.isEmpty()) {
             items(document.chapters) { chapter ->
-                val targetPage = sourcePageStartPages
-                    .getOrNull(chapter.sourceIndex)
-                    ?.coerceAtLeast(0)
-                    ?: 0
-                Text(
-                    text = chapter.title,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPageSelected(targetPage) }
-                        .padding(start = 18.dp, top = 8.dp, bottom = 8.dp)
+                ReflowChapterRow(
+                    chapter = chapter,
+                    sourcePageStartPages = sourcePageStartPages,
+                    onPageSelected = onPageSelected
                 )
+            }
+        } else {
+            chapterGroups.forEach { group ->
+                if (group.title == null) {
+                    items(group.chapters) { chapter ->
+                        ReflowChapterRow(
+                            chapter = chapter,
+                            sourcePageStartPages = sourcePageStartPages,
+                            onPageSelected = onPageSelected
+                        )
+                    }
+                } else {
+                    item(key = "group_${group.title}") {
+                        val expanded = group.title in expandedGroups
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    expandedGroups = if (expanded) {
+                                        expandedGroups - group.title
+                                    } else {
+                                        expandedGroups + group.title
+                                    }
+                                }
+                                .padding(top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (expanded) {
+                                    Icons.Filled.KeyboardArrowDown
+                                } else {
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                },
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = group.title,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    if (group.title in expandedGroups) {
+                        items(group.chapters) { chapter ->
+                            ReflowChapterRow(
+                                chapter = chapter,
+                                sourcePageStartPages = sourcePageStartPages,
+                                onPageSelected = onPageSelected,
+                                indent = 34.dp
+                            )
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+private data class ReaderChapterGroup(
+    val title: String?,
+    val chapters: List<ReaderChapter>
+)
+
+private fun List<ReaderChapter>.toReaderChapterGroups(): List<ReaderChapterGroup> {
+    if (none { !it.groupTitle.isNullOrBlank() }) return emptyList()
+    val groups = mutableListOf<ReaderChapterGroup>()
+    val ungrouped = mutableListOf<ReaderChapter>()
+    forEach { chapter ->
+        val groupTitle = chapter.groupTitle?.takeIf { it.isNotBlank() }
+        if (groupTitle == null) {
+            ungrouped += chapter
+        } else {
+            if (ungrouped.isNotEmpty()) {
+                groups += ReaderChapterGroup(title = null, chapters = ungrouped.toList())
+                ungrouped.clear()
+            }
+            val lastGroup = groups.lastOrNull()
+            if (lastGroup?.title == groupTitle) {
+                groups[groups.lastIndex] = lastGroup.copy(chapters = lastGroup.chapters + chapter)
+            } else {
+                groups += ReaderChapterGroup(title = groupTitle, chapters = listOf(chapter))
+            }
+        }
+    }
+    if (ungrouped.isNotEmpty()) {
+        groups += ReaderChapterGroup(title = null, chapters = ungrouped.toList())
+    }
+    return groups
+}
+
+@Composable
+private fun ReflowChapterRow(
+    chapter: ReaderChapter,
+    sourcePageStartPages: List<Int>,
+    onPageSelected: (Int) -> Unit,
+    indent: androidx.compose.ui.unit.Dp = 18.dp
+) {
+    val targetPage = sourcePageStartPages
+        .getOrNull(chapter.sourceIndex)
+        ?.coerceAtLeast(0)
+        ?: 0
+    Text(
+        text = chapter.title,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.White,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPageSelected(targetPage) }
+            .padding(start = indent, top = 8.dp, bottom = 8.dp)
+    )
 }
 
 @Composable

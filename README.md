@@ -36,15 +36,15 @@ El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Apli
 ## Capturas
 
 Las capturas todavía no están versionadas en el repositorio. Se recomienda añadir imágenes reales de la app en las siguientes rutas:
-
-| Pantalla | Placeholder |
-| --- | --- |
-| Inicio / actividad | `docs/images/home.png` |
-| Catálogo / descubrir | `docs/images/catalog.png` |
-| Detalle de libro | `docs/images/detail.png` |
-| Mis libros / listas | `docs/images/lists.png` |
-| Biblioteca local | `docs/images/device-library.png` |
-| Perfil y privacidad | `docs/images/profile.png` |
+    
+    | Pantalla | Placeholder |
+    | --- | --- |
+    | Inicio / actividad | `docs/images/home.png` |
+    | Catálogo / descubrir | `docs/images/catalog.png` |
+    | Detalle de libro | `docs/images/detail.png` |
+    | Mis libros / listas | `docs/images/lists.png` |
+    | Biblioteca local | `docs/images/device-library.png` |
+    | Perfil y privacidad | `docs/images/profile.png` |
 
 ## Características principales
 
@@ -80,23 +80,23 @@ Las capturas todavía no están versionadas en el repositorio. Se recomienda añ
 
 ## Stack tecnológico
 
-| Área | Tecnología |
-| --- | --- |
-| Lenguaje | Kotlin 2.2.0 |
-| UI | Jetpack Compose, Material 3 |
-| Navegación | Navigation Compose |
-| Arquitectura | MVVM, Repository Pattern, StateFlow |
-| Asincronía | Kotlin Coroutines |
-| Backend / datos remotos | Firebase Authentication, Firebase Firestore |
-| APIs externas | Google Books API, Groq API |
-| Red | Retrofit 3, Gson Converter, OkHttp, Logging Interceptor |
-| Imágenes | Coil 3 |
-| Login Google | AndroidX Credentials, Google ID |
-| Biblioteca local | Storage Access Framework, `DocumentsContract` |
-| Lectura local | `PdfDocument`, `PdfRenderer`, EPUB/TXT nativos y adaptador textual FB2 |
-| ML / idioma | ML Kit Language ID, ML Kit Translate |
-| Escaneo | ZXing Android Embedded |
-| Testing declarado | JUnit, AndroidX Test, Espresso, Compose UI Test |
+    | Área | Tecnología |
+    | --- | --- |
+    | Lenguaje | Kotlin 2.2.0 |
+    | UI | Jetpack Compose, Material 3 |
+    | Navegación | Navigation Compose |
+    | Arquitectura | MVVM, Repository Pattern, StateFlow |
+    | Asincronía | Kotlin Coroutines |
+    | Backend / datos remotos | Firebase Authentication, Firebase Firestore |
+    | APIs externas | Google Books API, Groq API |
+    | Red | Retrofit 3, Gson Converter, OkHttp, Logging Interceptor |
+    | Imágenes | Coil 3 |
+    | Login Google | AndroidX Credentials, Google ID |
+    | Biblioteca local | Storage Access Framework, `DocumentsContract` |
+    | Lectura local | `PdfDocument`, `PdfRenderer`, EPUB/TXT nativos y adaptador textual FB2 |
+    | ML / idioma | ML Kit Language ID, ML Kit Translate |
+    | Escaneo | ZXing Android Embedded |
+    | Testing declarado | JUnit, AndroidX Test, Espresso, Compose UI Test |
 
 ## Arquitectura del proyecto
 
@@ -197,10 +197,10 @@ KaiShelvesApp/
 
 1. Clona el repositorio:
 
-```bash
-git clone <URL_DEL_REPOSITORIO>
-cd KaiShelvesApp
-```
+    ```bash
+    git clone <URL_DEL_REPOSITORIO>
+    cd KaiShelvesApp
+    ```
 
 2. Abre el proyecto en Android Studio.
 
@@ -208,9 +208,9 @@ cd KaiShelvesApp
 
 4. Comprueba que existe el archivo de configuración de Firebase:
 
-```text
-app/google-services.json
-```
+    ```text
+    app/google-services.json
+    ```
 
 5. Configura las claves locales en `local.properties` si vas a usar Google Books con API key o el chat con Groq.
 
@@ -288,11 +288,11 @@ groqApiKey=TU_API_KEY
 groqModel=llama-3.1-8b-instant
 ```
 
-| Propiedad | Uso |
-| --- | --- |
-| `googleBooksApiKey` | Clave opcional para Google Books API. Si falta o falla por cuota/permisos, el cliente puede usar la API pública sin clave en determinados casos. |
-| `groqApiKey` | Clave opcional para activar el chat asistido por Groq. Si no existe, la ayuda usa un fallback local. |
-| `groqModel` | Modelo usado por Groq. Valor por defecto: `llama-3.1-8b-instant`. |
+    | Propiedad | Uso |
+    | --- | --- |
+    | `googleBooksApiKey` | Clave opcional para Google Books API. Si falta o falla por cuota/permisos, el cliente puede usar la API pública sin clave en determinados casos. |
+    | `groqApiKey` | Clave opcional para activar el chat asistido por Groq. Si no existe, la ayuda usa un fallback local. |
+    | `groqModel` | Modelo usado por Groq. Valor por defecto: `llama-3.1-8b-instant`. |
 
 También existe configuración para Google Sign-In en:
 
@@ -318,9 +318,9 @@ Mejoras futuras inferidas por pantallas, textos y rutas existentes:
 
 1. Crea una rama descriptiva:
 
-```bash
-git checkout -b feature/nombre-del-cambio
-```
+    ```bash
+    git checkout -b feature/nombre-del-cambio
+    ```
 
 2. Mantén los cambios acotados y coherentes con la arquitectura existente.
 
@@ -328,9 +328,9 @@ git checkout -b feature/nombre-del-cambio
 
 4. Ejecuta al menos:
 
-```powershell
-.\gradlew.bat compileDebugKotlin
-```
+    ```powershell
+    .\gradlew.bat compileDebugKotlin
+    ```
 
 5. Abre una pull request con:
    - resumen del cambio,

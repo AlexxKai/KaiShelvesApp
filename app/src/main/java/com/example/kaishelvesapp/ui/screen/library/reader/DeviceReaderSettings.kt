@@ -821,7 +821,9 @@ fun readerPdfZoomPercentToScale(zoomPercent: Int): Float {
 data class ReaderPaginationResult(
     val pages: List<String>,
     val sourceStartPages: List<Int>,
-    val pageTextRanges: List<ReaderPageTextRange> = emptyList()
+    val pageTextRanges: List<ReaderPageTextRange> = emptyList(),
+    val pageHeaders: List<String?> = emptyList(),
+    val pageKinds: List<ReaderSourcePageKind> = emptyList()
 )
 
 data class ReaderPageTextRange(
@@ -832,6 +834,8 @@ data class ReaderPageTextRange(
 
 fun paginateReflowTextWithStarts(
     sourcePages: List<String>,
+    sourcePageTitles: List<String?> = emptyList(),
+    sourcePageKinds: List<ReaderSourcePageKind> = emptyList(),
     fontSizePx: Float,
     lineHeightPx: Float,
     maxWidthPx: Int,
@@ -840,7 +844,13 @@ fun paginateReflowTextWithStarts(
     if (maxWidthPx <= 0 || maxHeightPx <= 0) {
         return ReaderPaginationResult(pages = listOf(""), sourceStartPages = listOf(0))
     }
-    val normalizedSources = sourcePages.map { it.replace(Regex("\\s+"), " ").trim() }
+    val normalizedSources = sourcePages.map { source ->
+        source
+            .replace(Regex("[ \\t\\x0B\\f\\r]+"), " ")
+            .replace(Regex(" *\\n *"), "\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
+    }
     if (normalizedSources.all { it.isBlank() }) {
         return ReaderPaginationResult(pages = listOf(""), sourceStartPages = listOf(0))
     }
@@ -851,11 +861,20 @@ fun paginateReflowTextWithStarts(
     }
     val blocks = mutableListOf<String>()
     val pageTextRanges = mutableListOf<ReaderPageTextRange>()
+    val pageHeaders = mutableListOf<String?>()
+    val pageKinds = mutableListOf<ReaderSourcePageKind>()
     val startPages = mutableListOf<Int>()
 
     normalizedSources.forEachIndexed { sourceIndex, sourceText ->
         startPages += blocks.size.coerceAtLeast(0)
         if (sourceText.isBlank()) return@forEachIndexed
+        val sourceHeader = sourcePageTitles.getOrNull(sourceIndex)?.takeIf { it.isNotBlank() }
+        val sourceKind = sourcePageKinds.getOrNull(sourceIndex) ?: ReaderSourcePageKind.Body
+        val firstPageReservedHeight = if (sourceHeader != null) {
+            (lineHeightPx * if (sourceKind == ReaderSourcePageKind.Cover) 9f else 3.2f).toInt()
+        } else {
+            0
+        }
         val layout = StaticLayout.Builder
             .obtain(sourceText, 0, sourceText.length, paint, maxWidthPx)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -867,11 +886,16 @@ fun paginateReflowTextWithStarts(
         // Se corta por líneas ya maquetadas fuera de Compose para que el cambio de página sea estable.
         while (startLine < layout.lineCount) {
             val startTop = layout.getLineTop(startLine)
+            val availableHeight = if (startLine == 0) {
+                (maxHeightPx - firstPageReservedHeight).coerceAtLeast(lineHeightPx.toInt())
+            } else {
+                maxHeightPx
+            }
             var endLine = startLine
             while (endLine < layout.lineCount) {
                 val blockHeight = layout.getLineBottom(endLine) - startTop
-                if (blockHeight > maxHeightPx && endLine > startLine) break
-                if (blockHeight > maxHeightPx) break
+                if (blockHeight > availableHeight && endLine > startLine) break
+                if (blockHeight > availableHeight) break
                 endLine += 1
             }
             val safeEndLine = endLine.coerceAtLeast(startLine + 1).coerceAtMost(layout.lineCount)
@@ -889,6 +913,8 @@ fun paginateReflowTextWithStarts(
                     start = startOffset + firstContentOffset,
                     end = startOffset + lastContentOffset + 1
                 )
+                pageHeaders += if (startLine == 0) sourceHeader else null
+                pageKinds += if (startLine == 0) sourceKind else ReaderSourcePageKind.Body
             }
             startLine = safeEndLine
         }
@@ -897,7 +923,9 @@ fun paginateReflowTextWithStarts(
     return ReaderPaginationResult(
         pages = pages,
         sourceStartPages = startPages.map { it.coerceIn(0, pages.lastIndex.coerceAtLeast(0)) }.ifEmpty { listOf(0) },
-        pageTextRanges = pageTextRanges.takeIf { it.size == pages.size }.orEmpty()
+        pageTextRanges = pageTextRanges.takeIf { it.size == pages.size }.orEmpty(),
+        pageHeaders = pageHeaders.takeIf { it.size == pages.size }.orEmpty(),
+        pageKinds = pageKinds.takeIf { it.size == pages.size }.orEmpty()
     )
 }
 

@@ -63,7 +63,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -207,7 +209,10 @@ fun String.readerHighlightColor(): Color {
 
 @Composable
 fun ReflowTextReaderPage(
+    file: DeviceLibraryFile? = null,
     sourcePages: List<String>,
+    sourcePageTitles: List<String?> = emptyList(),
+    sourcePageKinds: List<ReaderSourcePageKind> = emptyList(),
     pageIndex: Int,
     textSizePercent: Int,
     onPageCountChanged: (Int) -> Unit,
@@ -259,6 +264,8 @@ fun ReflowTextReaderPage(
             value = withContext(Dispatchers.Default) {
                 paginateReflowTextWithStarts(
                     sourcePages = sourcePages,
+                    sourcePageTitles = sourcePageTitles,
+                    sourcePageKinds = sourcePageKinds,
                     fontSizePx = fontSizePx,
                     lineHeightPx = lineHeightPx,
                     maxWidthPx = contentWidthPx,
@@ -305,6 +312,8 @@ fun ReflowTextReaderPage(
         ) {
             itemsIndexed(logicalPages) { index, visibleText ->
                 val pageTextRange = pagination.pageTextRanges.getOrNull(index)
+                val pageHeader = pagination.pageHeaders.getOrNull(index)
+                val pageKind = pagination.pageKinds.getOrNull(index) ?: ReaderSourcePageKind.Body
                 val pageHighlights = remember(visibleText, highlights, pageTextRange) {
                     highlights.filter { annotation ->
                         if (annotation.type != DeviceReaderAnnotationType.Highlight) {
@@ -400,20 +409,51 @@ fun ReflowTextReaderPage(
                                     }
                                     val pageWidth = size.width.toFloat().coerceAtLeast(1f)
                                     when {
-                                        offset.x < pageWidth * 0.33f -> onPreviousPage()
-                                        offset.x > pageWidth * 0.67f -> onNextPage()
+                                        offset.x < pageWidth * 0.33f -> onPageChanged((index - 1).coerceAtLeast(0))
+                                        offset.x > pageWidth * 0.67f -> onPageChanged((index + 1).coerceAtMost(logicalPages.lastIndex))
                                         else -> onCenterTap()
                                     }
                                 }
                             )
                         }
                 ) {
-                    Text(
-                        text = displayedText,
-                        style = textStyle,
-                        onTextLayout = { textLayoutResult = it },
-                        overflow = TextOverflow.Clip
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (pageKind == ReaderSourcePageKind.Cover && file != null && pageHeader != null) {
+                            FilePagePreview(
+                                file = file,
+                                coverText = "",
+                                overrideCoverId = null,
+                                modifier = Modifier
+                                    .width(156.dp)
+                                    .aspectRatio(0.68f)
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                        }
+                        pageHeader?.let { header ->
+                            Text(
+                                text = header,
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    color = Color(0xFF1A120B),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = (24f * readerPdfZoomPercentToScale(textSizePercent)).sp,
+                                    lineHeight = (30f * readerPdfZoomPercentToScale(textSizePercent)).sp
+                                ),
+                                textAlign = if (pageKind == ReaderSourcePageKind.Cover) TextAlign.Center else TextAlign.Start,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        top = if (pageKind == ReaderSourcePageKind.Chapter) 18.dp else 10.dp,
+                                        bottom = if (pageKind == ReaderSourcePageKind.Chapter) 18.dp else 12.dp
+                                    )
+                            )
+                        }
+                        Text(
+                            text = displayedText,
+                            style = textStyle,
+                            onTextLayout = { textLayoutResult = it },
+                            overflow = TextOverflow.Clip
+                        )
+                    }
                     if (selectedRange != null && activeSelectionText.isNotBlank() && activeSelectionPageIndex == index) {
                         ReaderSelectionToolbar(
                             selectedText = activeSelectionText,
