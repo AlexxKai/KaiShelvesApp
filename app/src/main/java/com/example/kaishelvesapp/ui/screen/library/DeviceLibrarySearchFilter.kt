@@ -420,9 +420,11 @@ fun DeviceLibraryFilterOverlay(
     layoutMode: DeviceLibraryLayoutMode,
     sortOption: DeviceLibrarySortOption,
     sortDescending: Boolean,
+    selectedFileTypes: Set<DeviceLibraryFileTypeFilter>,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
     onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
     onToggleSortDirection: () -> Unit,
+    onFileTypesChange: (Set<DeviceLibraryFileTypeFilter>) -> Unit,
     onDismiss: () -> Unit
 ) {
     Box(
@@ -436,9 +438,11 @@ fun DeviceLibraryFilterOverlay(
             layoutMode = layoutMode,
             sortOption = sortOption,
             sortDescending = sortDescending,
+            selectedFileTypes = selectedFileTypes,
             onLayoutModeChange = onLayoutModeChange,
             onSortOptionChange = onSortOptionChange,
             onToggleSortDirection = onToggleSortDirection,
+            onFileTypesChange = onFileTypesChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp)
@@ -453,11 +457,14 @@ fun DeviceLibraryFilterPanel(
     layoutMode: DeviceLibraryLayoutMode,
     sortOption: DeviceLibrarySortOption,
     sortDescending: Boolean,
+    selectedFileTypes: Set<DeviceLibraryFileTypeFilter>,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
     onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
     onToggleSortDirection: () -> Unit,
+    onFileTypesChange: (Set<DeviceLibraryFileTypeFilter>) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var fileTypesExpanded by remember { mutableStateOf(selectedFileTypes.isNotEmpty()) }
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(10.dp),
@@ -587,23 +594,114 @@ fun DeviceLibraryFilterPanel(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Tipo de archivo",
+                    stringResource(R.string.device_library_file_type),
                     modifier = Modifier.widthIn(min = 118.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = OldIvory
                 )
                 Checkbox(
-                    checked = true,
-                    onCheckedChange = null,
+                    checked = selectedFileTypes.isEmpty() && !fileTypesExpanded,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            fileTypesExpanded = false
+                            onFileTypesChange(emptySet())
+                        } else {
+                            fileTypesExpanded = true
+                        }
+                    },
                     colors = CheckboxDefaults.colors(
                         checkedColor = Color(0xFF9EAFDF),
                         checkmarkColor = OldIvory,
                         uncheckedColor = OldIvory.copy(alpha = 0.72f)
                     )
                 )
-                Text("Todo", style = MaterialTheme.typography.bodyMedium, color = OldIvory)
+                Text(
+                    text = stringResource(R.string.device_library_file_type_all),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory
+                )
+            }
+
+            if (fileTypesExpanded) {
+                FileTypeOptionsGrid(
+                    selectedFileTypes = selectedFileTypes,
+                    onFileTypesChange = onFileTypesChange
+                )
             }
         }
+    }
+}
+
+@Composable
+fun FileTypeOptionsGrid(
+    selectedFileTypes: Set<DeviceLibraryFileTypeFilter>,
+    onFileTypesChange: (Set<DeviceLibraryFileTypeFilter>) -> Unit
+) {
+    val options = remember { DeviceLibraryFileTypeFilter.entries }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(BorderStroke(2.dp, BloodWine), RoundedCornerShape(0.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.chunked(3).forEach { rowOptions ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowOptions.forEach { option ->
+                    FileTypeOption(
+                        label = stringResource(option.labelRes),
+                        selected = option in selectedFileTypes,
+                        onClick = {
+                            val updatedTypes = if (option in selectedFileTypes) {
+                                selectedFileTypes - option
+                            } else {
+                                selectedFileTypes + option
+                            }
+                            onFileTypesChange(updatedTypes)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                repeat(3 - rowOptions.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FileTypeOption(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .height(30.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = selected,
+            onCheckedChange = { onClick() },
+            colors = CheckboxDefaults.colors(
+                checkedColor = Color(0xFF9EAFDF),
+                checkmarkColor = OldIvory,
+                uncheckedColor = OldIvory.copy(alpha = 0.72f)
+            )
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = OldIvory,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

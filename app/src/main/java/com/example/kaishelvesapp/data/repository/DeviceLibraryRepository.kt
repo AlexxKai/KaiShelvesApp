@@ -277,6 +277,9 @@ private fun DeviceReaderAnnotation.toJson() = JSONObject()
     .put("type", type.name)
     .put("page", page)
     .put("pageCount", pageCount)
+    .put("sourcePage", sourcePage)
+    .put("selectionStart", selectionStart)
+    .put("selectionEnd", selectionEnd)
     .put("selectedText", selectedText)
     .put("note", note)
     .put("color", color)
@@ -289,6 +292,9 @@ private fun JSONObject.toReaderAnnotation() = DeviceReaderAnnotation(
     type = enumValueOrDefault(optString("type"), DeviceReaderAnnotationType.Bookmark),
     page = optInt("page"),
     pageCount = optInt("pageCount", 1).coerceAtLeast(1),
+    sourcePage = optInt("sourcePage", -1),
+    selectionStart = optInt("selectionStart", -1),
+    selectionEnd = optInt("selectionEnd", -1),
     selectedText = optString("selectedText"),
     note = optString("note"),
     color = optString("color"),

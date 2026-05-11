@@ -3,12 +3,15 @@
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -24,8 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
@@ -39,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 @Composable
 fun DeviceBookReaderDialog(
@@ -128,6 +134,11 @@ private suspend fun loadReaderEngineDocument(
         }
         else -> null
     }
+}
+
+enum class PdfReaderScrollOrientation {
+    Horizontal,
+    Vertical
 }
 
 private fun buildEpubEngineDocument(
@@ -317,6 +328,42 @@ private fun ReflowBookReader(
                         onSourcePageStartPagesChanged = { starts -> sourcePageStartPages = starts.ifEmpty { listOf(0) } },
                         onVisibleTextChanged = { visiblePageText = it },
                         onSelectedTextChanged = { selectedText = it },
+                        onPageChanged = { page -> currentPage = page.coerceIn(0, logicalPageCount - 1) },
+                        onPreviousPage = { currentPage = (currentPage - 1).coerceAtLeast(0) },
+                        onNextPage = { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) },
+                        onCenterTap = { controlsVisible = true },
+                        highlights = annotations.filter { it.type == DeviceReaderAnnotationType.Highlight },
+                        onHighlightSelection = { selection, highlightColor ->
+                            annotationRepository.addAnnotation(
+                                file = file,
+                                annotation = DeviceReaderAnnotation(
+                                    type = DeviceReaderAnnotationType.Highlight,
+                                    page = currentPage,
+                                    pageCount = logicalPageCount,
+                                    sourcePage = selection.sourcePage,
+                                    selectionStart = selection.start,
+                                    selectionEnd = selection.end,
+                                    selectedText = selection.text.take(READER_ANNOTATION_TEXT_LIMIT),
+                                    color = highlightColor
+                                )
+                            )
+                            annotations = annotationRepository.getAnnotations(file)
+                        },
+                        onHighlightUpdate = { annotation, highlightColor ->
+                            annotationRepository.updateAnnotation(
+                                file = file,
+                                annotation = annotation.copy(color = highlightColor)
+                            )
+                            annotations = annotationRepository.getAnnotations(file)
+                        },
+                        onHighlightDelete = { annotation ->
+                            annotationRepository.deleteAnnotation(file, annotation.id)
+                            annotations = annotationRepository.getAnnotations(file)
+                        },
+                        onNoteSelection = { noteText ->
+                            selectedText = noteText.take(READER_ANNOTATION_TEXT_LIMIT)
+                            showNoteDialog = true
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
 
@@ -400,26 +447,6 @@ private fun ReflowBookReader(
                             )
                         }
                     } else {
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(0.33f)
-                                    .fillMaxHeight()
-                                    .clickable { currentPage = (currentPage - 1).coerceAtLeast(0) }
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(0.34f)
-                                    .fillMaxHeight()
-                                    .clickable { controlsVisible = true }
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(0.33f)
-                                    .fillMaxHeight()
-                                    .clickable { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) }
-                            )
-                        }
                         ReaderBrightnessEdgeGesture(
                             selectedEdge = selectedBrightnessEdge,
                             onBrightnessDelta = { delta ->
@@ -612,6 +639,9 @@ fun PdfBookReader(
             var zoomPercentBeforeChange by remember(file.uri) { mutableStateOf<Int?>(null) }
             var pdfPanX by remember(file.uri) { mutableStateOf(0f) }
             var pdfPanY by remember(file.uri) { mutableStateOf(0f) }
+            var pdfScrollOrientation by remember(file.uri) { mutableStateOf(PdfReaderScrollOrientation.Horizontal) }
+            var pdfMovementLocked by remember(file.uri) { mutableStateOf(false) }
+            var pdfFloatingControlsVisible by remember(file.uri) { mutableStateOf(false) }
             var showBrightnessAdvancedSettings by remember(file.uri) { mutableStateOf(false) }
             var selectedBrightnessEdge by remember { mutableStateOf(readReaderBrightnessEdge(context)) }
             var resumeAutoBrightnessAfterInactivity by remember {
@@ -674,6 +704,12 @@ fun PdfBookReader(
                     brightnessFeedbackPercent = null
                 }
             }
+            LaunchedEffect(pdfFloatingControlsVisible, controlsVisible) {
+                if (pdfFloatingControlsVisible && !controlsVisible) {
+                    delay(1800)
+                    pdfFloatingControlsVisible = false
+                }
+            }
             LaunchedEffect(
                 brightnessEdgeChangeCount,
                 resumeAutoBrightnessAfterInactivity,
@@ -693,8 +729,13 @@ fun PdfBookReader(
                     if (targetZoomPercent != readerZoomPercent) {
                         readerZoomPercent = targetZoomPercent
                     }
-                    pdfPanX += panChange.x
-                    pdfPanY += panChange.y
+                    if (!pdfMovementLocked) {
+                        pdfPanX += panChange.x
+                        pdfPanY += panChange.y
+                        if (panChange.x != 0f || panChange.y != 0f) {
+                            pdfFloatingControlsVisible = true
+                        }
+                    }
                 }
             }
 
@@ -720,19 +761,42 @@ fun PdfBookReader(
                         .background(Color.Black)
                         .transformable(
                             state = pdfTransformState,
-                            enabled = !controlsVisible
+                            enabled = !controlsVisible &&
+                                !(pdfScrollOrientation == PdfReaderScrollOrientation.Vertical && pdfMovementLocked)
                         )
                 ) {
-                    PdfReaderPage(
-                        file = file,
-                        pageIndex = currentPage,
-                        pdfZoomPercent = readerZoomPercent,
-                        pdfPanX = pdfPanX,
-                        pdfPanY = pdfPanY,
-                        coverText = userMetadata.coverText,
-                        overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (pdfScrollOrientation == PdfReaderScrollOrientation.Vertical && pdfMovementLocked) {
+                        PdfReaderVerticalPages(
+                            file = file,
+                            pageCount = activePageCount,
+                            currentPage = currentPage,
+                            pdfZoomPercent = readerZoomPercent,
+                            coverText = userMetadata.coverText,
+                            overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
+                            onPageChanged = { page -> currentPage = page.coerceIn(0, activePageCount - 1) },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(pdfScrollOrientation, pdfMovementLocked) {
+                                    detectTapGestures { offset ->
+                                        val width = size.width.toFloat().coerceAtLeast(1f)
+                                        if (offset.x in (width * 0.33f)..(width * 0.67f)) {
+                                            controlsVisible = true
+                                        }
+                                    }
+                                }
+                        )
+                    } else {
+                        PdfReaderPage(
+                            file = file,
+                            pageIndex = currentPage,
+                            pdfZoomPercent = readerZoomPercent,
+                            pdfPanX = pdfPanX,
+                            pdfPanY = pdfPanY,
+                            coverText = userMetadata.coverText,
+                            overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
                     if (blueLightFilterEnabled && blueLightOpacity > 0) {
                         Box(
@@ -753,8 +817,50 @@ fun PdfBookReader(
                                     showTextSizeSettings = false
                                 }
                         )
-                    } else {
-                        Row(modifier = Modifier.fillMaxSize()) {
+                    } else if (pdfScrollOrientation == PdfReaderScrollOrientation.Horizontal) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(pdfScrollOrientation, activePageCount) {
+                                    var draggedX = 0f
+                                    var draggedY = 0f
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggedX = 0f
+                                            draggedY = 0f
+                                        },
+                                        onDrag = { _, dragAmount ->
+                                            draggedX += dragAmount.x
+                                            draggedY += dragAmount.y
+                                        },
+                                        onDragEnd = {
+                                            val horizontalGesture = abs(draggedX) > abs(draggedY) * 1.1f
+                                            val verticalGesture = abs(draggedY) > abs(draggedX) * 1.1f
+                                            val threshold = 72f
+                                            when {
+                                                pdfScrollOrientation == PdfReaderScrollOrientation.Horizontal &&
+                                                    horizontalGesture &&
+                                                    abs(draggedX) > threshold -> {
+                                                    currentPage = if (draggedX < 0) {
+                                                        (currentPage + 1).coerceAtMost(activePageCount - 1)
+                                                    } else {
+                                                        (currentPage - 1).coerceAtLeast(0)
+                                                    }
+                                                }
+                                                pdfScrollOrientation == PdfReaderScrollOrientation.Vertical &&
+                                                    verticalGesture &&
+                                                    abs(draggedY) > threshold -> {
+                                                    currentPage = if (draggedY < 0) {
+                                                        (currentPage + 1).coerceAtMost(activePageCount - 1)
+                                                    } else {
+                                                        (currentPage - 1).coerceAtLeast(0)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .weight(0.33f)
@@ -775,9 +881,30 @@ fun PdfBookReader(
                                     .fillMaxHeight()
                                     .clickable {
                                         currentPage = (currentPage + 1).coerceAtMost(activePageCount - 1)
-                                    }
+                                }
                             )
                         }
+                    }
+
+                    if ((controlsVisible || pdfFloatingControlsVisible) && !showDisplaySettings && !showTextSizeSettings) {
+                        PdfReaderFloatingControls(
+                            scrollOrientation = pdfScrollOrientation,
+                            movementLocked = pdfMovementLocked,
+                            onToggleScrollOrientation = {
+                                pdfScrollOrientation = when (pdfScrollOrientation) {
+                                    PdfReaderScrollOrientation.Horizontal -> PdfReaderScrollOrientation.Vertical
+                                    PdfReaderScrollOrientation.Vertical -> PdfReaderScrollOrientation.Horizontal
+                                }
+                            },
+                            onToggleMovementLock = { pdfMovementLocked = !pdfMovementLocked },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(
+                                    end = 14.dp,
+                                    bottom = if (controlsVisible) 204.dp else 48.dp
+                                )
+                                .zIndex(2f)
+                        )
                     }
 
                     if (controlsVisible) {

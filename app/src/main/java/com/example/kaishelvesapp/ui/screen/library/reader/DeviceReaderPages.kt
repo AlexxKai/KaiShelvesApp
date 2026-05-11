@@ -4,31 +4,52 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.FormatStrikethrough
+import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -42,11 +63,14 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
+import com.example.kaishelvesapp.data.model.DeviceReaderAnnotationType
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -83,17 +107,100 @@ fun wordRangeAt(text: String, offset: Int): IntRange {
 
 fun buildSelectableReaderText(
     text: String,
-    selectedRange: IntRange?
+    selectedRange: IntRange?,
+    highlights: List<DeviceReaderAnnotation> = emptyList(),
+    pageTextRange: ReaderPageTextRange? = null
 ): AnnotatedString {
-    if (selectedRange == null) return AnnotatedString(text)
-    val start = selectedRange.first.coerceIn(0, text.length)
-    val end = (selectedRange.last + 1).coerceIn(start, text.length)
-    return buildAnnotatedString {
-        append(text.substring(0, start))
-        withStyle(SpanStyle(background = Color(0x66EBC7E8))) {
-            append(text.substring(start, end))
+    val ranges = mutableListOf<Pair<IntRange, ReaderHighlightStyle>>()
+    highlights.forEach { highlight ->
+        val hasStoredRange = highlight.sourcePage >= 0 && highlight.selectionStart >= 0 && highlight.selectionEnd > highlight.selectionStart
+        if (hasStoredRange && pageTextRange != null && highlight.sourcePage == pageTextRange.sourcePage) {
+            val start = maxOf(highlight.selectionStart, pageTextRange.start) - pageTextRange.start
+            val end = minOf(highlight.selectionEnd, pageTextRange.end) - pageTextRange.start
+            if (end > start) {
+                ranges += (start until end) to highlight.color.readerHighlightStyle()
+            }
+        } else if (!hasStoredRange) {
+            val highlightedText = highlight.selectedText.takeIf { it.isNotBlank() } ?: return@forEach
+            var searchStart = 0
+            while (searchStart < text.length) {
+                val matchStart = text.indexOf(highlightedText, searchStart, ignoreCase = false)
+                if (matchStart < 0) break
+                val matchEnd = (matchStart + highlightedText.length).coerceAtMost(text.length)
+                ranges += (matchStart until matchEnd) to highlight.color.readerHighlightStyle()
+                searchStart = matchEnd
+            }
         }
-        append(text.substring(end))
+    }
+    selectedRange?.let { range ->
+        ranges += range to ReaderHighlightStyle(background = Color(0x66EBC7E8))
+    }
+    if (ranges.isEmpty()) return AnnotatedString(text)
+
+    val normalizedRanges = ranges
+        .mapNotNull { (range, style) ->
+            val start = range.first.coerceIn(0, text.length)
+            val end = (range.last + 1).coerceIn(start, text.length)
+            if (start == end) null else (start until end) to style
+        }
+        .sortedBy { it.first.first }
+
+    return buildAnnotatedString {
+        var cursor = 0
+        normalizedRanges.forEach { (range, highlightStyle) ->
+            val start = range.first.coerceIn(cursor, text.length)
+            val end = (range.last + 1).coerceIn(start, text.length)
+            if (cursor < start) append(text.substring(cursor, start))
+            withStyle(
+                SpanStyle(
+                    background = highlightStyle.background,
+                    textDecoration = highlightStyle.textDecoration
+                )
+            ) {
+                append(text.substring(start, end))
+            }
+            cursor = end
+        }
+        if (cursor < text.length) append(text.substring(cursor))
+    }
+}
+
+data class ReaderHighlightStyle(
+    val background: Color,
+    val textDecoration: TextDecoration? = null
+)
+
+data class ReaderTextSelection(
+    val text: String,
+    val sourcePage: Int,
+    val start: Int,
+    val end: Int
+)
+
+private data class ReaderVisibleHighlight(
+    val annotation: DeviceReaderAnnotation,
+    val range: IntRange
+)
+
+fun String.readerHighlightStyle(): ReaderHighlightStyle {
+    val rawStyle = substringBefore(":", "")
+    val color = readerHighlightColor()
+    return ReaderHighlightStyle(
+        background = color,
+        textDecoration = when (rawStyle) {
+            "underline", "diagonal" -> TextDecoration.Underline
+            "strike" -> TextDecoration.LineThrough
+            else -> null
+        }
+    )
+}
+
+fun String.readerHighlightColor(): Color {
+    val colorPart = substringAfter(":", this)
+    return runCatching {
+        Color(android.graphics.Color.parseColor(colorPart))
+    }.getOrElse {
+        Color(0x66EBC7E8)
     }
 }
 
@@ -107,12 +214,22 @@ fun ReflowTextReaderPage(
     onSourcePageStartPagesChanged: (List<Int>) -> Unit = {},
     onVisibleTextChanged: (String) -> Unit = {},
     onSelectedTextChanged: (String) -> Unit = {},
+    onPageChanged: (Int) -> Unit = {},
+    onPreviousPage: () -> Unit = {},
+    onNextPage: () -> Unit = {},
+    onCenterTap: () -> Unit = {},
+    highlights: List<DeviceReaderAnnotation> = emptyList(),
+    onHighlightSelection: (ReaderTextSelection, String) -> Unit = { _, _ -> },
+    onHighlightUpdate: (DeviceReaderAnnotation, String) -> Unit = { _, _ -> },
+    onHighlightDelete: (DeviceReaderAnnotation) -> Unit = {},
+    onNoteSelection: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-    var selectionStart by remember { mutableStateOf<Int?>(null) }
-    var selectionEnd by remember { mutableStateOf<Int?>(null) }
+    var activeSelectionText by remember { mutableStateOf("") }
+    var activeSelection by remember { mutableStateOf<ReaderTextSelection?>(null) }
+    var activeSelectionPageIndex by remember { mutableStateOf<Int?>(null) }
+    var activeHighlight by remember { mutableStateOf<DeviceReaderAnnotation?>(null) }
     BoxWithConstraints(
         modifier = modifier.background(Color(0xFFF8F1DE))
     ) {
@@ -151,6 +268,7 @@ fun ReflowTextReaderPage(
         }
         val logicalPages = pagination.pages
         val safePageIndex = pageIndex.coerceIn(0, logicalPages.lastIndex.coerceAtLeast(0))
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = safePageIndex)
 
         LaunchedEffect(logicalPages.size) {
             onPageCountChanged(logicalPages.size.coerceAtLeast(1))
@@ -158,67 +276,389 @@ fun ReflowTextReaderPage(
         LaunchedEffect(pagination.sourceStartPages) {
             onSourcePageStartPagesChanged(pagination.sourceStartPages)
         }
-        LaunchedEffect(safePageIndex, logicalPages) {
+        LaunchedEffect(safePageIndex, logicalPages.size) {
+            if (!listState.isScrollInProgress && listState.firstVisibleItemIndex != safePageIndex) {
+                listState.scrollToItem(safePageIndex)
+            }
             onVisibleTextChanged(logicalPages.getOrElse(safePageIndex) { "" })
-            selectionStart = null
-            selectionEnd = null
-            onSelectedTextChanged("")
         }
-        val visibleText = logicalPages.getOrElse(safePageIndex) { "" }
-        val selectedRange = remember(visibleText, selectionStart, selectionEnd) {
-            normalizeSelectionRange(selectionStart, selectionEnd, visibleText.length)
+        LaunchedEffect(listState, logicalPages) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .collect { visibleIndex ->
+                    val safeVisibleIndex = visibleIndex.coerceIn(0, logicalPages.lastIndex.coerceAtLeast(0))
+                    onPageChanged(safeVisibleIndex)
+                    onVisibleTextChanged(logicalPages.getOrElse(safeVisibleIndex) { "" })
+                    onSelectedTextChanged("")
+                    activeSelectionText = ""
+                    activeSelection = null
+                    activeSelectionPageIndex = null
+                    activeHighlight = null
+                }
         }
-        val displayedText = remember(visibleText, selectedRange) {
-            buildSelectableReaderText(visibleText, selectedRange)
-        }
-
-        // Cada página lógica ya está medida para caber completa en el viewport, sin scroll interno.
-        Box(
+        // Las páginas se mantienen paginadas, pero se presentan en una lista continua para seguir leyendo con scroll.
+        LazyColumn(
+            state = listState,
+            userScrollEnabled = activeSelectionPageIndex == null,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = horizontalPadding, vertical = verticalPadding)
-                .pointerInput(visibleText, textLayoutResult) {
-                    detectTapGestures { offset ->
-                        textLayoutResult?.let { layout ->
-                            val selectedWord = wordRangeAt(visibleText, layout.getOffsetForPosition(offset))
-                            selectionStart = selectedWord.first
-                            selectionEnd = selectedWord.last + 1
-                            onSelectedTextChanged(visibleText.substring(selectedWord.first, selectedWord.last + 1))
+        ) {
+            itemsIndexed(logicalPages) { index, visibleText ->
+                val pageTextRange = pagination.pageTextRanges.getOrNull(index)
+                val pageHighlights = remember(visibleText, highlights, pageTextRange) {
+                    highlights.filter { annotation ->
+                        if (annotation.type != DeviceReaderAnnotationType.Highlight) {
+                            false
+                        } else if (annotation.sourcePage >= 0 && pageTextRange != null) {
+                            annotation.sourcePage == pageTextRange.sourcePage &&
+                                annotation.selectionStart < pageTextRange.end &&
+                                annotation.selectionEnd > pageTextRange.start
+                        } else {
+                            annotation.selectedText.isNotBlank() && visibleText.contains(annotation.selectedText)
                         }
                     }
                 }
-                .pointerInput(visibleText, textLayoutResult) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            textLayoutResult?.let { layout ->
-                                val selectedWord = wordRangeAt(visibleText, layout.getOffsetForPosition(offset))
-                                selectionStart = selectedWord.first
-                                selectionEnd = selectedWord.last + 1
-                                onSelectedTextChanged(visibleText.substring(selectedWord.first, selectedWord.last + 1))
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            textLayoutResult?.let { layout ->
-                                val start = selectionStart ?: return@let
-                                val end = layout.getOffsetForPosition(change.position)
-                                val range = normalizeSelectionRange(start, end, visibleText.length) ?: return@let
-                                selectionEnd = range.last + 1
-                                onSelectedTextChanged(visibleText.substring(range.first, range.last + 1))
-                            }
+                val visibleHighlightRanges = remember(visibleText, pageHighlights, pageTextRange) {
+                    pageHighlights.flatMap { annotation ->
+                        annotation.visibleRangesInText(visibleText, pageTextRange).map { range ->
+                            ReaderVisibleHighlight(annotation, range)
                         }
+                    }
+                }
+                var textLayoutResult by remember(index, visibleText) { mutableStateOf<TextLayoutResult?>(null) }
+                var selectionStart by remember(index, visibleText) { mutableStateOf<Int?>(null) }
+                var selectionEnd by remember(index, visibleText) { mutableStateOf<Int?>(null) }
+                var selectionToolbarOffsetY by remember(index, visibleText) { mutableStateOf(0.dp) }
+                val selectedRange = remember(visibleText, selectionStart, selectionEnd) {
+                    normalizeSelectionRange(selectionStart, selectionEnd, visibleText.length)
+                }
+                val displayedText = remember(visibleText, selectedRange, pageHighlights, pageTextRange) {
+                    buildSelectableReaderText(visibleText, selectedRange, pageHighlights, pageTextRange)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .pointerInput(visibleText, textLayoutResult, selectedRange, visibleHighlightRanges, pageTextRange) {
+                            detectTapGestures(
+                                onLongPress = { offset ->
+                                    textLayoutResult?.let { layout ->
+                                        val selectedWord = wordRangeAt(visibleText, layout.getOffsetForPosition(offset))
+                                        selectionStart = selectedWord.first
+                                        selectionEnd = selectedWord.last + 1
+                                        activeSelectionPageIndex = index
+                                        activeHighlight = null
+                                        selectionToolbarOffsetY = with(density) {
+                                            (layout.getLineTop(layout.getLineForOffset(selectedWord.first)) - 108.dp.toPx())
+                                                .coerceAtLeast(0f)
+                                                .toDp()
+                                        }
+                                        val selected = visibleText.substring(selectedWord.first, selectedWord.last + 1)
+                                        activeSelectionText = selected
+                                        activeSelection = selected.toReaderTextSelection(
+                                            pageTextRange = pageTextRange,
+                                            localStart = selectedWord.first,
+                                            localEnd = selectedWord.last + 1
+                                        )
+                                        onSelectedTextChanged(selected)
+                                    }
+                                },
+                                onTap = { offset ->
+                                    if (selectedRange != null) {
+                                        selectionStart = null
+                                        selectionEnd = null
+                                        activeSelectionText = ""
+                                        activeSelection = null
+                                        activeSelectionPageIndex = null
+                                        activeHighlight = null
+                                        onSelectedTextChanged("")
+                                        return@detectTapGestures
+                                    }
+                                    val tappedOffset = textLayoutResult?.getOffsetForPosition(offset)
+                                    val tappedHighlight = tappedOffset?.let { textOffset ->
+                                        visibleHighlightRanges.firstOrNull { textOffset in it.range }
+                                    }
+                                    if (tappedHighlight != null) {
+                                        val range = tappedHighlight.range
+                                        selectionStart = range.first
+                                        selectionEnd = range.last + 1
+                                        activeSelectionPageIndex = index
+                                        activeHighlight = tappedHighlight.annotation
+                                        selectionToolbarOffsetY = with(density) {
+                                            textLayoutResult?.let { layout ->
+                                                (layout.getLineTop(layout.getLineForOffset(range.first)) - 108.dp.toPx())
+                                                    .coerceAtLeast(0f)
+                                                    .toDp()
+                                            } ?: 0.dp
+                                        }
+                                        val selected = visibleText.substring(range.first, range.last + 1)
+                                        activeSelectionText = selected
+                                        activeSelection = selected.toReaderTextSelection(pageTextRange, range.first, range.last + 1)
+                                        onSelectedTextChanged(selected)
+                                        return@detectTapGestures
+                                    }
+                                    val pageWidth = size.width.toFloat().coerceAtLeast(1f)
+                                    when {
+                                        offset.x < pageWidth * 0.33f -> onPreviousPage()
+                                        offset.x > pageWidth * 0.67f -> onNextPage()
+                                        else -> onCenterTap()
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    Text(
+                        text = displayedText,
+                        style = textStyle,
+                        onTextLayout = { textLayoutResult = it },
+                        overflow = TextOverflow.Clip
+                    )
+                    if (selectedRange != null && activeSelectionText.isNotBlank() && activeSelectionPageIndex == index) {
+                        ReaderSelectionToolbar(
+                            selectedText = activeSelectionText,
+                            onHighlightSelection = { _, color ->
+                                activeHighlight?.let { highlight ->
+                                    onHighlightUpdate(highlight, color)
+                                } ?: activeSelection?.let { selection ->
+                                    onHighlightSelection(selection, color)
+                                }
+                                selectionStart = null
+                                selectionEnd = null
+                                activeSelectionText = ""
+                                activeSelection = null
+                                activeSelectionPageIndex = null
+                                activeHighlight = null
+                                onSelectedTextChanged("")
+                            },
+                            onNoteSelection = onNoteSelection,
+                            showDelete = activeHighlight != null,
+                            onDeleteSelection = {
+                                activeHighlight?.let(onHighlightDelete)
+                                selectionStart = null
+                                selectionEnd = null
+                                activeSelectionText = ""
+                                activeSelection = null
+                                activeSelectionPageIndex = null
+                                activeHighlight = null
+                                onSelectedTextChanged("")
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(y = selectionToolbarOffsetY)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun DeviceReaderAnnotation.visibleRangesInText(
+    text: String,
+    pageTextRange: ReaderPageTextRange?
+): List<IntRange> {
+    val hasStoredRange = sourcePage >= 0 && selectionStart >= 0 && selectionEnd > selectionStart
+    if (hasStoredRange && pageTextRange != null && sourcePage == pageTextRange.sourcePage) {
+        val start = maxOf(selectionStart, pageTextRange.start) - pageTextRange.start
+        val end = minOf(selectionEnd, pageTextRange.end) - pageTextRange.start
+        return if (end > start) listOf(start until end) else emptyList()
+    }
+    val highlightedText = selectedText.takeIf { it.isNotBlank() } ?: return emptyList()
+    val ranges = mutableListOf<IntRange>()
+    var searchStart = 0
+    while (searchStart < text.length) {
+        val matchStart = text.indexOf(highlightedText, searchStart, ignoreCase = false)
+        if (matchStart < 0) break
+        val matchEnd = (matchStart + highlightedText.length).coerceAtMost(text.length)
+        ranges += matchStart until matchEnd
+        searchStart = matchEnd
+    }
+    return ranges
+}
+
+private fun String.toReaderTextSelection(
+    pageTextRange: ReaderPageTextRange?,
+    localStart: Int,
+    localEnd: Int
+): ReaderTextSelection {
+    return ReaderTextSelection(
+        text = this,
+        sourcePage = pageTextRange?.sourcePage ?: -1,
+        start = pageTextRange?.start?.plus(localStart) ?: -1,
+        end = pageTextRange?.start?.plus(localEnd) ?: -1
+    )
+}
+
+@Composable
+fun ReaderSelectionToolbar(
+    selectedText: String,
+    onHighlightSelection: (String, String) -> Unit,
+    onNoteSelection: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    showDelete: Boolean = false,
+    onDeleteSelection: () -> Unit = {}
+) {
+    Column(
+        modifier = modifier
+            .width(342.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(Color(0xEE202020))
+            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.32f)), RoundedCornerShape(2.dp))
+            .clickable(onClick = {})
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SelectionToolIcon(
+                icon = Icons.Filled.FormatColorFill,
+                contentDescriptionRes = R.string.reader_selection_highlight,
+                onClick = { onHighlightSelection(selectedText, "#EBC7E8") }
+            )
+            SelectionToolIcon(
+                icon = Icons.Filled.FormatUnderlined,
+                contentDescriptionRes = R.string.reader_selection_underline,
+                onClick = { onHighlightSelection(selectedText, "underline:#EBC7E8") }
+            )
+            SelectionToolIcon(
+                icon = Icons.Filled.FormatStrikethrough,
+                contentDescriptionRes = R.string.reader_selection_strikethrough,
+                onClick = { onHighlightSelection(selectedText, "strike:#EBC7E8") }
+            )
+            SelectionToolIcon(
+                icon = Icons.Filled.Edit,
+                contentDescriptionRes = R.string.reader_selection_diagonal,
+                onClick = { onHighlightSelection(selectedText, "diagonal:#EBC7E8") }
+            )
+            SelectionToolIcon(Icons.Filled.MoreHoriz, R.string.reader_selection_more)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf("#17E879", "#FF8A10", "#D6A1C9", "#B8B8B8", "#8C00FF").forEach { color ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(color.readerHighlightColor())
+                        .clickable { onHighlightSelection(selectedText, color) }
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showDelete) {
+                IconButton(onClick = onDeleteSelection, modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.DeleteOutline,
+                        contentDescription = stringResource(R.string.reader_selection_delete),
+                        tint = Color.White
                     )
                 }
-        ) {
+            }
             Text(
-                text = displayedText,
-                style = textStyle,
-                onTextLayout = { textLayoutResult = it },
-                overflow = TextOverflow.Clip
+                text = stringResource(R.string.reader_selection_copy),
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.clickable { }
+            )
+            Text(
+                text = stringResource(R.string.reader_selection_highlight),
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.clickable { onHighlightSelection(selectedText, "#EBC7E8") }
+            )
+            Text(
+                text = stringResource(R.string.reader_selection_note),
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.clickable { onNoteSelection(selectedText) }
+            )
+            Text(
+                text = stringResource(R.string.reader_selection_dict),
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Text(
+                text = stringResource(R.string.reader_selection_more),
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }
 }
 
+@Composable
+private fun SelectionToolIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescriptionRes: Int,
+    onClick: () -> Unit = {}
+) {
+    Icon(
+        imageVector = icon,
+        contentDescription = stringResource(contentDescriptionRes),
+        tint = Color.White,
+        modifier = Modifier
+            .size(22.dp)
+            .clickable(onClick = onClick)
+    )
+}
+
+@Composable
+fun PdfReaderVerticalPages(
+    file: DeviceLibraryFile,
+    pageCount: Int,
+    currentPage: Int,
+    pdfZoomPercent: Int = READER_PDF_ZOOM_DEFAULT,
+    coverText: String = "",
+    overrideCoverId: String? = null,
+    onPageChanged: (Int) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPage)
+
+    LaunchedEffect(currentPage, pageCount) {
+        val safePage = currentPage.coerceIn(0, pageCount.coerceAtLeast(1) - 1)
+        if (!listState.isScrollInProgress && listState.firstVisibleItemIndex != safePage) {
+            listState.scrollToItem(safePage)
+        }
+    }
+    LaunchedEffect(listState, pageCount) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .collect { visiblePage ->
+                onPageChanged(visiblePage.coerceIn(0, pageCount.coerceAtLeast(1) - 1))
+            }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = modifier.background(Color.White)
+    ) {
+        items(pageCount) { pageIndex ->
+            PdfReaderPage(
+                file = file,
+                pageIndex = pageIndex,
+                pdfZoomPercent = pdfZoomPercent,
+                coverText = coverText,
+                overrideCoverId = overrideCoverId,
+                compactForScroll = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp)
+            )
+        }
+    }
+}
 @Composable
 fun PdfReaderPage(
     file: DeviceLibraryFile,
@@ -228,11 +668,13 @@ fun PdfReaderPage(
     pdfPanY: Float = 0f,
     coverText: String = "",
     overrideCoverId: String? = null,
+    compactForScroll: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     BoxWithConstraints(modifier = modifier) {
         val pdfZoom = readerPdfZoomPercentToScale(pdfZoomPercent)
+        val scaledPageWidth = maxWidth * pdfZoom
         val targetWidth = with(LocalDensity.current) {
             (maxWidth.roundToPx() * pdfZoom).roundToInt()
         }.coerceAtLeast(360)
@@ -243,17 +685,32 @@ fun PdfReaderPage(
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White),
+            modifier = if (compactForScroll) {
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.White)
+                    .padding(vertical = 4.dp)
+            } else {
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.White)
+            },
             contentAlignment = Alignment.Center
         ) {
             if (pageIndex == 0) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF1D1A06))
-                        .padding(horizontal = 42.dp, vertical = 34.dp),
+                    modifier = if (compactForScroll) {
+                        Modifier
+                            .requiredWidth(scaledPageWidth)
+                            .aspectRatio(0.68f)
+                            .background(Color(0xFF1D1A06))
+                            .padding(horizontal = 42.dp, vertical = 34.dp)
+                    } else {
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF1D1A06))
+                            .padding(horizontal = 42.dp, vertical = 34.dp)
+                    },
                     contentAlignment = Alignment.Center
                 ) {
                     FilePagePreview(
@@ -266,22 +723,35 @@ fun PdfReaderPage(
                     )
                 }
             } else if (bitmap == null) {
-                CircularProgressIndicator(
-                    modifier = Modifier.padding(36.dp),
-                    color = TarnishedGold
-                )
-            } else {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(bitmap!!.width / bitmap!!.height.toFloat())
-                        .graphicsLayer {
-                            scaleX = pdfZoom
-                            scaleY = pdfZoom
-                            translationX = pdfPanX
-                            translationY = pdfPanY
-                            transformOrigin = TransformOrigin(0.5f, 0f)
-                        }
+                        .aspectRatio(0.68f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(36.dp),
+                        color = TarnishedGold
+                    )
+                }
+            } else {
+                Box(
+                    modifier = if (compactForScroll) {
+                        Modifier
+                            .requiredWidth(scaledPageWidth)
+                            .aspectRatio(bitmap!!.width / bitmap!!.height.toFloat())
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(bitmap!!.width / bitmap!!.height.toFloat())
+                            .graphicsLayer {
+                                scaleX = pdfZoom
+                                scaleY = pdfZoom
+                                translationX = pdfPanX
+                                translationY = pdfPanY
+                                transformOrigin = TransformOrigin(0.5f, 0f)
+                            }
+                    }
                 ) {
                     Image(
                         bitmap = bitmap!!.asImageBitmap(),

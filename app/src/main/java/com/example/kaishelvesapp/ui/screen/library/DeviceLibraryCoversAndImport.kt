@@ -1706,6 +1706,7 @@ const val PINNED_BOOKS_PREFS = "device_library_pinned_books"
 const val PINNED_BOOKS_KEY = "ordered_book_ids"
 const val LIBRARY_VIEW_PREFS = "device_library_view"
 const val LIBRARY_LAYOUT_MODE_KEY = "layout_mode"
+const val LIBRARY_FILE_TYPE_FILTERS_KEY = "file_type_filters"
 val imageExtensions = setOf("jpg", "jpeg", "png", "webp")
 
 fun readDeviceBookUserMetadata(context: Context, file: DeviceLibraryFile): DeviceBookUserMetadata {
@@ -1781,6 +1782,25 @@ fun saveDeviceLibraryLayoutMode(context: Context, layoutMode: DeviceLibraryLayou
     context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putString(LIBRARY_LAYOUT_MODE_KEY, layoutMode.name)
+        .apply()
+}
+
+fun readDeviceLibraryFileTypeFilters(context: Context): Set<DeviceLibraryFileTypeFilter> {
+    val savedNames = context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .getStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, emptySet())
+        .orEmpty()
+    return savedNames.mapNotNull { savedName ->
+        DeviceLibraryFileTypeFilter.entries.firstOrNull { it.name == savedName }
+    }.toSet()
+}
+
+fun saveDeviceLibraryFileTypeFilters(
+    context: Context,
+    selectedFileTypes: Set<DeviceLibraryFileTypeFilter>
+) {
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, selectedFileTypes.map { it.name }.toSet())
         .apply()
 }
 

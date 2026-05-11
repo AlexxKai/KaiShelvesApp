@@ -1,7 +1,9 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +23,16 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableRows
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -242,6 +248,66 @@ fun ReaderToolButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = if (enabled) Color(0xFFEBC7E8) else Color.White.copy(alpha = 0.34f)
+        )
+    }
+}
+
+@Composable
+fun PdfReaderFloatingControls(
+    scrollOrientation: PdfReaderScrollOrientation,
+    movementLocked: Boolean,
+    onToggleScrollOrientation: () -> Unit,
+    onToggleMovementLock: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ReaderFloatingButton(
+            icon = if (scrollOrientation == PdfReaderScrollOrientation.Horizontal) {
+                Icons.Filled.SwapHoriz
+            } else {
+                Icons.Filled.SwapVert
+            },
+            contentDescription = if (scrollOrientation == PdfReaderScrollOrientation.Horizontal) {
+                stringResource(R.string.reader_pdf_scroll_horizontal)
+            } else {
+                stringResource(R.string.reader_pdf_scroll_vertical)
+            },
+            onClick = onToggleScrollOrientation
+        )
+        ReaderFloatingButton(
+            icon = if (movementLocked) Icons.Filled.Lock else Icons.Filled.LockOpen,
+            contentDescription = if (movementLocked) {
+                stringResource(R.string.reader_pdf_unlock_movement)
+            } else {
+                stringResource(R.string.reader_pdf_lock_movement)
+            },
+            onClick = onToggleMovementLock
+        )
+    }
+}
+
+@Composable
+private fun ReaderFloatingButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(50.dp)
+            .background(Color(0xCCF2F0DE), CircleShape)
+            .border(1.dp, Color.Black.copy(alpha = 0.18f), CircleShape)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color(0xFF5F5A48),
+            modifier = Modifier.size(28.dp)
         )
     }
 }

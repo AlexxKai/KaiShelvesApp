@@ -64,11 +64,11 @@ Las capturas todavía no están versionadas en el repositorio. Se recomienda añ
 - Etiquetas personalizadas para organizar libros.
 - Estadísticas de lectura.
 - Recomendaciones personalizadas en la sección “Para ti”.
-- Biblioteca local del dispositivo mediante Storage Access Framework.
-- Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo y los formatos de texto usan paginacion reflow.
-- Registro local persistente de libros importados, progreso de lectura y modelo comun para marcadores, subrayados y notas.
-- Lector reflow para EPUB, TXT y FB2 con seleccion tactil controlada por palabra/frase, marcadores, subrayados y notas editables.
-- Vista PDF visual por página completa con zoom y desplazamiento manual, manteniendo marcadores y notas sin remaquetado del contenido.
+- Biblioteca local del dispositivo mediante Storage Access Framework, con disposición y filtros de tipo de archivo persistentes.
+- Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo y los formatos de texto usan paginación reflow.
+- Registro local persistente de libros importados, progreso de lectura y modelo común para marcadores, subrayados y notas.
+- Lector reflow para EPUB, TXT y FB2 con desplazamiento continuo, selección táctil por pulsación prolongada, rangos reales persistentes, marcadores, subrayados y notas editables.
+- Vista PDF visual con zoom, desplazamiento manual y lectura continua en modo vertical, manteniendo marcadores y notas sin remaquetado del contenido.
 - Conversor básico a PDF para TXT, EPUB y FB2.
 - Perfil de usuario con edición de datos, foto y métodos de inicio de sesión.
 - Ajustes de privacidad y visibilidad social.
@@ -346,6 +346,5 @@ Este proyecto está distribuido bajo licencia **Apache License 2.0**. Consulta e
 
 Proyecto académico desarrollado como **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)**.
 
-Autor inferido del historial Git local: **AlexxKai**.
-
+Autor: **AlexxKai**.
 

@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,11 +59,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.kaishelvesapp.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -84,55 +85,35 @@ fun ReaderTextSizePanel(
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.96f))
             .navigationBarsPadding()
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(38.dp),
-            contentAlignment = Alignment.Center
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (showReset) {
                 IconButton(
                     onClick = onResetZoomPercent,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Replay,
-                        contentDescription = "Restaurar tamaño de texto",
+                        contentDescription = stringResource(R.string.reader_restore_text_size),
                         tint = Color.White
                     )
                 }
             }
             Text(
                 text = "$zoomPercent%",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
+                modifier = Modifier.width(46.dp)
             )
-        }
-        Text(
-            text = when {
-                isReflowMode -> "Tamaño de lectura remaquetada"
-                canUseReflowMode -> "Zoom visual; cambia a vista reflow desde Vista"
-                else -> "Zoom visual: este PDF no tiene texto extraíble para reflow"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.72f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(42.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
             Slider(
                 value = zoomPercent.toFloat(),
                 onValueChange = { onZoomPercentChange(it.roundToInt()) },
@@ -147,6 +128,17 @@ fun ReaderTextSizePanel(
                 text = "+",
                 onClick = { onZoomPercentChange(zoomPercent + 1) }
             )
+            TextButton(
+                onClick = { onZoomPercentChange(READER_PDF_ZOOM_DEFAULT) },
+                modifier = Modifier.height(30.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.reader_zoom_default_110),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
         }
     }
 }
@@ -169,20 +161,20 @@ fun PdfDisplaySettingsPanel(
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.96f))
             .navigationBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Text(
-            text = "Brillo:",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.White
-        )
-        ReaderPercentControl(
-            value = brightnessPercent,
-            onValueChange = onBrightnessChange,
-            showSettings = true,
-            onSettingsClick = onOpenBrightnessAdvancedSettings,
-            leadingContent = {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Checkbox(
                     checked = autoBrightness,
                     onCheckedChange = onAutoBrightnessChange,
@@ -193,31 +185,45 @@ fun PdfDisplaySettingsPanel(
                     )
                 )
                 Text(
-                    text = "Auto",
+                    text = stringResource(R.string.reader_brightness_auto),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White
                 )
             }
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(30.dp)
-        ) {
-            Checkbox(
-                checked = blueLightFilterEnabled,
-                onCheckedChange = onBlueLightFilterChange,
-                modifier = Modifier.size(32.dp),
-                colors = CheckboxDefaults.colors(
-                    checkedColor = Color(0xFFB9C7FF),
-                    uncheckedColor = Color.White
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = blueLightFilterEnabled,
+                    onCheckedChange = onBlueLightFilterChange,
+                    modifier = Modifier.size(32.dp),
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Color(0xFFB9C7FF),
+                        uncheckedColor = Color.White
+                    )
                 )
-            )
-            Text(
-                text = "Filtro de luz azul para el cuidado de la vista",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White
-            )
+                Text(
+                    text = stringResource(R.string.reader_blue_light_filter_short),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White
+                )
+            }
         }
+        ReaderPercentControl(
+            value = brightnessPercent,
+            onValueChange = onBrightnessChange,
+            showSettings = true,
+            onSettingsClick = onOpenBrightnessAdvancedSettings,
+            leadingContent = {
+                Text(
+                    text = stringResource(R.string.reader_brightness),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    modifier = Modifier.width(58.dp)
+                )
+            }
+        )
         ReaderPercentControl(
             value = blueLightOpacity,
             onValueChange = onBlueLightOpacityChange,
@@ -225,7 +231,7 @@ fun PdfDisplaySettingsPanel(
             onSettingsClick = {},
             leadingContent = {
                 Text(
-                    text = "Opacidad",
+                    text = stringResource(R.string.reader_blue_light_opacity),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White,
                     modifier = Modifier.width(58.dp)
@@ -246,7 +252,7 @@ fun ReaderPercentControl(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp),
+            .height(38.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -265,7 +271,7 @@ fun ReaderPercentControl(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Settings,
-                    contentDescription = "Ajustes de brillo",
+                    contentDescription = stringResource(R.string.reader_brightness_settings),
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
@@ -281,23 +287,9 @@ fun ReaderPercentSlider(
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(
-        modifier = modifier.height(50.dp)
+        modifier = modifier.height(34.dp)
     ) {
         val safeValue = value.coerceIn(0, 100)
-        val labelWidth = 36.dp
-        val fraction = safeValue / 100f
-        val labelOffset = ((maxWidth - labelWidth) * fraction).coerceIn(0.dp, maxWidth - labelWidth)
-        Text(
-            text = "$safeValue%",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .width(labelWidth)
-                .offset(x = labelOffset)
-                .align(Alignment.TopStart)
-                .background(Color.Black.copy(alpha = 0.78f))
-        )
         Slider(
             value = safeValue.toFloat(),
             onValueChange = { onValueChange(it.roundToInt()) },
@@ -305,7 +297,7 @@ fun ReaderPercentSlider(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(34.dp)
-                .align(Alignment.BottomCenter)
+                .align(Alignment.Center)
         )
     }
 }
@@ -784,7 +776,7 @@ fun readerDisplaySettingsPreferences(context: Context) =
 
 const val READER_PDF_ZOOM_MIN = 50
 const val READER_PDF_ZOOM_MAX = 150
-const val READER_PDF_ZOOM_DEFAULT = 100
+const val READER_PDF_ZOOM_DEFAULT = 110
 const val READER_ANNOTATION_TEXT_LIMIT = 480
 
 fun readReaderBrightnessPercent(context: Context): Int {
@@ -828,7 +820,14 @@ fun readerPdfZoomPercentToScale(zoomPercent: Int): Float {
 
 data class ReaderPaginationResult(
     val pages: List<String>,
-    val sourceStartPages: List<Int>
+    val sourceStartPages: List<Int>,
+    val pageTextRanges: List<ReaderPageTextRange> = emptyList()
+)
+
+data class ReaderPageTextRange(
+    val sourcePage: Int,
+    val start: Int,
+    val end: Int
 )
 
 fun paginateReflowTextWithStarts(
@@ -851,11 +850,12 @@ fun paginateReflowTextWithStarts(
         color = android.graphics.Color.rgb(26, 18, 11)
     }
     val blocks = mutableListOf<String>()
+    val pageTextRanges = mutableListOf<ReaderPageTextRange>()
     val startPages = mutableListOf<Int>()
 
-    normalizedSources.forEach { sourceText ->
+    normalizedSources.forEachIndexed { sourceIndex, sourceText ->
         startPages += blocks.size.coerceAtLeast(0)
-        if (sourceText.isBlank()) return@forEach
+        if (sourceText.isBlank()) return@forEachIndexed
         val layout = StaticLayout.Builder
             .obtain(sourceText, 0, sourceText.length, paint, maxWidthPx)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -877,14 +877,27 @@ fun paginateReflowTextWithStarts(
             val safeEndLine = endLine.coerceAtLeast(startLine + 1).coerceAtMost(layout.lineCount)
             val startOffset = layout.getLineStart(startLine)
             val endOffset = layout.getLineEnd(safeEndLine - 1)
-            blocks += sourceText.substring(startOffset, endOffset).trim()
+            val rawBlock = sourceText.substring(startOffset, endOffset)
+            val trimmedBlock = rawBlock.trim()
+            val firstContentOffset = rawBlock.indexOfFirst { !it.isWhitespace() }
+            val lastContentOffset = rawBlock.indexOfLast { !it.isWhitespace() }
+            if (trimmedBlock.isNotBlank() && firstContentOffset >= 0 && lastContentOffset >= firstContentOffset) {
+                // La página visible mantiene el mismo texto que antes; los offsets solo se usan para anotaciones.
+                blocks += trimmedBlock
+                pageTextRanges += ReaderPageTextRange(
+                    sourcePage = sourceIndex,
+                    start = startOffset + firstContentOffset,
+                    end = startOffset + lastContentOffset + 1
+                )
+            }
             startLine = safeEndLine
         }
     }
-    val pages = blocks.filter { it.isNotBlank() }.ifEmpty { listOf("") }
+    val pages = blocks.ifEmpty { listOf("") }
     return ReaderPaginationResult(
         pages = pages,
-        sourceStartPages = startPages.map { it.coerceIn(0, pages.lastIndex.coerceAtLeast(0)) }.ifEmpty { listOf(0) }
+        sourceStartPages = startPages.map { it.coerceIn(0, pages.lastIndex.coerceAtLeast(0)) }.ifEmpty { listOf(0) },
+        pageTextRanges = pageTextRanges.takeIf { it.size == pages.size }.orEmpty()
     )
 }
 

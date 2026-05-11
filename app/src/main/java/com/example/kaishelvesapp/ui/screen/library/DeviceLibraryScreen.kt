@@ -178,6 +178,27 @@ enum class DeviceLibrarySortOption {
     RecentList
 }
 
+enum class DeviceLibraryFileTypeFilter(
+    val extensions: Set<String>,
+    val labelRes: Int
+) {
+    Epub(setOf("epub"), R.string.device_library_file_type_epub),
+    PdfDjvu(setOf("pdf", "djvu", "djv"), R.string.device_library_file_type_pdf_djvu),
+    MobiAzwPrc(setOf("mobi", "azw", "azw3", "prc"), R.string.device_library_file_type_mobi_azw_prc),
+    Fb2(setOf("fb2"), R.string.device_library_file_type_fb2),
+    ChmUmd(setOf("chm", "umd"), R.string.device_library_file_type_chm_umd),
+    Document(setOf("doc", "docx", "odt", "rtf"), R.string.device_library_file_type_document),
+    Text(setOf("txt", "md", "log"), R.string.device_library_file_type_text),
+    Comic(setOf("cbz", "cbr"), R.string.device_library_file_type_comic),
+    Html(setOf("html", "htm", "mhtml", "mht"), R.string.device_library_file_type_html)
+}
+
+fun DeviceLibraryFile.matchesFileTypeFilters(selectedTypes: Set<DeviceLibraryFileTypeFilter>): Boolean {
+    if (selectedTypes.isEmpty()) return true
+    val extension = name.substringAfterLast('.', missingDelimiterValue = "").lowercase(Locale.ROOT)
+    return selectedTypes.any { filter -> extension in filter.extensions }
+}
+
 @Composable
 fun DeviceLibraryScreen(
     userName: String?,
@@ -203,6 +224,7 @@ fun DeviceLibraryScreen(
     var layoutMode by remember { mutableStateOf(readDeviceLibraryLayoutMode(context)) }
     var sortOption by remember { mutableStateOf(DeviceLibrarySortOption.Title) }
     var sortDescending by remember { mutableStateOf(false) }
+    var selectedFileTypes by remember { mutableStateOf(readDeviceLibraryFileTypeFilters(context)) }
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
     var showImportBooksDialog by remember { mutableStateOf(false) }
@@ -222,22 +244,23 @@ fun DeviceLibraryScreen(
                 }
         }
     }
-    val sortedFiles = remember(uiState.filteredFiles, fileMetadata, sortOption, sortDescending) {
+    val sortedFiles = remember(uiState.filteredFiles, fileMetadata, sortOption, sortDescending, selectedFileTypes) {
+        val formatFilteredFiles = uiState.filteredFiles.filter { it.matchesFileTypeFilters(selectedFileTypes) }
         val sorted = when (sortOption) {
-            DeviceLibrarySortOption.Title -> uiState.filteredFiles.sortedBy { file ->
+            DeviceLibrarySortOption.Title -> formatFilteredFiles.sortedBy { file ->
                 fileMetadata[file.uri.toString()]?.title?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT)
                     ?: file.name.substringBeforeLast('.').lowercase(Locale.ROOT)
             }
-            DeviceLibrarySortOption.Author -> uiState.filteredFiles.sortedBy { file ->
+            DeviceLibrarySortOption.Author -> formatFilteredFiles.sortedBy { file ->
                 fileMetadata[file.uri.toString()]?.author?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT)
                     ?: file.name.substringBeforeLast('.').lowercase(Locale.ROOT)
             }
-            DeviceLibrarySortOption.Recent -> uiState.filteredFiles.sortedBy { it.modifiedAtMillis ?: 0L }
-            DeviceLibrarySortOption.Folder -> uiState.filteredFiles.sortedWith(
+            DeviceLibrarySortOption.Recent -> formatFilteredFiles.sortedBy { it.modifiedAtMillis ?: 0L }
+            DeviceLibrarySortOption.Folder -> formatFilteredFiles.sortedWith(
                 compareBy<DeviceLibraryFile> { it.location.lowercase(Locale.ROOT) }
                     .thenBy { it.name.substringBeforeLast('.').lowercase(Locale.ROOT) }
             )
-            DeviceLibrarySortOption.RecentList -> uiState.filteredFiles.sortedBy { it.uri.toString() }
+            DeviceLibrarySortOption.RecentList -> formatFilteredFiles.sortedBy { it.uri.toString() }
         }
         if (sortDescending) sorted.asReversed() else sorted
     }
@@ -353,12 +376,17 @@ fun DeviceLibraryScreen(
                     layoutMode = layoutMode,
                     sortOption = sortOption,
                     sortDescending = sortDescending,
+                    selectedFileTypes = selectedFileTypes,
                     onLayoutModeChange = {
                         layoutMode = it
                         saveDeviceLibraryLayoutMode(context, it)
                     },
                     onSortOptionChange = { sortOption = it },
                     onToggleSortDirection = { sortDescending = !sortDescending },
+                    onFileTypesChange = {
+                        selectedFileTypes = it
+                        saveDeviceLibraryFileTypeFilters(context, it)
+                    },
                     onDismiss = { showFilterPanel = false }
                 )
             }
