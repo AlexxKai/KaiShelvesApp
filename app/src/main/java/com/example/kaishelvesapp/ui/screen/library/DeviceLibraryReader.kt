@@ -1,6 +1,9 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
 import android.content.Context
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -53,6 +56,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import org.json.JSONTokener
 @Composable
 fun DeviceBookReaderDialog(
     file: DeviceLibraryFile,
@@ -184,7 +188,15 @@ private fun buildEpubEngineDocument(
     val readerChapters = mutableListOf<ReaderChapter>()
     val bookTitle = epubContent.metadata.title.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.')
     val bookAuthor = epubContent.metadata.author.takeIf { it.isNotBlank() }.orEmpty()
-    val webPageIndicesByHref = epubContent.webPages.mapIndexed { index, page -> page.href to index }.toMap()
+    val needsFallbackCover = epubContent.coverPath == null
+    val epubWebPages = if (needsFallbackCover) {
+        listOf(ReaderEpubPage(title = bookTitle, href = EPUB_FALLBACK_COVER_HREF, html = "")) +
+            epubContent.webPages.map { page -> ReaderEpubPage(page.title, page.href, page.html) }
+    } else {
+        epubContent.webPages.map { page -> ReaderEpubPage(page.title, page.href, page.html) }
+    }
+    val webPageIndexOffset = if (needsFallbackCover) 1 else 0
+    val webPageIndicesByHref = epubContent.webPages.mapIndexed { index, page -> page.href to (index + webPageIndexOffset) }.toMap()
 
     if (epubContent.coverPath != null) {
         sourcePages += listOf(bookTitle, bookAuthor).filter { it.isNotBlank() }.joinToString("\n").ifBlank { bookTitle }
@@ -220,13 +232,7 @@ private fun buildEpubEngineDocument(
         pages = pages,
         pageTitles = pageTitles,
         pageKinds = pageKinds,
-        epubPages = epubContent.webPages.map { page ->
-            ReaderEpubPage(
-                title = page.title,
-                href = page.href,
-                html = page.html
-            )
-        },
+        epubPages = epubWebPages,
         epubResources = epubContent.resources,
         chapters = readerChapters,
         imageLabels = epubContent.imagePaths.map { path -> path.substringAfterLast('/') },
@@ -267,80 +273,161 @@ private fun String.withoutLeadingTitle(title: String): String {
 
 @Composable
 private fun EpubWebReaderPage(
+    file: DeviceLibraryFile,
     page: ReaderEpubPage,
     resources: Map<String, ByteArray>,
     textSizePercent: Int,
+    colorTheme: ReaderColorTheme,
     onVisibleTextChanged: (String) -> Unit,
+    onSelectedTextChanged: (String) -> Unit,
+    onHighlightSelection: (String, String) -> Unit,
+    onNoteSelection: (String) -> Unit,
     onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
     onCenterTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    AndroidView(
-        modifier = modifier.background(Color(0xFF202006)),
-        factory = { viewContext ->
-            WebView(viewContext).apply {
-                setBackgroundColor(android.graphics.Color.rgb(32, 32, 6))
-                settings.javaScriptEnabled = false
-                settings.domStorageEnabled = false
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                webViewClient = EpubResourceWebViewClient(resources)
-                var downX = 0f
-                var downY = 0f
-                setOnTouchListener { view, event ->
-                    when (event.actionMasked) {
-                        MotionEvent.ACTION_DOWN -> {
-                            downX = event.x
-                            downY = event.y
-                            false
+    if (page.href == EPUB_FALLBACK_COVER_HREF) {
+        Box(
+            modifier = modifier
+                .background(colorTheme.background.toReaderColor())
+                .clickable(onClick = onCenterTap),
+            contentAlignment = Alignment.Center
+        ) {
+            FilePagePreview(
+                file = file,
+                coverText = "",
+                overrideCoverId = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(34.dp)
+            )
+        }
+        return
+    }
+
+    var webSelectedText by remember(page.href) { mutableStateOf("") }
+    var activeWebView by remember(page.href) { mutableStateOf<WebView?>(null) }
+    Box(modifier = modifier.background(Color(0xFF202006))) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                object : WebView(viewContext) {
+                    override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
+                        return super.startActionMode(EpubSelectionActionModeCallback(callback))
+                    }
+
+                    override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
+                        return super.startActionMode(EpubSelectionActionModeCallback(callback), type)
+                    }
+                }.apply {
+                    activeWebView = this
+                    setBackgroundColor(android.graphics.Color.rgb(32, 32, 6))
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = false
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    settings.builtInZoomControls = false
+                    settings.displayZoomControls = false
+                    webViewClient = EpubResourceWebViewClient(resources)
+                    var longPressTriggered = false
+                    setOnLongClickListener {
+                        longPressTriggered = true
+                        listOf(260L, 620L, 980L).forEach { delayMillis ->
+                            postDelayed({
+                                captureEpubSelection(
+                                    onSelected = { selected ->
+                                        webSelectedText = selected
+                                        onSelectedTextChanged(selected)
+                                    }
+                                )
+                            }, delayMillis)
                         }
-                        MotionEvent.ACTION_UP -> {
-                            val movedX = kotlin.math.abs(event.x - downX)
-                            val movedY = kotlin.math.abs(event.y - downY)
-                            if (movedX < 18f && movedY < 18f) {
-                                val width = view.width.toFloat().coerceAtLeast(1f)
-                                when {
-                                    event.x < width * 0.24f -> {
-                                        onPreviousPage()
-                                        true
-                                    }
-                                    event.x > width * 0.76f -> {
-                                        onNextPage()
-                                        true
-                                    }
-                                    else -> {
-                                        onCenterTap()
-                                        true
-                                    }
-                                }
-                            } else {
+                        false
+                    }
+                    var downX = 0f
+                    var downY = 0f
+                    setOnTouchListener { view, event ->
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                downX = event.x
+                                downY = event.y
+                                longPressTriggered = false
                                 false
                             }
+                            MotionEvent.ACTION_UP -> {
+                                if (longPressTriggered) {
+                                    longPressTriggered = false
+                                    return@setOnTouchListener true
+                                }
+                                val movedX = kotlin.math.abs(event.x - downX)
+                                val movedY = kotlin.math.abs(event.y - downY)
+                                if (movedX < 18f && movedY < 18f) {
+                                    if (!longPressTriggered) {
+                                        webSelectedText = ""
+                                        evaluateJavascript("window.getSelection().removeAllRanges();", null)
+                                    }
+                                    val width = view.width.toFloat().coerceAtLeast(1f)
+                                    when {
+                                        event.x < width * 0.24f -> {
+                                            onPreviousPage()
+                                            true
+                                        }
+                                        event.x > width * 0.76f -> {
+                                            onNextPage()
+                                            true
+                                        }
+                                        else -> {
+                                            onCenterTap()
+                                            true
+                                        }
+                                    }
+                                } else {
+                                    false
+                                }
+                            }
+                            else -> false
                         }
-                        else -> false
                     }
                 }
+            },
+            update = { webView ->
+                val fontScale = readerPdfZoomPercentToScale(textSizePercent)
+                webView.settings.textZoom = (fontScale * 100).roundToInt().coerceIn(70, 220)
+                val renderTag = "${page.href}|${colorTheme.background}|${colorTheme.text}"
+                if (webView.tag != renderTag) {
+                    webView.tag = renderTag
+                    webSelectedText = ""
+                    onVisibleTextChanged(page.title)
+                    webView.loadDataWithBaseURL(
+                        page.epubBaseUrl(),
+                        page.html.withReaderColors(colorTheme).withoutExecutableScripts(),
+                        "text/html",
+                        "UTF-8",
+                        null
+                    )
+                }
             }
-        },
-        update = { webView ->
-            val fontScale = readerPdfZoomPercentToScale(textSizePercent)
-            webView.settings.textZoom = (fontScale * 100).roundToInt().coerceIn(70, 220)
-            if (webView.tag != page.href) {
-                webView.tag = page.href
-                onVisibleTextChanged(page.title)
-                webView.loadDataWithBaseURL(
-                    page.epubBaseUrl(),
-                    page.html,
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
-            }
+        )
+        if (webSelectedText.isNotBlank()) {
+            ReaderSelectionToolbar(
+                selectedText = webSelectedText,
+                onHighlightSelection = { _, color ->
+                    activeWebView?.applyEpubSelectionStyle(color)
+                    onHighlightSelection(webSelectedText, color)
+                    webSelectedText = ""
+                },
+                onNoteSelection = {
+                    onNoteSelection(webSelectedText)
+                    webSelectedText = ""
+                },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 92.dp),
+                showDelete = false
+            )
         }
-    )
+    }
 }
 
 private class EpubResourceWebViewClient(
@@ -362,7 +449,32 @@ private class EpubResourceWebViewClient(
     }
 }
 
+private class EpubSelectionActionModeCallback(
+    private val delegate: ActionMode.Callback?
+) : ActionMode.Callback {
+    override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+        delegate?.onCreateActionMode(mode, menu)
+        menu.clear()
+        return true
+    }
+
+    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+        delegate?.onPrepareActionMode(mode, menu)
+        menu.clear()
+        return true
+    }
+
+    override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+        return delegate?.onActionItemClicked(mode, item) ?: false
+    }
+
+    override fun onDestroyActionMode(mode: ActionMode) {
+        delegate?.onDestroyActionMode(mode)
+    }
+}
+
 private const val EPUB_WEB_HOST = "kai-epub.local"
+private const val EPUB_FALLBACK_COVER_HREF = "__kai_fallback_cover__"
 
 private fun ReaderEpubPage.epubBaseUrl(): String {
     val directory = href.substringBeforeLast('/', missingDelimiterValue = "")
@@ -371,6 +483,68 @@ private fun ReaderEpubPage.epubBaseUrl(): String {
     } else {
         "https://$EPUB_WEB_HOST/$directory/"
     }
+}
+
+private fun String.withReaderColors(theme: ReaderColorTheme): String {
+    val colorCss = """
+        <style type="text/css">
+        html, body { background:${theme.background}; color:${theme.text}; }
+        body, p, li, blockquote, div, span, h1, h2, h3, h4, h5, h6 { color:${theme.text}; }
+        a { color:${theme.text}; }
+        </style>
+    """.trimIndent()
+    return if (contains("</head>", ignoreCase = true)) {
+        replace(Regex("(?i)</head>"), "$colorCss\n</head>")
+    } else {
+        "$colorCss\n$this"
+    }
+}
+
+private fun WebView.applyEpubSelectionStyle(color: String) {
+    val safeColor = color.substringAfter(":").takeIf { it.startsWith("#") } ?: "#EBC7E8"
+    val command = when {
+        color.startsWith("underline") || color.startsWith("diagonal") -> "document.execCommand('underline', false, null);"
+        color.startsWith("strike") -> "document.execCommand('strikeThrough', false, null);"
+        else -> "document.execCommand('hiliteColor', false, '$safeColor');"
+    }
+    evaluateJavascript(
+        """
+        (function(){
+            try {
+                document.designMode = 'on';
+                $command
+                document.designMode = 'off';
+            } catch(e) {
+                document.designMode = 'off';
+            }
+        })();
+        """.trimIndent(),
+        null
+    )
+}
+
+private fun WebView.captureEpubSelection(onSelected: (String) -> Unit) {
+    evaluateJavascript("(function(){return window.getSelection().toString();})()") { encoded ->
+        val selected = encoded.decodeJavascriptString().trim()
+        if (selected.isNotBlank()) {
+            onSelected(selected)
+        }
+    }
+}
+
+private fun String.withoutExecutableScripts(): String {
+    return replace(Regex("(?is)<script\\b.*?</script>"), "")
+}
+
+private fun String.decodeJavascriptString(): String {
+    return runCatching { JSONTokener(this).nextValue() as? String }
+        .getOrNull()
+        .orEmpty()
+}
+
+private fun String.toReaderColor(): Color {
+    return runCatching { Color(android.graphics.Color.parseColor(this)) }
+        .getOrDefault(Color(0xFF202006))
 }
 
 private fun String.epubMimeType(): String {
@@ -422,10 +596,12 @@ private fun ReflowBookReader(
             var controlsVisible by remember(file.uri) { mutableStateOf(false) }
             var showDisplaySettings by remember(file.uri) { mutableStateOf(false) }
             var showTextSizeSettings by remember(file.uri) { mutableStateOf(false) }
+            var showThemeSettings by remember(file.uri) { mutableStateOf(false) }
             var showAnnotationsDialog by remember(file.uri) { mutableStateOf(false) }
             var showNoteDialog by remember(file.uri) { mutableStateOf(false) }
             var editingAnnotation by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
             var brightnessPercent by remember { mutableStateOf(readReaderBrightnessPercent(context)) }
+            var readerColorTheme by remember { mutableStateOf(readReaderColorTheme(context)) }
             var autoBrightness by remember { mutableStateOf(readReaderAutoBrightness(context)) }
             var blueLightFilterEnabled by remember { mutableStateOf(readReaderBlueLightFilterEnabled(context)) }
             var blueLightOpacity by remember { mutableStateOf(readReaderBlueLightOpacity(context)) }
@@ -476,6 +652,7 @@ private fun ReflowBookReader(
                 blueLightFilterEnabled,
                 blueLightOpacity,
                 textSizePercent,
+                readerColorTheme,
                 selectedBrightnessEdge,
                 resumeAutoBrightnessAfterInactivity,
                 resumeAutoBrightnessMinutes
@@ -491,6 +668,7 @@ private fun ReflowBookReader(
                     resumeAutoBrightness = resumeAutoBrightnessAfterInactivity,
                     resumeAutoBrightnessMinutes = resumeAutoBrightnessMinutes
                 )
+                saveReaderColorTheme(context, readerColorTheme)
             }
             LaunchedEffect(brightnessFeedbackPercent) {
                 if (brightnessFeedbackPercent != null) {
@@ -535,10 +713,40 @@ private fun ReflowBookReader(
                 ) {
                     if (engineKind == ReaderEngineKind.Epub && loadedDocument.epubPages.isNotEmpty()) {
                         EpubWebReaderPage(
+                            file = file,
                             page = loadedDocument.epubPages[currentPage.coerceIn(0, loadedDocument.epubPages.lastIndex)],
                             resources = loadedDocument.epubResources,
                             textSizePercent = textSizePercent,
+                            colorTheme = readerColorTheme,
                             onVisibleTextChanged = { visiblePageText = it },
+                            onSelectedTextChanged = { selectedText = it },
+                            onHighlightSelection = { selected, highlightColor ->
+                                annotationRepository.addAnnotation(
+                                    file = file,
+                                    annotation = DeviceReaderAnnotation(
+                                        type = DeviceReaderAnnotationType.Highlight,
+                                        page = currentPage,
+                                        pageCount = logicalPageCount,
+                                        selectedText = selected.take(READER_ANNOTATION_TEXT_LIMIT),
+                                        color = highlightColor
+                                    )
+                                )
+                                annotationRepository.addAnnotation(
+                                    file = file,
+                                    annotation = DeviceReaderAnnotation(
+                                        type = DeviceReaderAnnotationType.Bookmark,
+                                        page = currentPage,
+                                        pageCount = logicalPageCount,
+                                        selectedText = selected.take(READER_ANNOTATION_TEXT_LIMIT),
+                                        note = selected.take(READER_ANNOTATION_TEXT_LIMIT)
+                                    )
+                                )
+                                annotations = annotationRepository.getAnnotations(file)
+                            },
+                            onNoteSelection = { selected ->
+                                selectedText = selected.take(READER_ANNOTATION_TEXT_LIMIT)
+                                showNoteDialog = true
+                            },
                             onPreviousPage = { currentPage = (currentPage - 1).coerceAtLeast(0) },
                             onNextPage = { currentPage = (currentPage + 1).coerceAtMost(logicalPageCount - 1) },
                             onCenterTap = { controlsVisible = true },
@@ -613,17 +821,23 @@ private fun ReflowBookReader(
                                     controlsVisible = false
                                     showDisplaySettings = false
                                     showTextSizeSettings = false
+                                    showThemeSettings = false
                                 }
                         )
                         PdfReaderTopControls(
                             title = loadedDocument.title,
                             onDismiss = onDismiss,
                             onTitleClick = {},
+                            onOpenThemeSettings = {
+                                showThemeSettings = true
+                                showDisplaySettings = false
+                                showTextSizeSettings = false
+                            },
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .zIndex(2f)
                         )
-                        if (!showDisplaySettings && !showTextSizeSettings) {
+                        if (!showDisplaySettings && !showTextSizeSettings && !showThemeSettings) {
                             PdfReaderBottomControls(
                                 currentPage = currentPage,
                                 pageCount = logicalPageCount,
@@ -635,11 +849,13 @@ private fun ReflowBookReader(
                                 onOpenDisplaySettings = {
                                     showDisplaySettings = true
                                     showTextSizeSettings = false
+                                    showThemeSettings = false
                                 },
                                 annotationsCount = annotations.size,
                                 onOpenTextSizeSettings = {
                                     showTextSizeSettings = true
                                     showDisplaySettings = false
+                                    showThemeSettings = false
                                     zoomPercentBeforeChange = null
                                 },
                                 onOpenAnnotations = { showAnnotationsDialog = true },
@@ -704,6 +920,16 @@ private fun ReflowBookReader(
                             onBlueLightFilterChange = { blueLightFilterEnabled = it },
                             onBlueLightOpacityChange = { blueLightOpacity = it.coerceIn(0, 100) },
                             onOpenBrightnessAdvancedSettings = { showBrightnessAdvancedSettings = true },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .zIndex(3f)
+                        )
+                    }
+
+                    if (showThemeSettings) {
+                        ReaderThemePanel(
+                            selectedTheme = readerColorTheme,
+                            onThemeSelected = { readerColorTheme = it },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .zIndex(3f)
@@ -797,6 +1023,18 @@ private fun ReflowBookReader(
                                         note = note
                                     )
                                 )
+                                if (engineKind == ReaderEngineKind.Epub) {
+                                    annotationRepository.addAnnotation(
+                                        file = file,
+                                        annotation = DeviceReaderAnnotation(
+                                            type = DeviceReaderAnnotationType.Bookmark,
+                                            page = currentPage,
+                                            pageCount = logicalPageCount,
+                                            selectedText = selectedText.ifBlank { visiblePageText }.take(READER_ANNOTATION_TEXT_LIMIT),
+                                            note = note
+                                        )
+                                    )
+                                }
                                 annotations = annotationRepository.getAnnotations(file)
                                 showNoteDialog = false
                             },

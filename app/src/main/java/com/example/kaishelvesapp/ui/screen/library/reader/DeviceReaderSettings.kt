@@ -9,6 +9,7 @@ import android.text.TextPaint
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,114 @@ import com.example.kaishelvesapp.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+data class ReaderColorTheme(
+    val background: String,
+    val text: String
+)
+
+enum class ReaderColorThemePreset(
+    val background: String,
+    val text: String,
+    val titleRes: Int
+) {
+    Day("#F6F1E5", "#1E1A12", R.string.reader_theme_day),
+    Night("#2E3235", "#D8D3C0", R.string.reader_theme_night),
+    Amoled("#000000", "#E7E2CF", R.string.reader_theme_amoled),
+    Sepia("#E7D7AF", "#21190E", R.string.reader_theme_sepia)
+}
+
+@Composable
+fun ReaderThemePanel(
+    selectedTheme: ReaderColorTheme,
+    onThemeSelected: (ReaderColorTheme) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .navigationBarsPadding()
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.reader_theme_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ReaderColorThemePreset.entries.forEach { preset ->
+                val isSelected = selectedTheme.background == preset.background && selectedTheme.text == preset.text
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(88.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(preset.background.toComposeColor())
+                        .border(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) Color(0xFF8FB6FF) else Color.White.copy(alpha = 0.24f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .clickable { onThemeSelected(ReaderColorTheme(preset.background, preset.text)) }
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(preset.titleRes),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = preset.text.toComposeColor(),
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = true,
+                onCheckedChange = null,
+                modifier = Modifier.size(32.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = Color(0xFF4097E8),
+                    uncheckedColor = Color.White
+                )
+            )
+            Text(
+                text = stringResource(R.string.reader_theme_apply_colors_only),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White
+            )
+        }
+    }
+}
+
+fun readReaderColorTheme(context: Context): ReaderColorTheme {
+    val prefs = readerDisplaySettingsPreferences(context)
+    return ReaderColorTheme(
+        background = prefs.getString("reader_theme_background", ReaderColorThemePreset.Night.background)
+            ?: ReaderColorThemePreset.Night.background,
+        text = prefs.getString("reader_theme_text", ReaderColorThemePreset.Night.text)
+            ?: ReaderColorThemePreset.Night.text
+    )
+}
+
+fun saveReaderColorTheme(context: Context, theme: ReaderColorTheme) {
+    readerDisplaySettingsPreferences(context)
+        .edit()
+        .putString("reader_theme_background", theme.background)
+        .putString("reader_theme_text", theme.text)
+        .apply()
+}
+
+private fun String.toComposeColor(): Color {
+    return runCatching { Color(android.graphics.Color.parseColor(this)) }.getOrDefault(Color.White)
+}
 
 @Composable
 fun ReaderTextSizePanel(

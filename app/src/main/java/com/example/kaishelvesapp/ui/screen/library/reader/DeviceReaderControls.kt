@@ -63,6 +63,7 @@ fun PdfReaderTopControls(
     title: String,
     onDismiss: () -> Unit,
     onTitleClick: () -> Unit,
+    onOpenThemeSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -107,18 +108,21 @@ fun PdfReaderTopControls(
                     modifier = Modifier.background(Color(0xFF252525))
                 ) {
                     listOf(
-                        "Opciones de Visualización",
-                        "Opciones de Control",
-                        "Otros ajustes",
-                        "Temas",
-                        "Reemplazo de nombres",
-                        "Más operaciones...",
-                        "Compartir...",
-                        "Información del libro"
-                    ).forEach { label ->
+                        R.string.reader_menu_visual_options to {},
+                        R.string.reader_menu_control_options to {},
+                        R.string.reader_menu_other_settings to {},
+                        R.string.reader_menu_themes to onOpenThemeSettings,
+                        R.string.reader_menu_name_replacement to {},
+                        R.string.reader_menu_more_operations to {},
+                        R.string.reader_menu_share to {},
+                        R.string.reader_menu_book_info to {}
+                    ).forEach { (labelRes, action) ->
                         DropdownMenuItem(
-                            text = { Text(text = label, color = Color.White) },
-                            onClick = { menuExpanded = false }
+                            text = { Text(text = stringResource(labelRes), color = Color.White) },
+                            onClick = {
+                                menuExpanded = false
+                                action()
+                            }
                         )
                     }
                 }
