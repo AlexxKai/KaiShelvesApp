@@ -1,10 +1,16 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
 import android.content.Context
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
 import android.view.ActionMode
+import android.view.GestureDetector
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -30,18 +36,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
 import androidx.compose.ui.zIndex
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
@@ -104,6 +114,7 @@ data class ReaderEngineDocument(
     val epubResources: Map<String, ByteArray> = emptyMap(),
     val chapters: List<ReaderChapter> = emptyList(),
     val imageLabels: List<String> = emptyList(),
+    val imagePaths: List<String> = emptyList(),
     val coverPath: String? = null
 )
 
@@ -188,15 +199,22 @@ private fun buildEpubEngineDocument(
     val readerChapters = mutableListOf<ReaderChapter>()
     val bookTitle = epubContent.metadata.title.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.')
     val bookAuthor = epubContent.metadata.author.takeIf { it.isNotBlank() }.orEmpty()
-    val needsFallbackCover = epubContent.coverPath == null
-    val epubWebPages = if (needsFallbackCover) {
-        listOf(ReaderEpubPage(title = bookTitle, href = EPUB_FALLBACK_COVER_HREF, html = "")) +
-            epubContent.webPages.map { page -> ReaderEpubPage(page.title, page.href, page.html) }
-    } else {
-        epubContent.webPages.map { page -> ReaderEpubPage(page.title, page.href, page.html) }
+    val introPages = buildEpubIntroPages(
+        title = bookTitle,
+        author = bookAuthor,
+        description = epubContent.metadata.description,
+        coverPath = epubContent.coverPath,
+        synopsisTitle = synopsisTitle
+    )
+    val chapterTextByHref = epubContent.chapters.associate { it.href to it.text }
+    val epubWebPages = introPages + epubContent.webPages.map { page ->
+        val fallbackText = chapterTextByHref[page.href].orEmpty()
+        ReaderEpubPage(page.title, page.href, page.html.withReadableFallback(fallbackText))
     }
-    val webPageIndexOffset = if (needsFallbackCover) 1 else 0
-    val webPageIndicesByHref = epubContent.webPages.mapIndexed { index, page -> page.href to (index + webPageIndexOffset) }.toMap()
+    val webPageIndexOffset = introPages.size
+    val webPageIndicesByHref = epubContent.webPages
+        .mapIndexed { index, page -> page.href to (index + webPageIndexOffset) }
+        .toMap()
 
     if (epubContent.coverPath != null) {
         sourcePages += listOf(bookTitle, bookAuthor).filter { it.isNotBlank() }.joinToString("\n").ifBlank { bookTitle }
@@ -236,8 +254,37 @@ private fun buildEpubEngineDocument(
         epubResources = epubContent.resources,
         chapters = readerChapters,
         imageLabels = epubContent.imagePaths.map { path -> path.substringAfterLast('/') },
+        imagePaths = epubContent.imagePaths,
         coverPath = epubContent.coverPath
     )
+}
+
+private fun buildEpubIntroPages(
+    title: String,
+    author: String,
+    description: String,
+    coverPath: String?,
+    synopsisTitle: String
+): List<ReaderEpubPage> {
+    val pages = mutableListOf<ReaderEpubPage>()
+    val coverHtml = buildString {
+        append("<section class=\"kai-reader-cover\">")
+        coverPath?.let { append("<img class=\"kai-cover-image\" src=\"${it.escapeHtmlAttribute()}\" alt=\"${title.escapeHtmlAttribute()}\" />") }
+        append("<h1>${title.escapeHtml()}</h1>")
+        if (author.isNotBlank()) append("<p class=\"kai-author\">${author.escapeHtml()}</p>")
+        append("</section>")
+    }
+    pages += ReaderEpubPage(title = title, href = EPUB_SYNTHETIC_COVER_HREF, html = coverHtml)
+
+    if (description.isNotBlank()) {
+        pages += ReaderEpubPage(
+            title = synopsisTitle,
+            href = EPUB_SYNTHETIC_SYNOPSIS_HREF,
+            html = "<section class=\"kai-reader-synopsis\"><h2>${synopsisTitle.escapeHtml()}</h2><p>${description.escapeHtml()}</p></section>"
+        )
+    }
+
+    return pages
 }
 
 private fun buildTextEngineDocument(
@@ -274,160 +321,869 @@ private fun String.withoutLeadingTitle(title: String): String {
 @Composable
 private fun EpubWebReaderPage(
     file: DeviceLibraryFile,
-    page: ReaderEpubPage,
+    pages: List<ReaderEpubPage>,
     resources: Map<String, ByteArray>,
+    annotations: List<DeviceReaderAnnotation>,
+    pageIndex: Int,
     textSizePercent: Int,
     colorTheme: ReaderColorTheme,
+    onPageCountChanged: (Int) -> Unit,
+    onChapterPageStartsChanged: (List<Int>) -> Unit,
+    onPageChanged: (Int) -> Unit,
     onVisibleTextChanged: (String) -> Unit,
     onSelectedTextChanged: (String) -> Unit,
-    onHighlightSelection: (String, String) -> Unit,
+    onHighlightSelection: (String, String, String?) -> String,
+    onHighlightUpdate: (DeviceReaderAnnotation, String) -> Unit,
+    onHighlightDelete: (DeviceReaderAnnotation) -> Unit,
     onNoteSelection: (String) -> Unit,
     onPreviousPage: () -> Unit,
     onNextPage: () -> Unit,
     onCenterTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (page.href == EPUB_FALLBACK_COVER_HREF) {
-        Box(
-            modifier = modifier
-                .background(colorTheme.background.toReaderColor())
-                .clickable(onClick = onCenterTap),
-            contentAlignment = Alignment.Center
-        ) {
-            FilePagePreview(
-                file = file,
-                coverText = "",
-                overrideCoverId = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(34.dp)
-            )
-        }
-        return
+    var webSelectedText by remember(file.uri) { mutableStateOf("") }
+    var selectedRect by remember(file.uri) { mutableStateOf<Rect?>(null) }
+    var activeHighlight by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
+    var activeWebView by remember(file.uri) { mutableStateOf<WebView?>(null) }
+    val density = LocalDensity.current
+    val latestAnnotations by rememberUpdatedState(annotations)
+    val bridge = remember(file.uri) {
+        EpubJsBridge(
+            onTextSelected = { text, _, rect ->
+                val safeText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+                webSelectedText = safeText
+                selectedRect = rect
+                activeHighlight = null
+                onSelectedTextChanged(safeText)
+            },
+            onHighlightSelected = { annotationId, text, rect ->
+                activeHighlight = latestAnnotations.firstOrNull { it.id == annotationId }
+                    ?: latestAnnotations.firstOrNull {
+                        it.type == DeviceReaderAnnotationType.Highlight && it.selectedText == text
+                    }
+                webSelectedText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+                selectedRect = rect
+                onSelectedTextChanged(webSelectedText)
+            },
+            onPageCountReady = { pageCount, chapterStarts ->
+                onPageCountChanged(pageCount.coerceAtLeast(1))
+                onChapterPageStartsChanged(chapterStarts.ifEmpty { listOf(0) })
+            },
+            onPageChanged = onPageChanged
+        )
     }
 
-    var webSelectedText by remember(page.href) { mutableStateOf("") }
-    var activeWebView by remember(page.href) { mutableStateOf<WebView?>(null) }
-    Box(modifier = modifier.background(Color(0xFF202006))) {
+    Box(modifier = modifier.background(colorTheme.background.toReaderColor())) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 object : WebView(viewContext) {
                     override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
-                        return super.startActionMode(EpubSelectionActionModeCallback(callback))
+                        return null
                     }
 
                     override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
-                        return super.startActionMode(EpubSelectionActionModeCallback(callback), type)
+                        return null
                     }
                 }.apply {
                     activeWebView = this
-                    setBackgroundColor(android.graphics.Color.rgb(32, 32, 6))
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
                     settings.builtInZoomControls = false
                     settings.displayZoomControls = false
+                    isHorizontalScrollBarEnabled = false
+                    isVerticalScrollBarEnabled = false
+                    overScrollMode = WebView.OVER_SCROLL_NEVER
                     webViewClient = EpubResourceWebViewClient(resources)
-                    var longPressTriggered = false
-                    setOnLongClickListener {
-                        longPressTriggered = true
-                        listOf(260L, 620L, 980L).forEach { delayMillis ->
-                            postDelayed({
-                                captureEpubSelection(
-                                    onSelected = { selected ->
-                                        webSelectedText = selected
-                                        onSelectedTextChanged(selected)
-                                    }
-                                )
-                            }, delayMillis)
+                    addJavascriptInterface(bridge, EPUB_JS_BRIDGE_NAME)
+                    var selectionGestureActive = false
+                    val gestureDetector = GestureDetector(
+                        viewContext,
+                        object : GestureDetector.SimpleOnGestureListener() {
+                            override fun onLongPress(event: MotionEvent) {
+                                selectionGestureActive = true
+                                evaluateJavascript("window.kaiEnableSelection && window.kaiEnableSelection();", null)
+                            }
+
+                            override fun onSingleTapUp(event: MotionEvent): Boolean {
+                                return true
+                            }
+
+                            override fun onFling(
+                                e1: MotionEvent?,
+                                e2: MotionEvent,
+                                velocityX: Float,
+                                velocityY: Float
+                            ): Boolean {
+                                if (selectionGestureActive) return true
+                                val isHorizontalPageGesture = abs(velocityX) > abs(velocityY) && abs(velocityX) >= 420f
+                                val isVerticalPageGesture = abs(velocityY) > abs(velocityX) && abs(velocityY) >= 420f
+                                when {
+                                    isHorizontalPageGesture -> if (velocityX < 0f) onNextPage() else onPreviousPage()
+                                    isVerticalPageGesture -> if (velocityY < 0f) onNextPage() else onPreviousPage()
+                                    else -> return false
+                                }
+                                return true
+                            }
                         }
-                        false
-                    }
+                    )
                     var downX = 0f
                     var downY = 0f
+                    var downAt = 0L
                     setOnTouchListener { view, event ->
+                        val handled = gestureDetector.onTouchEvent(event)
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 downX = event.x
                                 downY = event.y
-                                longPressTriggered = false
-                                false
+                                downAt = event.eventTime
+                                selectionGestureActive = false
                             }
                             MotionEvent.ACTION_UP -> {
-                                if (longPressTriggered) {
-                                    longPressTriggered = false
+                                if (selectionGestureActive) {
+                                    evaluateJavascript("window.kaiFinishSelection && window.kaiFinishSelection();", null)
+                                    selectionGestureActive = false
                                     return@setOnTouchListener true
                                 }
-                                val movedX = kotlin.math.abs(event.x - downX)
-                                val movedY = kotlin.math.abs(event.y - downY)
-                                if (movedX < 18f && movedY < 18f) {
-                                    if (!longPressTriggered) {
-                                        webSelectedText = ""
-                                        evaluateJavascript("window.getSelection().removeAllRanges();", null)
-                                    }
-                                    val width = view.width.toFloat().coerceAtLeast(1f)
-                                    when {
-                                        event.x < width * 0.24f -> {
-                                            onPreviousPage()
-                                            true
-                                        }
-                                        event.x > width * 0.76f -> {
-                                            onNextPage()
-                                            true
-                                        }
-                                        else -> {
-                                            onCenterTap()
-                                            true
+                                val dragX = event.x - downX
+                                val dragY = event.y - downY
+                                val duration = event.eventTime - downAt
+                                val tapGesture = duration < 420L && abs(dragX) < 24f && abs(dragY) < 24f
+                                if (tapGesture) {
+                                    evaluateJavascript("window.kaiTapAt && window.kaiTapAt(${event.x}, ${event.y});") { handledTap ->
+                                        if (handledTap == "true") return@evaluateJavascript
+                                        evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                        val width = this.width.toFloat().coerceAtLeast(1f)
+                                        when {
+                                            event.x < width * 0.26f -> onPreviousPage()
+                                            event.x > width * 0.74f -> onNextPage()
+                                            else -> onCenterTap()
                                         }
                                     }
-                                } else {
-                                    false
+                                    return@setOnTouchListener true
                                 }
+                                evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                val threshold = 84f
+                                val quickPageDrag = duration < 650L && maxOf(abs(dragX), abs(dragY)) > threshold
+                                if (!handled && webSelectedText.isBlank() && quickPageDrag) {
+                                    if (abs(dragY) >= abs(dragX)) {
+                                        if (dragY < 0f) onNextPage() else onPreviousPage()
+                                    } else {
+                                        if (dragX < 0f) onNextPage() else onPreviousPage()
+                                    }
+                                    return@setOnTouchListener true
+                                }
+                                postDelayed({ snapEpubWebViewToNearestPage(this, onPageChanged) }, 120L)
                             }
-                            else -> false
+                            MotionEvent.ACTION_CANCEL -> {
+                                evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                selectionGestureActive = false
+                                postDelayed({ snapEpubWebViewToNearestPage(this, onPageChanged) }, 120L)
+                            }
                         }
+                        handled
                     }
                 }
             },
             update = { webView ->
                 val fontScale = readerPdfZoomPercentToScale(textSizePercent)
-                webView.settings.textZoom = (fontScale * 100).roundToInt().coerceIn(70, 220)
-                val renderTag = "${page.href}|${colorTheme.background}|${colorTheme.text}"
+                val renderTag = "${pages.size}|${colorTheme.background}|${colorTheme.text}|$textSizePercent"
                 if (webView.tag != renderTag) {
                     webView.tag = renderTag
                     webSelectedText = ""
-                    onVisibleTextChanged(page.title)
+                    selectedRect = null
+                    activeHighlight = null
+                    onVisibleTextChanged(pages.firstOrNull()?.title.orEmpty())
                     webView.loadDataWithBaseURL(
-                        page.epubBaseUrl(),
-                        page.html.withReaderColors(colorTheme).withoutExecutableScripts(),
+                        "https://$EPUB_WEB_HOST/",
+                        buildEpubReaderHtml(
+                            pages = pages,
+                            annotations = annotations.filter { it.type == DeviceReaderAnnotationType.Highlight },
+                            resources = resources,
+                            theme = colorTheme,
+                            fontScale = fontScale
+                        ),
                         "text/html",
                         "UTF-8",
                         null
                     )
+                    webView.postDelayed({ webView.goToEpubPage(pageIndex) }, 360L)
+                } else {
+                    webView.goToEpubPage(pageIndex)
                 }
             }
         )
-        if (webSelectedText.isNotBlank()) {
-            ReaderSelectionToolbar(
-                selectedText = webSelectedText,
-                onHighlightSelection = { _, color ->
-                    activeWebView?.applyEpubSelectionStyle(color)
-                    onHighlightSelection(webSelectedText, color)
+
+        selectedRect?.takeIf { webSelectedText.isNotBlank() }?.let { rect ->
+            val toolbarWidthPx = with(density) { 342.dp.roundToPx() }
+            Popup(
+                offset = IntOffset(
+                    x = (rect.centerX() - toolbarWidthPx / 2).coerceAtLeast(8),
+                    y = (rect.top - with(density) { 126.dp.roundToPx() }).coerceAtLeast(24)
+                ),
+                onDismissRequest = {
+                    activeWebView?.cancelEpubSelection()
                     webSelectedText = ""
-                },
-                onNoteSelection = {
-                    onNoteSelection(webSelectedText)
-                    webSelectedText = ""
-                },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 92.dp),
-                showDelete = false
-            )
+                    selectedRect = null
+                    activeHighlight = null
+                }
+            ) {
+                ReaderSelectionToolbar(
+                    selectedText = webSelectedText,
+                    onHighlightSelection = { _, color ->
+                        activeHighlight?.let { highlight ->
+                            onHighlightUpdate(highlight, color)
+                            activeWebView?.updateEpubHighlightStyle(highlight.id, color)
+                            webSelectedText = ""
+                            selectedRect = null
+                            activeHighlight = null
+                        } ?: run {
+                            val text = webSelectedText
+                            if (text.isNotBlank()) {
+                                activeWebView?.createEpubHighlight(color) { tempId ->
+                                    if (tempId.isNotBlank()) {
+                                        val storedId = onHighlightSelection(text, color, tempId)
+                                        if (tempId != storedId) {
+                                            activeWebView?.replaceEpubHighlightId(tempId, storedId)
+                                        }
+                                    }
+                                    webSelectedText = ""
+                                    selectedRect = null
+                                    activeHighlight = null
+                                }
+                            } else {
+                                webSelectedText = ""
+                                selectedRect = null
+                                activeHighlight = null
+                            }
+                        }
+                    },
+                    onNoteSelection = {
+                        onNoteSelection(webSelectedText)
+                        webSelectedText = ""
+                        selectedRect = null
+                        activeHighlight = null
+                        activeWebView?.cancelEpubSelection()
+                    },
+                    showDelete = activeHighlight != null,
+                    onDeleteSelection = {
+                        activeHighlight?.let { highlight ->
+                            onHighlightDelete(highlight)
+                            activeWebView?.removeEpubHighlight(highlight.id)
+                        }
+                        webSelectedText = ""
+                        selectedRect = null
+                        activeHighlight = null
+                    }
+                )
+            }
         }
     }
+}
+
+// El puente JS mantiene la selección dentro de WebView y deja que Compose pinte el menú flotante.
+private class EpubJsBridge(
+    private val onTextSelected: (String, String, Rect) -> Unit,
+    private val onHighlightSelected: (String, String, Rect) -> Unit,
+    private val onPageCountReady: (Int, List<Int>) -> Unit,
+    private val onPageChanged: (Int) -> Unit
+) {
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun onSelectionChanged(text: String, tempId: String, x: Float, y: Float, width: Float, height: Float) {
+        val rect = Rect(x.toInt(), y.toInt(), (x + width).toInt(), (y + height).toInt())
+        mainHandler.post { onTextSelected(text, tempId, rect) }
+    }
+
+    @JavascriptInterface
+    fun onHighlightTapped(id: String, text: String, x: Float, y: Float, width: Float, height: Float) {
+        val rect = Rect(x.toInt(), y.toInt(), (x + width).toInt(), (y + height).toInt())
+        mainHandler.post { onHighlightSelected(id, text, rect) }
+    }
+
+    @JavascriptInterface
+    fun onPageCountCalculated(count: Int, chapterStarts: String) {
+        val starts = chapterStarts.split(',')
+            .mapNotNull { it.toIntOrNull() }
+            .ifEmpty { listOf(0) }
+        mainHandler.post { onPageCountReady(count, starts) }
+    }
+
+    @JavascriptInterface
+    fun onPageChanged(page: Int) {
+        mainHandler.post { onPageChanged(page.coerceAtLeast(0)) }
+    }
+}
+
+// Construye un único documento HTML para que las columnas CSS paginen to-do el EPUB como páginas reales.
+private fun buildEpubReaderHtml(
+    pages: List<ReaderEpubPage>,
+    annotations: List<DeviceReaderAnnotation>,
+    resources: Map<String, ByteArray>,
+    theme: ReaderColorTheme,
+    fontScale: Float
+): String {
+    val epubCss = resources.epubStylesheetCss()
+    val sections = pages.mapIndexed { index, page ->
+        val html = page.html.toEpubSectionBody(page.href, resources)
+        val bodyClasses = page.html.extractEpubBodyClasses()
+        """
+        <section class="kai-source $bodyClasses" data-source-index="$index" data-title="${page.title.escapeHtmlAttribute()}">
+            $html
+        </section>
+        """.trimIndent()
+    }.joinToString("\n")
+    val highlightsJson = annotations.joinToString(
+        prefix = "[",
+        postfix = "]"
+    ) { annotation ->
+        """{"id":"${annotation.id.escapeJsString()}","text":"${annotation.selectedText.escapeJsString()}","color":"${annotation.color.escapeJsString()}"}"""
+    }
+
+    return """
+        <!doctype html>
+        <html>
+        <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                $epubCss
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    overflow: hidden;
+                    background: ${theme.background};
+                    color: ${theme.text};
+                }
+                #kai-reader-content {
+                    position: fixed;
+                    inset: 0;
+                    box-sizing: border-box;
+                    column-width: calc(100vw - 52px);
+                    column-gap: 52px;
+                    font-size: ${(18f * fontScale).coerceIn(12f, 32f)}px;
+                    line-height: 1.52;
+                    padding: 30px 26px 34px;
+                    font-family: serif;
+                    overflow-x: hidden;
+                    overflow-y: hidden;
+                    scrollbar-width: none;
+                    -webkit-user-select: none;
+                    user-select: none;
+                }
+                #kai-reader-content.kai-selection-active {
+                    -webkit-user-select: text;
+                    user-select: text;
+                }
+                #kai-reader-content::-webkit-scrollbar {
+                    display: none;
+                }
+                .kai-source {
+                    min-height: calc(100vh - 64px);
+                    display: block;
+                    -webkit-column-break-inside: auto;
+                    break-inside: auto;
+                }
+                .kai-source + .kai-source {
+                    -webkit-column-break-before: always;
+                    break-before: column;
+                    page-break-before: always;
+                }
+                .kai-reader-cover {
+                    min-height: calc(100vh - 72px);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    text-align: center;
+                }
+                .kai-cover-image {
+                    max-width: 62vw;
+                    max-height: 58vh;
+                    object-fit: contain;
+                    margin-bottom: 24px;
+                }
+                .kai-reader-cover h1, h1, h2, h3 {
+                    color: ${theme.text};
+                    line-height: 1.18;
+                }
+                .kai-author {
+                    opacity: 0.78;
+                    font-style: italic;
+                }
+                .kai-reader-images figure {
+                    margin: 0 0 24px;
+                    break-inside: avoid;
+                    text-align: center;
+                }
+                img, svg {
+                    max-width: calc(100vw - 64px);
+                    max-height: calc(100vh - 104px);
+                    object-fit: contain;
+                }
+                p, li, blockquote, div, span, a {
+                    color: ${theme.text};
+                }
+                .kai-highlight {
+                    border-radius: 2px;
+                    pointer-events: auto;
+                }
+                .kai-highlight[data-style="underline"], .kai-highlight[data-style="diagonal"] {
+                    text-decoration: underline;
+                    background: transparent !important;
+                }
+                .kai-highlight[data-style="strike"] {
+                    text-decoration: line-through;
+                    background: transparent !important;
+                }
+                #kai-magnifier {
+                    position: fixed;
+                    display: none;
+                    z-index: 9999;
+                    max-width: 240px;
+                    padding: 8px 10px;
+                    border-radius: 999px;
+                    background: rgba(32, 32, 32, 0.94);
+                    color: #ffffff;
+                    font-size: 20px;
+                    line-height: 1.2;
+                    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+                    pointer-events: none;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+            </style>
+        </head>
+        <body>
+            <div id="kai-magnifier"></div>
+            <main id="kai-reader-content">
+                $sections
+            </main>
+            <script>
+                (function() {
+                    const bridge = window.$EPUB_JS_BRIDGE_NAME;
+                    const highlights = $highlightsJson;
+                    const content = document.getElementById('kai-reader-content');
+                    const pageWidth = () => Math.max(1, window.innerWidth);
+                    const pageIndex = () => Math.round((content ? content.scrollLeft : 0) / pageWidth());
+                    const pageCount = () => Math.max(1, Math.ceil((content ? content.scrollWidth : document.body.scrollWidth) / pageWidth()));
+                    const highlightColor = (raw) => raw.indexOf(':') >= 0 ? raw.split(':').pop() : raw;
+                    const highlightStyle = (raw) => raw.indexOf(':') >= 0 ? raw.split(':')[0] : 'fill';
+                    let selectionArmed = false;
+                    let savedSelectionRange = null;
+                    let savedSelectionText = '';
+
+                    function notifyPages() {
+                        const starts = Array.from(document.querySelectorAll('.kai-source')).map((node) => {
+                            return Math.max(0, Math.round(node.offsetLeft / pageWidth()));
+                        });
+                        bridge.onPageCountCalculated(pageCount(), starts.join(','));
+                        bridge.onPageChanged(pageIndex());
+                    }
+
+                    function notifyPageChanged() {
+                        bridge.onPageChanged(Math.max(0, Math.min(pageIndex(), pageCount() - 1)));
+                    }
+
+                    function goToPage(page) {
+                        const safePage = Math.max(0, Math.min(page, pageCount() - 1));
+                        if (content) content.scrollTo({ left: safePage * pageWidth(), top: 0, behavior: 'auto' });
+                        bridge.onPageChanged(safePage);
+                    }
+
+                    function textNodesUnder(root) {
+                        const nodes = [];
+                        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                            acceptNode: (node) => {
+                                if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                                if (node.parentElement && node.parentElement.closest('.kai-highlight, script, style')) return NodeFilter.FILTER_REJECT;
+                                return NodeFilter.FILTER_ACCEPT;
+                            }
+                        });
+                        while (walker.nextNode()) nodes.push(walker.currentNode);
+                        return nodes;
+                    }
+
+                    function applyHighlight(annotation) {
+                        if (!annotation.text) return;
+                        for (const node of textNodesUnder(content || document.body)) {
+                            const index = node.nodeValue.indexOf(annotation.text);
+                            if (index < 0) continue;
+                            const range = document.createRange();
+                            range.setStart(node, index);
+                            range.setEnd(node, index + annotation.text.length);
+                            const span = document.createElement('span');
+                            span.className = 'kai-highlight';
+                            span.dataset.id = annotation.id;
+                            span.dataset.style = highlightStyle(annotation.color || '');
+                            span.style.backgroundColor = highlightColor(annotation.color || '#EBC7E8');
+                            range.surroundContents(span);
+                            return;
+                        }
+                    }
+
+                    function bindHighlight(span) {
+                        span.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openHighlightMenu(span);
+                        });
+                    }
+
+                    function openHighlightMenu(span) {
+                        if (!span) return false;
+                        const rect = span.getBoundingClientRect();
+                        window.getSelection().removeAllRanges();
+                        hideMagnifier();
+                        selectionArmed = false;
+                        if (content) content.classList.remove('kai-selection-active');
+                        bridge.onHighlightTapped(span.dataset.id || '', span.innerText || span.textContent || '', rect.left, rect.top, rect.width, rect.height);
+                        return true;
+                    }
+
+                    function wrapCurrentSelection(color) {
+                        const liveSelected = selectionRect();
+                        const range = liveSelected?.selection?.rangeCount ? liveSelected.selection.getRangeAt(0).cloneRange() : savedSelectionRange;
+                        const text = liveSelected?.text || savedSelectionText || '';
+                        if (!range || !text.trim()) return null;
+                        const id = 'tmp-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+                        const span = document.createElement('span');
+                        span.className = 'kai-highlight';
+                        span.dataset.id = id;
+                        span.dataset.style = highlightStyle(color || '');
+                        span.style.backgroundColor = highlightColor(color || '#EBC7E8');
+                        try {
+                            range.surroundContents(span);
+                        } catch (error) {
+                            const fragment = range.extractContents();
+                            span.appendChild(fragment);
+                            range.insertNode(span);
+                        }
+                        bindHighlight(span);
+                        savedSelectionRange = null;
+                        savedSelectionText = '';
+                        return { id: id, text: span.innerText || span.textContent || text, rect: span.getBoundingClientRect() };
+                    }
+
+                    function showMagnifier(text, rect) {
+                        const magnifier = document.getElementById('kai-magnifier');
+                        if (!magnifier) return;
+                        magnifier.textContent = text.slice(0, 42);
+                        magnifier.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 250)) + 'px';
+                        magnifier.style.top = Math.max(14, rect.top - 58) + 'px';
+                        magnifier.style.display = 'block';
+                    }
+
+                    function hideMagnifier() {
+                        const magnifier = document.getElementById('kai-magnifier');
+                        if (magnifier) magnifier.style.display = 'none';
+                    }
+
+                    function selectionRect() {
+                        const selection = window.getSelection();
+                        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+                        const range = selection.getRangeAt(0);
+                        const rect = range.getBoundingClientRect();
+                        if (!rect || rect.width === 0 || rect.height === 0) return null;
+                        return { selection, rect, text: selection.toString() };
+                    }
+
+                    function rememberSelection(selected) {
+                        if (!selected || !selected.text.trim()) return;
+                        savedSelectionRange = selected.selection.getRangeAt(0).cloneRange();
+                        savedSelectionText = selected.text;
+                    }
+
+                    highlights.forEach(applyHighlight);
+                    document.querySelectorAll('.kai-highlight').forEach(bindHighlight);
+                    window.kaiGoToPage = goToPage;
+                    window.kaiWheelPageTimer = 0;
+                    window.kaiTapAt = function(x, y) {
+                        const element = document.elementFromPoint(x, y);
+                        const highlight = element ? element.closest('.kai-highlight') : null;
+                        return openHighlightMenu(highlight);
+                    };
+                    window.kaiEnableSelection = function() {
+                        selectionArmed = true;
+                        if (content) content.classList.add('kai-selection-active');
+                    };
+                    window.kaiDisableSelection = function() {
+                        selectionArmed = false;
+                        hideMagnifier();
+                    };
+                    window.kaiFinishSelection = function() {
+                        const selected = selectionRect();
+                        hideMagnifier();
+                        selectionArmed = false;
+                        if (content) content.classList.remove('kai-selection-active');
+                        if (!selected || !selected.text.trim()) return;
+                        rememberSelection(selected);
+                        bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
+                    };
+                    window.kaiCancelSelection = function() {
+                        selectionArmed = false;
+                        savedSelectionRange = null;
+                        savedSelectionText = '';
+                        hideMagnifier();
+                        if (content) content.classList.remove('kai-selection-active');
+                        window.getSelection().removeAllRanges();
+                    };
+                    window.kaiUpdateHighlight = function(id, color) {
+                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
+                            span.dataset.style = highlightStyle(color || '');
+                            span.style.backgroundColor = highlightColor(color || '#EBC7E8');
+                        });
+                    };
+                    window.kaiApplySelectionHighlight = function(color) {
+                        const selected = wrapCurrentSelection(color || '#EBC7E8');
+                        if (!selected || !selected.text.trim()) return '';
+                        window.getSelection().removeAllRanges();
+                        return selected.id || '';
+                    };
+                    window.kaiReplaceHighlightId = function(oldId, newId) {
+                        if (!oldId || !newId) return;
+                        document.querySelectorAll('.kai-highlight[data-id="' + oldId + '"]').forEach((span) => {
+                            span.dataset.id = newId;
+                        });
+                    };
+                    window.kaiRemoveHighlight = function(id) {
+                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
+                            span.replaceWith(document.createTextNode(span.textContent || ''));
+                        });
+                    };
+
+                    document.addEventListener('selectionchange', () => {
+                        if (!selectionArmed) {
+                            hideMagnifier();
+                            return;
+                        }
+                        const selected = selectionRect();
+                        if (!selected) {
+                            hideMagnifier();
+                            return;
+                        }
+                        rememberSelection(selected);
+                        showMagnifier(selected.text, selected.rect);
+                        bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
+                    });
+                    if (content) {
+                        content.addEventListener('scroll', () => window.clearTimeout(window.kaiScrollTimer) || (window.kaiScrollTimer = window.setTimeout(notifyPageChanged, 80)));
+                        content.addEventListener('wheel', (event) => {
+                            event.preventDefault();
+                            const now = Date.now();
+                            if (now - window.kaiWheelPageTimer < 360 || Math.abs(event.deltaY) < 10) return;
+                            window.kaiWheelPageTimer = now;
+                            goToPage(pageIndex() + (event.deltaY > 0 ? 1 : -1));
+                        }, { passive: false });
+                    }
+                    window.addEventListener('resize', () => window.setTimeout(notifyPages, 120));
+                    window.addEventListener('load', () => window.setTimeout(notifyPages, 180));
+                    window.setTimeout(notifyPages, 320);
+                })();
+            </script>
+        </body>
+        </html>
+    """.trimIndent()
+}
+
+// La navegación siempre salta a una columna concreta; tap, gesto, scroll y slider usan el mismo índice.
+private fun WebView.goToEpubPage(page: Int) {
+    evaluateJavascript("window.kaiGoToPage && window.kaiGoToPage(${page.coerceAtLeast(0)});", null)
+}
+
+private fun WebView.updateEpubHighlightStyle(annotationId: String, color: String) {
+    evaluateJavascript(
+        "window.kaiUpdateHighlight && window.kaiUpdateHighlight('${annotationId.escapeJsString()}', '${color.escapeJsString()}');",
+        null
+    )
+}
+
+private fun WebView.removeEpubHighlight(annotationId: String) {
+    evaluateJavascript(
+        "window.kaiRemoveHighlight && window.kaiRemoveHighlight('${annotationId.escapeJsString()}');",
+        null
+    )
+}
+
+private fun WebView.createEpubHighlight(
+    color: String,
+    onCreated: (String) -> Unit
+) {
+    evaluateJavascript(
+        """
+        (function() {
+            if (!window.kaiApplySelectionHighlight) return '';
+            return window.kaiApplySelectionHighlight('${color.escapeJsString()}');
+        })();
+        """.trimIndent()
+    ) { encoded ->
+        onCreated(encoded.decodeJavascriptString())
+    }
+}
+
+private fun WebView.cancelEpubSelection() {
+    evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+}
+
+private fun WebView.replaceEpubHighlightId(oldId: String?, newId: String) {
+    if (oldId.isNullOrBlank() || newId.isBlank()) return
+    evaluateJavascript(
+        "window.kaiReplaceHighlightId && window.kaiReplaceHighlightId('${oldId.escapeJsString()}', '${newId.escapeJsString()}');",
+        null
+    )
+}
+
+private fun snapEpubWebViewToNearestPage(webView: WebView, onPageChanged: (Int) -> Unit) {
+    webView.evaluateJavascript(
+        """
+        (function(){
+            var width = Math.max(1, window.innerWidth);
+            var content = document.getElementById('kai-reader-content');
+            var page = Math.round(((content && content.scrollLeft) || 0) / width);
+            if (window.kaiGoToPage) window.kaiGoToPage(page);
+            return page;
+        })();
+        """.trimIndent()
+    ) { encoded ->
+        encoded.toIntOrNull()?.let { onPageChanged(it.coerceAtLeast(0)) }
+    }
+}
+
+private fun String.toEpubSectionBody(pageHref: String, resources: Map<String, ByteArray>): String {
+    return withoutExecutableScripts()
+        .rewriteEpubRelativeResources(pageHref)
+        .inlineEpubImages(resources)
+        .extractEpubBodyContent()
+}
+
+private fun String.extractEpubBodyClasses(): String {
+    val match = Regex("(?is)<body\\b[^>]*\\bclass\\s*=\\s*(['\"])(.*?)\\1").find(this)
+    return match?.groupValues?.getOrNull(2)
+        ?.split(Regex("\\s+"))
+        ?.joinToString(" ") { it.escapeHtmlAttribute() }
+        .orEmpty()
+}
+
+private fun String.extractEpubBodyContent(): String {
+    val bodyMatch = Regex("(?is)<body\\b[^>]*>(.*?)</body>").find(this)
+    return (bodyMatch?.groupValues?.getOrNull(1) ?: this)
+        .replace(Regex("(?is)<head\\b.*?</head>"), "")
+}
+
+private fun Map<String, ByteArray>.epubStylesheetCss(): String {
+    return entries
+        .filter { it.key.endsWith(".css", ignoreCase = true) }
+        .joinToString("\n") { (path, bytes) ->
+            bytes.decodeToString()
+                .rewriteEpubCssUrls(path)
+                .inlineEpubCssImages(this)
+        }
+}
+
+private fun String.rewriteEpubCssUrls(cssPath: String): String {
+    val directory = cssPath.substringBeforeLast('/', missingDelimiterValue = "")
+    return replace(Regex("""(?i)url\(\s*(['"]?)(?!https?:|data:|#)([^'")]+)\1\s*\)""")) { match ->
+        val rawValue = match.groupValues[2].trim()
+        val valueWithoutFragment = rawValue.substringBefore('#')
+        val fragment = rawValue.substringAfter('#', missingDelimiterValue = "")
+        val resolvedPath = if (rawValue.startsWith("/")) {
+            rawValue.trimStart('/')
+        } else if (directory.isBlank()) {
+            valueWithoutFragment
+        } else {
+            "$directory/$valueWithoutFragment"
+        }.normalizeEpubPath()
+        val resolved = buildString {
+            append("https://")
+            append(EPUB_WEB_HOST)
+            append("/")
+            append(resolvedPath)
+            if (fragment.isNotBlank()) {
+                append("#")
+                append(fragment)
+            }
+        }
+        "url('$resolved')"
+    }
+}
+
+private fun String.rewriteEpubRelativeResources(pageHref: String): String {
+    val directory = pageHref.substringBeforeLast('/', missingDelimiterValue = "")
+    return replace(Regex("""(?i)\b(src|href)\s*=\s*(['"])(?!https?:|data:|mailto:|#)([^'"]+)\2""")) { match ->
+        val attr = match.groupValues[1]
+        val quote = match.groupValues[2]
+        val rawValue = match.groupValues[3]
+        val valueWithoutFragment = rawValue.substringBefore('#')
+        val fragment = rawValue.substringAfter('#', missingDelimiterValue = "")
+        val resolvedPath = if (rawValue.startsWith("/")) {
+            rawValue.trimStart('/')
+        } else if (directory.isBlank()) {
+            valueWithoutFragment
+        } else {
+            "$directory/$valueWithoutFragment"
+        }.normalizeEpubPath()
+        val resolved = buildString {
+            append("https://")
+            append(EPUB_WEB_HOST)
+            append("/")
+            append(resolvedPath)
+            if (fragment.isNotBlank()) {
+                append("#")
+                append(fragment)
+            }
+        }
+        "$attr=$quote$resolved$quote"
+    }
+}
+
+private fun String.inlineEpubImages(resources: Map<String, ByteArray>): String {
+    return replace(Regex("""(?i)\bsrc\s*=\s*(['"])https://$EPUB_WEB_HOST/([^'"]+)\1""")) { match ->
+        val quote = match.groupValues[1]
+        val rawPath = match.groupValues[2].substringBefore('#')
+        val path = rawPath.normalizeEpubPath()
+        val bytes = resources[path] ?: resources.entries.firstOrNull { it.key.equals(path, ignoreCase = true) }?.value
+        if (bytes == null) {
+            match.value
+        } else {
+            val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            "src=$quote" + "data:${path.epubMimeType()};base64,$encoded" + quote
+        }
+    }
+}
+
+private fun String.inlineEpubCssImages(resources: Map<String, ByteArray>): String {
+    return replace(Regex("""(?i)url\(\s*(['"])https://$EPUB_WEB_HOST/([^'"]+)\1\s*\)""")) { match ->
+        val quote = match.groupValues[1]
+        val rawPath = match.groupValues[2].substringBefore('#')
+        val path = rawPath.normalizeEpubPath()
+        val bytes = resources[path] ?: resources.entries.firstOrNull { it.key.equals(path, ignoreCase = true) }?.value
+        if (bytes == null) {
+            match.value
+        } else {
+            val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+            "url($quote" + "data:${path.epubMimeType()};base64,$encoded" + quote + ")"
+        }
+    }
+}
+
+private fun String.normalizeEpubPath(): String {
+    val parts = split('/').filter { it.isNotBlank() }
+    val stack = mutableListOf<String>()
+    parts.forEach { part ->
+        when (part) {
+            "." -> Unit
+            ".." -> if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex)
+            else -> stack += part
+        }
+    }
+    return stack.joinToString("/")
 }
 
 private class EpubResourceWebViewClient(
@@ -449,32 +1205,10 @@ private class EpubResourceWebViewClient(
     }
 }
 
-private class EpubSelectionActionModeCallback(
-    private val delegate: ActionMode.Callback?
-) : ActionMode.Callback {
-    override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-        delegate?.onCreateActionMode(mode, menu)
-        menu.clear()
-        return true
-    }
-
-    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-        delegate?.onPrepareActionMode(mode, menu)
-        menu.clear()
-        return true
-    }
-
-    override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-        return delegate?.onActionItemClicked(mode, item) ?: false
-    }
-
-    override fun onDestroyActionMode(mode: ActionMode) {
-        delegate?.onDestroyActionMode(mode)
-    }
-}
-
 private const val EPUB_WEB_HOST = "kai-epub.local"
-private const val EPUB_FALLBACK_COVER_HREF = "__kai_fallback_cover__"
+private const val EPUB_JS_BRIDGE_NAME = "KaiEpubBridge"
+private const val EPUB_SYNTHETIC_COVER_HREF = "__kai_cover__.xhtml"
+private const val EPUB_SYNTHETIC_SYNOPSIS_HREF = "__kai_synopsis__.xhtml"
 
 private fun ReaderEpubPage.epubBaseUrl(): String {
     val directory = href.substringBeforeLast('/', missingDelimiterValue = "")
@@ -497,6 +1231,45 @@ private fun String.withReaderColors(theme: ReaderColorTheme): String {
         replace(Regex("(?i)</head>"), "$colorCss\n</head>")
     } else {
         "$colorCss\n$this"
+    }
+}
+
+private fun String.withReadableFallback(fallbackText: String): String {
+    if (fallbackText.isBlank()) return this
+    if (contains(Regex("(?is)<img\\b|<svg\\b"))) return this
+    val hasVisibleBodyText = extractEpubBodyContent()
+        .replace(Regex("(?is)<(script|style)\\b.*?</\\1>"), "")
+        .replace(Regex("(?is)<[^>]+>"), " ")
+        .replace("&nbsp;", " ")
+        .trim()
+        .isNotBlank()
+    if (hasVisibleBodyText) return this
+    return "<section><p>${fallbackText.escapeHtml().replace("\n\n", "</p><p>").replace("\n", "<br />")}</p></section>"
+}
+
+private fun String.escapeHtml(): String {
+    return replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&#39;")
+}
+
+private fun String.escapeHtmlAttribute(): String = escapeHtml()
+
+private fun String.escapeJsString(): String {
+    return buildString {
+        this@escapeJsString.forEach { char ->
+            when (char) {
+                '\\' -> append("\\\\")
+                '\'' -> append("\\'")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(char)
+            }
+        }
     }
 }
 
@@ -591,8 +1364,11 @@ private fun ReflowBookReader(
         is ReaderEngineLoadState.Ready -> {
             val loadedDocument = state.document
             val annotationRepository = remember(file.uri) { DeviceLibraryRepository(context) }
-            var currentPage by remember(file.uri) { mutableStateOf(readDeviceBookCurrentPage(context, file, 1)) }
-            var logicalPageCount by remember(file.uri) { mutableStateOf(1) }
+            val storedPageCount = remember(file.uri) { readDeviceBookStoredPageCount(context, file) }
+            var currentPage by remember(file.uri) {
+                mutableStateOf(readDeviceBookCurrentPage(context, file, storedPageCount))
+            }
+            var logicalPageCount by remember(file.uri) { mutableStateOf(storedPageCount.coerceAtLeast(1)) }
             var controlsVisible by remember(file.uri) { mutableStateOf(false) }
             var showDisplaySettings by remember(file.uri) { mutableStateOf(false) }
             var showTextSizeSettings by remember(file.uri) { mutableStateOf(false) }
@@ -639,7 +1415,7 @@ private fun ReflowBookReader(
             }
             LaunchedEffect(engineKind, loadedDocument.epubPages.size) {
                 if (engineKind == ReaderEngineKind.Epub && loadedDocument.epubPages.isNotEmpty()) {
-                    logicalPageCount = loadedDocument.epubPages.size
+                    logicalPageCount = logicalPageCount.coerceAtLeast(1)
                     sourcePageStartPages = loadedDocument.epubPages.indices.toList().ifEmpty { listOf(0) }
                 }
             }
@@ -714,16 +1490,22 @@ private fun ReflowBookReader(
                     if (engineKind == ReaderEngineKind.Epub && loadedDocument.epubPages.isNotEmpty()) {
                         EpubWebReaderPage(
                             file = file,
-                            page = loadedDocument.epubPages[currentPage.coerceIn(0, loadedDocument.epubPages.lastIndex)],
+                            pages = loadedDocument.epubPages,
                             resources = loadedDocument.epubResources,
+                            annotations = annotations,
+                            pageIndex = currentPage,
                             textSizePercent = textSizePercent,
                             colorTheme = readerColorTheme,
+                            onPageCountChanged = { count -> logicalPageCount = count.coerceAtLeast(1) },
+                            onChapterPageStartsChanged = { starts -> sourcePageStartPages = starts.ifEmpty { listOf(0) } },
+                            onPageChanged = { page -> currentPage = page.coerceIn(0, logicalPageCount - 1) },
                             onVisibleTextChanged = { visiblePageText = it },
                             onSelectedTextChanged = { selectedText = it },
-                            onHighlightSelection = { selected, highlightColor ->
-                                annotationRepository.addAnnotation(
+                            onHighlightSelection = { selected, highlightColor, requestedId ->
+                                val storedHighlight = annotationRepository.addAnnotation(
                                     file = file,
                                     annotation = DeviceReaderAnnotation(
+                                        id = requestedId.orEmpty(),
                                         type = DeviceReaderAnnotationType.Highlight,
                                         page = currentPage,
                                         pageCount = logicalPageCount,
@@ -731,16 +1513,18 @@ private fun ReflowBookReader(
                                         color = highlightColor
                                     )
                                 )
-                                annotationRepository.addAnnotation(
+                                annotations = annotationRepository.getAnnotations(file)
+                                storedHighlight.id
+                            },
+                            onHighlightUpdate = { annotation, highlightColor ->
+                                annotationRepository.updateAnnotation(
                                     file = file,
-                                    annotation = DeviceReaderAnnotation(
-                                        type = DeviceReaderAnnotationType.Bookmark,
-                                        page = currentPage,
-                                        pageCount = logicalPageCount,
-                                        selectedText = selected.take(READER_ANNOTATION_TEXT_LIMIT),
-                                        note = selected.take(READER_ANNOTATION_TEXT_LIMIT)
-                                    )
+                                    annotation = annotation.copy(color = highlightColor)
                                 )
+                                annotations = annotationRepository.getAnnotations(file)
+                            },
+                            onHighlightDelete = { annotation ->
+                                annotationRepository.deleteAnnotation(file, annotation.id)
                                 annotations = annotationRepository.getAnnotations(file)
                             },
                             onNoteSelection = { selected ->

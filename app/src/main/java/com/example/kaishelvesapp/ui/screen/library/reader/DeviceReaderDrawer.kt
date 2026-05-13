@@ -1,5 +1,7 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -683,9 +687,36 @@ fun ReflowReaderImagesTab(
             )
         }
         item { PdfImagePlaceholderLabel(stringResource(R.string.reader_detected_cover)) }
-        items(document.imageLabels) { label ->
-            PdfImagePlaceholderLabel(stringResource(R.string.reader_detected_image, label))
+        items(document.imagePaths) { path ->
+            EpubDrawerImageItem(
+                path = path,
+                bytes = document.epubResources[path]
+                    ?: document.epubResources.entries.firstOrNull { it.key.equals(path, ignoreCase = true) }?.value
+            )
         }
+    }
+}
+
+@Composable
+private fun EpubDrawerImageItem(
+    path: String,
+    bytes: ByteArray?
+) {
+    val bitmap = remember(path, bytes) {
+        bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = stringResource(R.string.reader_detected_image, path.substringAfterLast('/')),
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth(0.76f)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.White.copy(alpha = 0.08f))
+        )
+    } else {
+        PdfImagePlaceholderLabel(stringResource(R.string.reader_detected_image, path.substringAfterLast('/')))
     }
 }
 
