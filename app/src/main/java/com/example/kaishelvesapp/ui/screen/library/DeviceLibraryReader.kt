@@ -347,6 +347,9 @@ private fun EpubWebReaderPage(
     var selectedRect by remember(file.uri) { mutableStateOf<Rect?>(null) }
     var activeHighlight by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
     var activeWebView by remember(file.uri) { mutableStateOf<WebView?>(null) }
+    var allowNativeSelection by remember(file.uri) { mutableStateOf(false) }
+    var selectionLongPressConfirmed by remember(file.uri) { mutableStateOf(false) }
+    var highlightTouchInProgress by remember(file.uri) { mutableStateOf(false) }
     val density = LocalDensity.current
     val latestAnnotations by rememberUpdatedState(annotations)
     val bridge = remember(file.uri) {
@@ -393,26 +396,74 @@ private fun EpubWebReaderPage(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 object : WebView(viewContext) {
+                    private fun shouldAllowSelectionActionMode(): Boolean {
+                        return allowNativeSelection && selectionLongPressConfirmed
+                    }
+
+                    private fun onNativeSelectionCreated() {
+                        postDelayed({
+                            readCurrentWebSelection(
+                                onSelection = { text, rect ->
+                                    val safeText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+
+                                    if (safeText.isBlank()) return@readCurrentWebSelection
+
+                                    webSelectedText = safeText
+                                    selectedRect = rect
+                                    activeHighlight = null
+                                    onSelectedTextChanged(safeText)
+
+                                    evaluateJavascript(
+                                        "window.kaiFinishSelection && window.kaiFinishSelection();",
+                                        null
+                                    )
+                                },
+                                fallback = {
+                                    evaluateJavascript(
+                                        "window.kaiCancelSelection && window.kaiCancelSelection();",
+                                        null
+                                    )
+                                }
+                            )
+                        }, 80L)
+                    }
+
                     override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
-                        return super.startActionMode(EpubSelectionActionModeCallback(callback) {
-                            captureEpubSelectionPreview { text, rect ->
-                                webSelectedText = text
-                                selectedRect = rect
-                                activeHighlight = null
-                                onSelectedTextChanged(text)
+                        if (!shouldAllowSelectionActionMode()) {
+                            post {
+                                evaluateJavascript(
+                                    "window.kaiCancelSelection && window.kaiCancelSelection();",
+                                    null
+                                )
                             }
-                        })
+                            return null
+                        }
+
+                        onNativeSelectionCreated()
+
+                        return super.startActionMode(
+                            EpubSelectionActionModeCallback(callback) {
+                                onNativeSelectionCreated()
+                            }
+                        )
                     }
 
                     override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
+                        if (!shouldAllowSelectionActionMode()) {
+                            post {
+                                evaluateJavascript(
+                                    "window.kaiCancelSelection && window.kaiCancelSelection();",
+                                    null
+                                )
+                            }
+                            return null
+                        }
+
+                        onNativeSelectionCreated()
+
                         return super.startActionMode(
                             EpubSelectionActionModeCallback(callback) {
-                                captureEpubSelectionPreview { text, rect ->
-                                    webSelectedText = text
-                                    selectedRect = rect
-                                    activeHighlight = null
-                                    onSelectedTextChanged(text)
-                                }
+                                onNativeSelectionCreated()
                             },
                             type
                         )
@@ -432,11 +483,21 @@ private fun EpubWebReaderPage(
                     webViewClient = EpubResourceWebViewClient(resources)
                     addJavascriptInterface(bridge, EPUB_JS_BRIDGE_NAME)
                     var selectionGestureActive = false
+                    var downX = 0f
+                    var downY = 0f
+                    var downAt = 0L
+                    var movedTooMuchForSelection = false
+
                     val gestureDetector = GestureDetector(
                         viewContext,
                         object : GestureDetector.SimpleOnGestureListener() {
                             override fun onLongPress(event: MotionEvent) {
+                                if (movedTooMuchForSelection || highlightTouchInProgress) return
+
                                 selectionGestureActive = true
+                                selectionLongPressConfirmed = true
+                                allowNativeSelection = true
+
                                 evaluateJavascript("window.kaiEnableSelection && window.kaiEnableSelection();", null)
                             }
 
@@ -450,44 +511,128 @@ private fun EpubWebReaderPage(
                                 velocityX: Float,
                                 velocityY: Float
                             ): Boolean {
-                                if (selectionGestureActive) return true
+                                if (selectionGestureActive || selectionLongPressConfirmed) return true
+
                                 val isHorizontalPageGesture = abs(velocityX) > abs(velocityY) && abs(velocityX) >= 420f
                                 val isVerticalPageGesture = abs(velocityY) > abs(velocityX) && abs(velocityY) >= 420f
                                 when {
-                                    isHorizontalPageGesture -> if (velocityX < 0f) onNextPage() else onPreviousPage()
-                                    isVerticalPageGesture -> if (velocityY < 0f) onNextPage() else onPreviousPage()
+                                    isHorizontalPageGesture -> {
+                                        if (velocityX < 0f) onNextPage() else onPreviousPage()
+                                        return true
+                                    }
+                                    isVerticalPageGesture -> {
+                                        if (velocityY < 0f) onNextPage() else onPreviousPage()
+                                        return true
+                                    }
                                     else -> return false
                                 }
-                                return true
                             }
                         }
                     )
-                    var downX = 0f
-                    var downY = 0f
-                    var downAt = 0L
-                    setOnTouchListener { view, event ->
-                        val handled = gestureDetector.onTouchEvent(event)
+                    setOnTouchListener { _, event ->
+                        val handledByGestureDetector = gestureDetector.onTouchEvent(event)
+
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 downX = event.x
                                 downY = event.y
                                 downAt = event.eventTime
+
+                                movedTooMuchForSelection = false
                                 selectionGestureActive = false
-                            }
-                            MotionEvent.ACTION_UP -> {
-                                if (selectionGestureActive) {
-                                    postDelayed({ evaluateJavascript("window.kaiFinishSelection && window.kaiFinishSelection();", null) }, 120L)
-                                    selectionGestureActive = false
-                                    return@setOnTouchListener true
+                                selectionLongPressConfirmed = false
+                                highlightTouchInProgress = false
+
+                                isPointInsideEpubHighlight(event.x, event.y) { isHighlight ->
+                                    highlightTouchInProgress = isHighlight
                                 }
+                            }
+
+                            MotionEvent.ACTION_MOVE -> {
+                                val dragX = event.x - downX
+                                val dragY = event.y - downY
+
+                                if (abs(dragX) > 18f || abs(dragY) > 18f) {
+                                    movedTooMuchForSelection = true
+                                }
+                            }
+
+                            MotionEvent.ACTION_UP -> {
                                 val dragX = event.x - downX
                                 val dragY = event.y - downY
                                 val duration = event.eventTime - downAt
-                                val tapGesture = duration < 420L && abs(dragX) < 24f && abs(dragY) < 24f
+
+                                if (highlightTouchInProgress) {
+                                    evaluateJavascript("window.kaiTapAt && window.kaiTapAt(${event.x}, ${event.y});", null)
+                                    highlightTouchInProgress = false
+                                    selectionGestureActive = false
+                                    selectionLongPressConfirmed = false
+                                    return@setOnTouchListener true
+                                }
+
+                                if (selectionGestureActive && selectionLongPressConfirmed) {
+                                    postDelayed({
+                                        readCurrentWebSelection(
+                                            onSelection = { text, rect ->
+                                                val safeText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+
+                                                if (safeText.isBlank()) {
+                                                    evaluateJavascript(
+                                                        "window.kaiCancelSelection && window.kaiCancelSelection();",
+                                                        null
+                                                    )
+                                                    return@readCurrentWebSelection
+                                                }
+
+                                                webSelectedText = safeText
+                                                selectedRect = rect
+                                                activeHighlight = null
+                                                onSelectedTextChanged(safeText)
+
+                                                evaluateJavascript(
+                                                    "window.kaiFinishSelection && window.kaiFinishSelection();",
+                                                    null
+                                                )
+                                            },
+                                            fallback = {
+                                                evaluateJavascript(
+                                                    "window.kaiFinishSelection && window.kaiFinishSelection();",
+                                                    null
+                                                )
+                                            }
+                                        )
+                                    }, 120L)
+
+                                    selectionGestureActive = false
+
+                                    return@setOnTouchListener false
+                                }
+
+                                val tapGesture = duration < 320L && abs(dragX) < 18f && abs(dragY) < 18f
+
                                 if (tapGesture) {
-                                    evaluateJavascript("window.kaiTapAt && window.kaiTapAt(${event.x}, ${event.y});") { handledTap ->
-                                        if (handledTap == "true") return@evaluateJavascript
-                                        evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                    allowNativeSelection = false
+                                    selectionLongPressConfirmed = false
+                                    selectionGestureActive = false
+
+                                    evaluateJavascript(
+                                        """
+                                        (function() {
+                                            if (window.kaiTapAt && window.kaiTapAt(${event.x}, ${event.y})) return true;
+                                            if (window.kaiLastHighlightTapAt && Date.now() - window.kaiLastHighlightTapAt < 450) return true;
+                                            window.kaiCancelSelection && window.kaiCancelSelection();
+                                            return false;
+                                        })();
+                                        """.trimIndent()
+                                    ) { handledTap ->
+                                        if (handledTap == "true") {
+                                            return@evaluateJavascript
+                                        }
+
+                                        webSelectedText = ""
+                                        selectedRect = null
+                                        activeHighlight = null
+
                                         val width = this.width.toFloat().coerceAtLeast(1f)
                                         when {
                                             event.x < width * 0.26f -> onPreviousPage()
@@ -497,10 +642,17 @@ private fun EpubWebReaderPage(
                                     }
                                     return@setOnTouchListener true
                                 }
-                                evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
-                                val threshold = 84f
-                                val quickPageDrag = duration < 650L && maxOf(abs(dragX), abs(dragY)) > threshold
-                                if (!handled && webSelectedText.isBlank() && quickPageDrag) {
+
+                                allowNativeSelection = false
+                                selectionLongPressConfirmed = false
+                                selectionGestureActive = false
+
+                                if (webSelectedText.isBlank()) {
+                                    evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                }
+
+                                val quickPageDrag = duration < 650L && maxOf(abs(dragX), abs(dragY)) > 84f
+                                if (!handledByGestureDetector && webSelectedText.isBlank() && quickPageDrag) {
                                     if (abs(dragY) >= abs(dragX)) {
                                         if (dragY < 0f) onNextPage() else onPreviousPage()
                                     } else {
@@ -511,12 +663,20 @@ private fun EpubWebReaderPage(
                                 postDelayed({ snapEpubWebViewToNearestPage(this, onPageChanged) }, 120L)
                             }
                             MotionEvent.ACTION_CANCEL -> {
-                                evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                if (webSelectedText.isBlank()) {
+                                    evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
+                                }
+
+                                allowNativeSelection = false
                                 selectionGestureActive = false
+                                selectionLongPressConfirmed = false
+                                highlightTouchInProgress = false
+                                movedTooMuchForSelection = false
                                 postDelayed({ snapEpubWebViewToNearestPage(this, onPageChanged) }, 120L)
                             }
                         }
-                        handled
+
+                        handledByGestureDetector
                     }
                 }
             },
@@ -723,19 +883,17 @@ private fun String.normalizeReaderSelectionText(): String {
 
 private class EpubSelectionActionModeCallback(
     private val delegate: ActionMode.Callback?,
-    private val onSelectionStarted: () -> Unit
+    private val onSelectionChanged: () -> Unit
 ) : ActionMode.Callback {
     override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-        delegate?.onCreateActionMode(mode, menu)
         menu?.clear()
-        onSelectionStarted()
-        return true
+        onSelectionChanged()
+        return delegate?.onCreateActionMode(mode, menu) ?: true
     }
 
     override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
-        delegate?.onPrepareActionMode(mode, menu)
         menu?.clear()
-        onSelectionStarted()
+        onSelectionChanged()
         return true
     }
 
@@ -783,6 +941,98 @@ private fun WebView.captureEpubSelectionPreview(onPreview: (String, Rect) -> Uni
             }
         }
     }, 80L)
+}
+
+private fun WebView.readCurrentWebSelection(
+    onSelection: (String, Rect) -> Unit,
+    fallback: () -> Unit = {}
+) {
+    evaluateJavascript(
+        """
+        (function() {
+            const selection = window.getSelection();
+
+            if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+                return '';
+            }
+
+            const range = selection.getRangeAt(0);
+
+            const rects = Array.from(range.getClientRects()).filter(function(rect) {
+                return rect.width > 0 &&
+                    rect.height > 0 &&
+                    rect.right >= 0 &&
+                    rect.left <= window.innerWidth &&
+                    rect.bottom >= 0 &&
+                    rect.top <= window.innerHeight;
+            });
+
+            const rect = rects.length ? rects[0] : range.getBoundingClientRect();
+
+            if (!rect || rect.width === 0 || rect.height === 0) {
+                return '';
+            }
+
+            return JSON.stringify({
+                text: selection.toString(),
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height
+            });
+        })();
+        """.trimIndent()
+    ) { encoded ->
+        val raw = encoded.decodeJavascriptString()
+
+        if (raw.isBlank()) {
+            fallback()
+            return@evaluateJavascript
+        }
+
+        runCatching {
+            val obj = JSONObject(raw)
+
+            val text = obj.optString("text").orEmpty()
+            val left = obj.optDouble("left").toInt()
+            val top = obj.optDouble("top").toInt()
+            val width = obj.optDouble("width").toInt()
+            val height = obj.optDouble("height").toInt()
+
+            if (text.isBlank() || width <= 0 || height <= 0) {
+                fallback()
+            } else {
+                onSelection(
+                    text,
+                    Rect(
+                        left,
+                        top,
+                        left + width,
+                        top + height
+                    )
+                )
+            }
+        }.onFailure {
+            fallback()
+        }
+    }
+}
+
+private fun WebView.isPointInsideEpubHighlight(
+    x: Float,
+    y: Float,
+    onResult: (Boolean) -> Unit
+) {
+    evaluateJavascript(
+        """
+        (function() {
+            if (!window.kaiIsPointInsideHighlight) return false;
+            return window.kaiIsPointInsideHighlight(${x}, ${y});
+        })();
+        """.trimIndent()
+    ) { encoded ->
+        onResult(encoded == "true")
+    }
 }
 
 // Construye un único documento HTML para que las columnas CSS paginen to-do el EPUB como páginas reales.
@@ -840,13 +1090,14 @@ private fun buildEpubReaderHtml(
                     overflow-x: hidden;
                     overflow-y: hidden;
                     scrollbar-width: none;
-                    -webkit-touch-callout: default;
-                    -webkit-user-select: text;
-                    user-select: text;
+                    -webkit-user-select: none;
+                    user-select: none;
+                    -webkit-touch-callout: none;
                 }
                 #kai-reader-content.kai-selection-active {
                     -webkit-user-select: text;
                     user-select: text;
+                    -webkit-touch-callout: default;
                 }
                 #kai-reader-content::-webkit-scrollbar {
                     display: none;
@@ -949,21 +1200,10 @@ private fun buildEpubReaderHtml(
                     text-decoration-color: var(--kai-highlight-color, #EBC7E8) !important;
                 }
                 #kai-magnifier {
-                    position: fixed;
-                    display: none;
-                    z-index: 9999;
-                    max-width: 240px;
-                    padding: 8px 10px;
-                    border-radius: 999px;
-                    background: rgba(32, 32, 32, 0.94);
-                    color: #ffffff;
-                    font-size: 20px;
-                    line-height: 1.2;
-                    box-shadow: 0 6px 18px rgba(0,0,0,.35);
-                    pointer-events: none;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
+                    display: none !important;
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
                 }
             </style>
         </head>
@@ -1028,6 +1268,7 @@ private fun buildEpubReaderHtml(
                         span.style.textDecorationColor = resolvedColor;
                     }
                     let selectionArmed = false;
+                    let selectionFinished = false;
                     let savedSelectionRange = null;
                     let savedSelectionText = '';
 
@@ -1091,13 +1332,16 @@ private fun buildEpubReaderHtml(
                             event.preventDefault();
                             event.stopPropagation();
                             event.stopImmediatePropagation();
+                            window.kaiLastHighlightTapAt = Date.now();
                             openHighlightMenu(span);
                             return false;
                         };
 
                         span.addEventListener('click', handler, true);
                         span.addEventListener('touchstart', handler, { capture: true, passive: false });
+                        span.addEventListener('touchend', handler, { capture: true, passive: false });
                         span.addEventListener('pointerdown', handler, true);
+                        span.addEventListener('pointerup', handler, true);
                     }
 
                     function bestVisibleRect(rects) {
@@ -1131,8 +1375,11 @@ private fun buildEpubReaderHtml(
                         }
 
                         window.getSelection().removeAllRanges();
-                        hideMagnifier();
                         selectionArmed = false;
+                        selectionFinished = false;
+                        savedSelectionRange = null;
+                        savedSelectionText = '';
+                        hideMagnifier();
 
                         if (content) {
                             content.classList.remove('kai-selection-active');
@@ -1174,17 +1421,18 @@ private fun buildEpubReaderHtml(
                     }
 
                     function showMagnifier(text, rect) {
-                        const magnifier = document.getElementById('kai-magnifier');
-                        if (!magnifier) return;
-                        magnifier.textContent = text.slice(0, 42);
-                        magnifier.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 250)) + 'px';
-                        magnifier.style.top = Math.max(14, rect.top - 58) + 'px';
-                        magnifier.style.display = 'block';
+                        hideMagnifier();
                     }
 
                     function hideMagnifier() {
                         const magnifier = document.getElementById('kai-magnifier');
-                        if (magnifier) magnifier.style.display = 'none';
+                        if (!magnifier) return;
+
+                        magnifier.textContent = '';
+                        magnifier.style.display = 'none';
+                        magnifier.style.visibility = 'hidden';
+                        magnifier.style.opacity = '0';
+                        magnifier.style.pointerEvents = 'none';
                     }
 
                     function selectionRect() {
@@ -1218,44 +1466,95 @@ private fun buildEpubReaderHtml(
                     document.querySelectorAll('.kai-highlight').forEach(bindHighlight);
                     window.kaiGoToPage = goToPage;
                     window.kaiWheelPageTimer = 0;
-                    window.kaiTapAt = function(x, y) {
+                    window.kaiLastHighlightTapAt = 0;
+
+                    function findHighlightAtPoint(x, y) {
                         const elements = document.elementsFromPoint
                             ? document.elementsFromPoint(x, y)
                             : [document.elementFromPoint(x, y)].filter(Boolean);
 
-                        const highlight = elements
+                        const direct = elements
                             .map((element) => element && element.closest ? element.closest('.kai-highlight') : null)
                             .find(Boolean);
 
+                        if (direct) return direct;
+
+                        const tolerance = 8;
+                        const highlights = Array.from(document.querySelectorAll('.kai-highlight'));
+
+                        return highlights.find((span) => {
+                            const rects = Array.from(span.getClientRects());
+                            return rects.some((rect) => {
+                                return x >= rect.left - tolerance &&
+                                    x <= rect.right + tolerance &&
+                                    y >= rect.top - tolerance &&
+                                    y <= rect.bottom + tolerance;
+                            });
+                        }) || null;
+                    }
+
+                    window.kaiTapAt = function(x, y) {
+                        const highlight = findHighlightAtPoint(x, y);
+
                         if (highlight) {
+                            window.kaiLastHighlightTapAt = Date.now();
                             return openHighlightMenu(highlight);
                         }
 
                         return false;
                     };
+                    window.kaiIsPointInsideHighlight = function(x, y) {
+                        return !!findHighlightAtPoint(x, y);
+                    };
                     window.kaiEnableSelection = function() {
                         selectionArmed = true;
-                        if (content) content.classList.add('kai-selection-active');
+                        selectionFinished = false;
+                        hideMagnifier();
+
+                        if (content) {
+                            content.classList.add('kai-selection-active');
+                        }
                     };
                     window.kaiDisableSelection = function() {
                         selectionArmed = false;
+                        selectionFinished = false;
                         hideMagnifier();
+
+                        if (content) {
+                            content.classList.remove('kai-selection-active');
+                        }
                     };
                     window.kaiFinishSelection = function() {
+                        if (!selectionArmed || selectionFinished) {
+                            hideMagnifier();
+                            return;
+                        }
+
                         const selected = selectionRect();
                         hideMagnifier();
-                        selectionArmed = true;
-                        if (content) content.classList.add('kai-selection-active');
+
                         if (!selected || !selected.text.trim()) return;
+
+                        selectionFinished = true;
+
+                        if (content) {
+                            content.classList.add('kai-selection-active');
+                        }
+
                         rememberSelection(selected);
                         bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
                     };
                     window.kaiCancelSelection = function() {
                         selectionArmed = false;
+                        selectionFinished = false;
                         savedSelectionRange = null;
                         savedSelectionText = '';
                         hideMagnifier();
-                        if (content) content.classList.remove('kai-selection-active');
+
+                        if (content) {
+                            content.classList.remove('kai-selection-active');
+                        }
+
                         window.getSelection().removeAllRanges();
                     };
                     window.kaiUpdateHighlight = function(id, color) {
@@ -1265,11 +1564,25 @@ private fun buildEpubReaderHtml(
                     };
                     window.kaiApplySelectionHighlight = function(color) {
                         const selected = wrapCurrentSelection(color || '#EBC7E8');
-                        if (!selected || !selected.text.trim()) return '';
+
+                        if (!selected || !selected.text.trim()) {
+                            hideMagnifier();
+                            return '';
+                        }
+
                         hideMagnifier();
+
                         selectionArmed = false;
-                        if (content) content.classList.remove('kai-selection-active');
+                        selectionFinished = false;
+                        savedSelectionRange = null;
+                        savedSelectionText = '';
+
+                        if (content) {
+                            content.classList.remove('kai-selection-active');
+                        }
+
                         window.getSelection().removeAllRanges();
+
                         return selected.id || '';
                     };
                     window.kaiReplaceHighlightId = function(oldId, newId) {
@@ -1294,27 +1607,34 @@ private fun buildEpubReaderHtml(
                     };
 
                     document.addEventListener('selectionchange', () => {
+                        hideMagnifier();
+
                         if (!selectionArmed) {
-                            hideMagnifier();
                             return;
                         }
                         const selected = selectionRect();
                         if (!selected) {
-                            hideMagnifier();
                             return;
                         }
                         rememberSelection(selected);
-                        showMagnifier(selected.text, selected.rect);
                         bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
                     });
                     document.addEventListener('touchend', () => {
-                        if (!selectionArmed) return;
+                        if (!selectionArmed || selectionFinished) {
+                            hideMagnifier();
+                            return;
+                        }
+
                         window.setTimeout(() => {
                             if (window.kaiFinishSelection) window.kaiFinishSelection();
                         }, 120);
                     }, { passive: true });
                     document.addEventListener('mouseup', () => {
-                        if (!selectionArmed) return;
+                        if (!selectionArmed || selectionFinished) {
+                            hideMagnifier();
+                            return;
+                        }
+
                         window.setTimeout(() => {
                             if (window.kaiFinishSelection) window.kaiFinishSelection();
                         }, 80);

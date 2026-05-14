@@ -35,7 +35,7 @@ El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Apli
 
 ## Capturas
 
-Las capturas todavía no están versionadas en el repositorio. Se recomienda añadir imágenes reales de la app en las siguientes rutas:
+Las capturas todavía no están versionadas en el repositorio. Se añadirán imágenes reales de la app en las siguientes rutas:
     
     | Pantalla | Placeholder |
     | --- | --- |
