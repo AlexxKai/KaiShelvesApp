@@ -1,5 +1,8 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,7 +31,6 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TableRows
@@ -48,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -56,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 @Composable
@@ -143,12 +147,19 @@ fun PdfReaderBottomControls(
     onOpenDisplaySettings: () -> Unit,
     onOpenTextSizeSettings: () -> Unit,
     annotationsCount: Int,
-    onOpenAnnotations: () -> Unit,
     onAddBookmark: () -> Unit,
     onAddHighlight: () -> Unit,
     onAddNote: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var bookmarkPulseTick by remember { mutableStateOf(0) }
+    var bookmarkPulseActive by remember { mutableStateOf(false) }
+
+    LaunchedBookmarkPulse(
+        pulseTick = bookmarkPulseTick,
+        onPulseChange = { bookmarkPulseActive = it }
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -211,21 +222,8 @@ fun PdfReaderBottomControls(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReaderToolButton(Icons.AutoMirrored.Filled.VolumeUp, "Lectura en voz alta")
-            ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Capítulos y marcadores", onOpenNavigation)
-            ReaderToolButton(Icons.Filled.Brightness6, "Brillo", onOpenDisplaySettings)
-            ReaderToolButton(Icons.Filled.FormatSize, "Tamaño del texto", onOpenTextSizeSettings)
-            ReaderToolButton(Icons.Filled.BookmarkBorder, "Añadir marcador", onAddBookmark)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, "Alineación")
-            ReaderToolButton(Icons.Filled.Star, "Subrayar selección", onAddHighlight)
-            ReaderToolButton(Icons.Filled.MoreHoriz, "Añadir nota", onAddNote)
             Box {
-                ReaderToolButton(Icons.Filled.Search, "Ver anotaciones", onOpenAnnotations)
+                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Capítulos y marcadores", onOpenNavigation)
                 if (annotationsCount > 0) {
                     Text(
                         text = annotationsCount.toString(),
@@ -235,6 +233,26 @@ fun PdfReaderBottomControls(
                     )
                 }
             }
+            ReaderToolButton(Icons.Filled.Brightness6, "Brillo", onOpenDisplaySettings)
+            ReaderToolButton(Icons.Filled.FormatSize, "Tamaño del texto", onOpenTextSizeSettings)
+            ReaderToolButton(
+                icon = Icons.Filled.BookmarkBorder,
+                contentDescription = "Añadir marcador",
+                onClick = {
+                    onAddBookmark()
+                    bookmarkPulseTick += 1
+                },
+                pulseActive = bookmarkPulseActive
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, "Alineación")
+            ReaderToolButton(Icons.Filled.Star, "Subrayar selección", onAddHighlight)
+            ReaderToolButton(Icons.Filled.MoreHoriz, "Añadir nota", onAddNote)
             ReaderToolButton(Icons.Filled.TableRows, "Vista de página")
         }
     }
@@ -245,14 +263,54 @@ fun ReaderToolButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit = {},
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    pulseActive: Boolean = false
 ) {
-    IconButton(onClick = onClick, enabled = enabled) {
+    val scale by animateFloatAsState(
+        targetValue = if (pulseActive) 1.38f else 1f,
+        animationSpec = tween(durationMillis = 140),
+        label = "readerToolButtonScale"
+    )
+    val glowAlpha by animateFloatAsState(
+        targetValue = if (pulseActive) 0.34f else 0f,
+        animationSpec = tween(durationMillis = 140),
+        label = "readerToolButtonGlow"
+    )
+    val tint by animateColorAsState(
+        targetValue = when {
+            pulseActive -> Color(0xFFFFD166)
+            enabled -> Color(0xFFEBC7E8)
+            else -> Color.White.copy(alpha = 0.34f)
+        },
+        animationSpec = tween(durationMillis = 140),
+        label = "readerToolButtonTint"
+    )
+
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .scale(scale)
+            .background(TarnishedGold.copy(alpha = glowAlpha), CircleShape)
+    ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (enabled) Color(0xFFEBC7E8) else Color.White.copy(alpha = 0.34f)
+            tint = tint
         )
+    }
+}
+
+@Composable
+private fun LaunchedBookmarkPulse(
+    pulseTick: Int,
+    onPulseChange: (Boolean) -> Unit
+) {
+    androidx.compose.runtime.LaunchedEffect(pulseTick) {
+        if (pulseTick <= 0) return@LaunchedEffect
+        onPulseChange(true)
+        delay(230)
+        onPulseChange(false)
     }
 }
 
@@ -325,12 +383,20 @@ fun ReflowReaderBottomControls(
     onPageSelected: (Int) -> Unit,
     annotationsCount: Int,
     onOpenTextSizeSettings: () -> Unit,
-    onOpenAnnotations: () -> Unit,
+    onOpenNavigation: () -> Unit,
     onAddBookmark: () -> Unit,
     onAddHighlight: () -> Unit,
     onAddNote: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var bookmarkPulseTick by remember { mutableStateOf(0) }
+    var bookmarkPulseActive by remember { mutableStateOf(false) }
+
+    LaunchedBookmarkPulse(
+        pulseTick = bookmarkPulseTick,
+        onPulseChange = { bookmarkPulseActive = it }
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -385,11 +451,19 @@ fun ReflowReaderBottomControls(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ReaderToolButton(Icons.Filled.FormatSize, "Tamaño del texto", onOpenTextSizeSettings)
-            ReaderToolButton(Icons.Filled.BookmarkBorder, "Añadir marcador", onAddBookmark)
+            ReaderToolButton(
+                icon = Icons.Filled.BookmarkBorder,
+                contentDescription = "Añadir marcador",
+                onClick = {
+                    onAddBookmark()
+                    bookmarkPulseTick += 1
+                },
+                pulseActive = bookmarkPulseActive
+            )
             ReaderToolButton(Icons.Filled.Star, "Subrayar página", onAddHighlight)
             ReaderToolButton(Icons.Filled.MoreHoriz, "Añadir nota", onAddNote)
             Box {
-                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Ver anotaciones", onOpenAnnotations)
+                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Capítulos y marcadores", onOpenNavigation)
                 if (annotationsCount > 0) {
                     Text(
                         text = annotationsCount.toString(),

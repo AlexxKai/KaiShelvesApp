@@ -352,6 +352,9 @@ private fun EpubWebReaderPage(
     var highlightTouchInProgress by remember(file.uri) { mutableStateOf(false) }
     val density = LocalDensity.current
     val latestAnnotations by rememberUpdatedState(annotations)
+    val epubHighlightsJson = remember(annotations) {
+        annotations.filter { it.type == DeviceReaderAnnotationType.Highlight }.toEpubHighlightsJson()
+    }
     val bridge = remember(file.uri) {
         EpubJsBridge(
             onTextSelected = { text, _, rect ->
@@ -392,6 +395,11 @@ private fun EpubWebReaderPage(
     }
 
     BoxWithConstraints(modifier = modifier.background(colorTheme.background.toReaderColor())) {
+        // Sincroniza cambios externos del drawer sin recargar el WebView ni mover la página actual.
+        LaunchedEffect(activeWebView, epubHighlightsJson) {
+            activeWebView?.syncEpubHighlights(epubHighlightsJson)
+        }
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
@@ -1053,12 +1061,7 @@ private fun buildEpubReaderHtml(
         </section>
         """.trimIndent()
     }.joinToString("\n")
-    val highlightsJson = annotations.joinToString(
-        prefix = "[",
-        postfix = "]"
-    ) { annotation ->
-        """{"id":"${annotation.id.escapeJsString()}","text":"${annotation.selectedText.escapeJsString()}","color":"${annotation.color.escapeJsString()}"}"""
-    }
+    val highlightsJson = annotations.toEpubHighlightsJson()
 
     return """
         <!doctype html>
@@ -1303,26 +1306,72 @@ private fun buildEpubReaderHtml(
                         return nodes;
                     }
 
+                    function createHighlightSpan(id, color) {
+                        const span = document.createElement('span');
+                        span.className = 'kai-highlight';
+                        span.dataset.id = id;
+                        applyHighlightVisualStyle(span, color || '#EBC7E8');
+                        return span;
+                    }
+
+                    function wrapTextSegment(node, start, end, id, color) {
+                        if (!node || start >= end) return null;
+
+                        const range = document.createRange();
+                        range.setStart(node, start);
+                        range.setEnd(node, end);
+
+                        const span = createHighlightSpan(id, color);
+                        range.surroundContents(span);
+                        bindHighlight(span);
+                        return span;
+                    }
+
+                    function selectionSegments(range) {
+                        return textNodesUnder(content || document.body)
+                            .map((node) => {
+                                try {
+                                    if (range.intersectsNode && !range.intersectsNode(node)) {
+                                        return null;
+                                    }
+                                } catch (error) {
+                                    return null;
+                                }
+
+                                const start = node === range.startContainer
+                                    ? Math.max(0, Math.min(range.startOffset, node.nodeValue.length))
+                                    : 0;
+                                const end = node === range.endContainer
+                                    ? Math.max(0, Math.min(range.endOffset, node.nodeValue.length))
+                                    : node.nodeValue.length;
+
+                                return end > start ? { node, start, end } : null;
+                            })
+                            .filter(Boolean);
+                    }
+
+                    function wrapRangeWithHighlights(range, id, color) {
+                        const segments = selectionSegments(range);
+                        const spans = [];
+
+                        segments.forEach((segment) => {
+                            const span = wrapTextSegment(segment.node, segment.start, segment.end, id, color);
+                            if (span) spans.push(span);
+                        });
+
+                        return spans;
+                    }
+
                     function applyHighlight(annotation) {
                         if (!annotation.text) return;
+                        removeHighlightById(annotation.id);
                         for (const node of textNodesUnder(content || document.body)) {
                             const index = node.nodeValue.indexOf(annotation.text);
                             if (index < 0) continue;
                             const range = document.createRange();
                             range.setStart(node, index);
                             range.setEnd(node, index + annotation.text.length);
-                            const span = document.createElement('span');
-                            span.className = 'kai-highlight';
-                            span.dataset.id = annotation.id;
-                            applyHighlightVisualStyle(span, annotation.color || '#EBC7E8');
-                            try {
-                                range.surroundContents(span);
-                            } catch (error) {
-                                const fragment = range.extractContents();
-                                span.appendChild(fragment);
-                                range.insertNode(span);
-                            }
-                            bindHighlight(span);
+                            wrapRangeWithHighlights(range, annotation.id, annotation.color || '#EBC7E8');
                             return;
                         }
                     }
@@ -1342,6 +1391,19 @@ private fun buildEpubReaderHtml(
                         span.addEventListener('touchend', handler, { capture: true, passive: false });
                         span.addEventListener('pointerdown', handler, true);
                         span.addEventListener('pointerup', handler, true);
+                    }
+
+                    function removeHighlightById(id) {
+                        if (!id) return;
+
+                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
+                            const textNode = document.createTextNode(span.textContent || '');
+                            span.replaceWith(textNode);
+
+                            if (textNode.parentNode) {
+                                textNode.parentNode.normalize();
+                            }
+                        });
                     }
 
                     function bestVisibleRect(rects) {
@@ -1403,21 +1465,18 @@ private fun buildEpubReaderHtml(
                         const text = liveSelected?.text || savedSelectionText || '';
                         if (!range || !text.trim()) return null;
                         const id = 'tmp-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
-                        const span = document.createElement('span');
-                        span.className = 'kai-highlight';
-                        span.dataset.id = id;
-                        applyHighlightVisualStyle(span, color || '#EBC7E8');
-                        try {
-                            range.surroundContents(span);
-                        } catch (error) {
-                            const fragment = range.extractContents();
-                            span.appendChild(fragment);
-                            range.insertNode(span);
-                        }
-                        bindHighlight(span);
+                        const spans = wrapRangeWithHighlights(range, id, color || '#EBC7E8');
+                        if (spans.length === 0) return null;
                         savedSelectionRange = null;
                         savedSelectionText = '';
-                        return { id: id, text: span.innerText || span.textContent || text, rect: span.getBoundingClientRect() };
+
+                        const rects = [];
+                        spans.forEach((span) => {
+                            Array.from(span.getClientRects()).forEach((rect) => rects.push(rect));
+                        });
+                        const rect = bestVisibleRect(rects) || spans[0].getBoundingClientRect();
+
+                        return { id: id, text: text, rect: rect };
                     }
 
                     function showMagnifier(text, rect) {
@@ -1562,6 +1621,36 @@ private fun buildEpubReaderHtml(
                             applyHighlightVisualStyle(span, color || '#EBC7E8');
                         });
                     };
+                    window.kaiSyncHighlights = function(nextHighlights) {
+                        const incoming = Array.isArray(nextHighlights) ? nextHighlights : [];
+                        const incomingById = new Map(incoming.filter((item) => item && item.id).map((item) => [item.id, item]));
+                        const existingIds = new Set(Array.from(document.querySelectorAll('.kai-highlight'))
+                            .map((span) => span.dataset.id || '')
+                            .filter(Boolean));
+
+                        existingIds.forEach((id) => {
+                            if (!incomingById.has(id)) {
+                                removeHighlightById(id);
+                            }
+                        });
+
+                        incoming.forEach((annotation) => {
+                            if (!annotation || !annotation.id) return;
+
+                            const existing = document.querySelector('.kai-highlight[data-id="' + annotation.id + '"]');
+                            if (existing) {
+                                const currentText = existing.innerText || existing.textContent || '';
+                                if (currentText === annotation.text) {
+                                    applyHighlightVisualStyle(existing, annotation.color || '#EBC7E8');
+                                } else {
+                                    removeHighlightById(annotation.id);
+                                    applyHighlight(annotation);
+                                }
+                            } else {
+                                applyHighlight(annotation);
+                            }
+                        });
+                    };
                     window.kaiApplySelectionHighlight = function(color) {
                         const selected = wrapCurrentSelection(color || '#EBC7E8');
 
@@ -1592,17 +1681,7 @@ private fun buildEpubReaderHtml(
                         });
                     };
                     window.kaiRemoveHighlight = function(id) {
-                        if (!id) return;
-
-                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
-                            const textNode = document.createTextNode(span.textContent || '');
-                            span.replaceWith(textNode);
-
-                            if (textNode.parentNode) {
-                                textNode.parentNode.normalize();
-                            }
-                        });
-
+                        removeHighlightById(id);
                         window.getSelection().removeAllRanges();
                     };
 
@@ -1678,6 +1757,18 @@ private fun WebView.removeEpubHighlight(annotationId: String) {
     )
 }
 
+private fun WebView.syncEpubHighlights(highlightsJson: String) {
+    evaluateJavascript(
+        """
+        (function() {
+            if (!window.kaiSyncHighlights) return;
+            window.kaiSyncHighlights($highlightsJson);
+        })();
+        """.trimIndent(),
+        null
+    )
+}
+
 private fun WebView.createEpubHighlight(
     color: String,
     onCreated: (String) -> Unit
@@ -1704,6 +1795,15 @@ private fun WebView.replaceEpubHighlightId(oldId: String?, newId: String) {
         "window.kaiReplaceHighlightId && window.kaiReplaceHighlightId('${oldId.escapeJsString()}', '${newId.escapeJsString()}');",
         null
     )
+}
+
+private fun List<DeviceReaderAnnotation>.toEpubHighlightsJson(): String {
+    return joinToString(
+        prefix = "[",
+        postfix = "]"
+    ) { annotation ->
+        """{"id":"${annotation.id.escapeJsString()}","text":"${annotation.selectedText.escapeJsString()}","color":"${annotation.color.escapeJsString()}"}"""
+    }
 }
 
 private fun snapEpubWebViewToNearestPage(webView: WebView, onPageChanged: (Int) -> Unit) {
@@ -2039,7 +2139,6 @@ private fun ReflowBookReader(
             var showDisplaySettings by remember(file.uri) { mutableStateOf(false) }
             var showTextSizeSettings by remember(file.uri) { mutableStateOf(false) }
             var showThemeSettings by remember(file.uri) { mutableStateOf(false) }
-            var showAnnotationsDialog by remember(file.uri) { mutableStateOf(false) }
             var showNoteDialog by remember(file.uri) { mutableStateOf(false) }
             var editingAnnotation by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
             var brightnessPercent by remember { mutableStateOf(readReaderBrightnessPercent(context)) }
@@ -2139,10 +2238,29 @@ private fun ReflowBookReader(
                         document = loadedDocument,
                         currentPage = currentPage,
                         pageCount = logicalPageCount,
+                        annotations = annotations,
                         sourcePageStartPages = sourcePageStartPages,
                         onPageSelected = { page ->
                             currentPage = page.coerceIn(0, logicalPageCount - 1)
                             scope.launch { drawerState.close() }
+                        },
+                        onAnnotationEdit = { annotation -> editingAnnotation = annotation },
+                        onAnnotationDelete = { annotation ->
+                            annotationRepository.deleteAnnotation(file, annotation.id)
+                            annotations = annotationRepository.getAnnotations(file)
+                        },
+                        onAddBookmark = {
+                            annotationRepository.addAnnotation(
+                                file = file,
+                                annotation = DeviceReaderAnnotation(
+                                    type = DeviceReaderAnnotationType.Bookmark,
+                                    page = currentPage,
+                                    pageCount = logicalPageCount,
+                                    selectedText = visiblePageText.take(READER_ANNOTATION_TEXT_LIMIT),
+                                    note = "Marcador de lectura"
+                                )
+                            )
+                            annotations = annotationRepository.getAnnotations(file)
                         },
                         onClose = { scope.launch { drawerState.close() } }
                     )
@@ -2308,7 +2426,6 @@ private fun ReflowBookReader(
                                     showThemeSettings = false
                                     zoomPercentBeforeChange = null
                                 },
-                                onOpenAnnotations = { showAnnotationsDialog = true },
                                 onAddBookmark = {
                                     annotationRepository.addAnnotation(
                                         file = file,
@@ -2443,23 +2560,6 @@ private fun ReflowBookReader(
                         )
                     }
 
-                    if (showAnnotationsDialog) {
-                        ReflowAnnotationsDialog(
-                            annotations = annotations,
-                            onAnnotationSelected = { annotation ->
-                                currentPage = annotation.page.coerceIn(0, logicalPageCount - 1)
-                                showAnnotationsDialog = false
-                                controlsVisible = false
-                            },
-                            onAnnotationEdit = { annotation -> editingAnnotation = annotation },
-                            onAnnotationDelete = { annotation ->
-                                annotationRepository.deleteAnnotation(file, annotation.id)
-                                annotations = annotationRepository.getAnnotations(file)
-                            },
-                            onDismiss = { showAnnotationsDialog = false }
-                        )
-                    }
-
                     if (showNoteDialog) {
                         ReaderNoteDialog(
                             onSave = { note ->
@@ -2473,18 +2573,6 @@ private fun ReflowBookReader(
                                         note = note
                                     )
                                 )
-                                if (engineKind == ReaderEngineKind.Epub) {
-                                    annotationRepository.addAnnotation(
-                                        file = file,
-                                        annotation = DeviceReaderAnnotation(
-                                            type = DeviceReaderAnnotationType.Bookmark,
-                                            page = currentPage,
-                                            pageCount = logicalPageCount,
-                                            selectedText = selectedText.ifBlank { visiblePageText }.take(READER_ANNOTATION_TEXT_LIMIT),
-                                            note = note
-                                        )
-                                    )
-                                }
                                 annotations = annotationRepository.getAnnotations(file)
                                 showNoteDialog = false
                             },
@@ -2545,7 +2633,6 @@ fun PdfBookReader(
             var showBookInfoMore by remember(file.uri) { mutableStateOf(false) }
             var showDisplaySettings by remember(file.uri) { mutableStateOf(false) }
             var showTextSizeSettings by remember(file.uri) { mutableStateOf(false) }
-            var showAnnotationsDialog by remember(file.uri) { mutableStateOf(false) }
             var showNoteDialog by remember(file.uri) { mutableStateOf(false) }
             var editingAnnotation by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
             var brightnessPercent by remember { mutableStateOf(readReaderBrightnessPercent(context)) }
@@ -2664,9 +2751,27 @@ fun PdfBookReader(
                         file = file,
                         currentPage = currentPage,
                         pageCount = activePageCount,
+                        annotations = annotations,
                         onPageSelected = { page ->
                             currentPage = page.coerceIn(0, activePageCount - 1)
                             scope.launch { drawerState.close() }
+                        },
+                        onAnnotationEdit = { annotation -> editingAnnotation = annotation },
+                        onAnnotationDelete = { annotation ->
+                            annotationRepository.deleteAnnotation(file, annotation.id)
+                            annotations = annotationRepository.getAnnotations(file)
+                        },
+                        onAddBookmark = {
+                            annotationRepository.addAnnotation(
+                                file = file,
+                                annotation = DeviceReaderAnnotation(
+                                    type = DeviceReaderAnnotationType.Bookmark,
+                                    page = currentPage,
+                                    pageCount = activePageCount,
+                                    note = "Marcador de lectura"
+                                )
+                            )
+                            annotations = annotationRepository.getAnnotations(file)
                         },
                         onClose = { scope.launch { drawerState.close() } }
                     )
@@ -2864,7 +2969,6 @@ fun PdfBookReader(
                                     zoomPercentBeforeChange = null
                                 },
                                 annotationsCount = annotations.size,
-                                onOpenAnnotations = { showAnnotationsDialog = true },
                                 onAddBookmark = {
                                     annotationRepository.addAnnotation(
                                         file = file,
@@ -3004,23 +3108,6 @@ fun PdfBookReader(
 
                     if (showBookInfoMore) {
                         PdfBookInfoMoreDialog(onDismiss = { showBookInfoMore = false })
-                    }
-
-                    if (showAnnotationsDialog) {
-                        ReflowAnnotationsDialog(
-                            annotations = annotations,
-                            onAnnotationSelected = { annotation ->
-                                currentPage = annotation.page.coerceIn(0, activePageCount - 1)
-                                showAnnotationsDialog = false
-                                controlsVisible = false
-                            },
-                            onAnnotationEdit = { annotation -> editingAnnotation = annotation },
-                            onAnnotationDelete = { annotation ->
-                                annotationRepository.deleteAnnotation(file, annotation.id)
-                                annotations = annotationRepository.getAnnotations(file)
-                            },
-                            onDismiss = { showAnnotationsDialog = false }
-                        )
                     }
 
                     if (showNoteDialog) {

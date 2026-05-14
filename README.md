@@ -67,8 +67,8 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Biblioteca local del dispositivo mediante Storage Access Framework, con disposición y filtros de tipo de archivo persistentes.
 - Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo, EPUB usa WebView con paginación horizontal por columnas CSS y TXT/FB2 usan paginación reflow.
 - Registro local persistente de libros importados, progreso de lectura y modelo común para marcadores, subrayados y notas.
-- Lector EPUB con portada/sinopsis/imágenes iniciales, capítulos detectados, paso de página por laterales, gesto o scroll horizontal, selección vía JS Bridge, lupa de selección, marcadores, subrayados y notas editables.
-- Lector reflow para TXT y FB2 con desplazamiento continuo, selección táctil por pulsación prolongada, rangos reales persistentes, marcadores, subrayados y notas editables.
+- Lector EPUB con portada/sinopsis/imágenes iniciales, capítulos detectados, paso de página por laterales, gesto o scroll horizontal, selección vía JS Bridge, marcadores, subrayados y notas editables desde el panel lateral de Marcadores.
+- Lector reflow para TXT y FB2 con desplazamiento continuo, selección táctil por pulsación prolongada, rangos reales persistentes, marcadores, subrayados y notas editables desde el panel lateral.
 - Vista PDF visual con zoom, desplazamiento manual y lectura continua en modo vertical, manteniendo marcadores y notas sin remaquetado del contenido.
 - Conversor básico a PDF para TXT, EPUB y FB2.
 - Perfil de usuario con edición de datos, foto y métodos de inicio de sesión.

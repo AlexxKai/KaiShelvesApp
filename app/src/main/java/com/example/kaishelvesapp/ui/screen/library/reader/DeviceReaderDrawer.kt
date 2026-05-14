@@ -29,13 +29,13 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Image as ImageIcon
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,9 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
-import com.example.kaishelvesapp.data.model.DeviceReaderAnnotationType
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
-import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 enum class PdfReaderDrawerTab {
@@ -72,8 +70,12 @@ fun ReflowReaderNavigationDrawer(
     document: ReaderEngineDocument,
     currentPage: Int,
     pageCount: Int,
+    annotations: List<DeviceReaderAnnotation>,
     sourcePageStartPages: List<Int>,
     onPageSelected: (Int) -> Unit,
+    onAnnotationEdit: (DeviceReaderAnnotation) -> Unit,
+    onAnnotationDelete: (DeviceReaderAnnotation) -> Unit,
+    onAddBookmark: () -> Unit,
     onClose: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(PdfReaderDrawerTab.Chapters) }
@@ -138,10 +140,13 @@ fun ReflowReaderNavigationDrawer(
                 modifier = Modifier.weight(1f)
             )
             PdfReaderDrawerTab.Bookmarks -> PdfReaderBookmarksTab(
-                file = file,
                 currentPage = currentPage,
                 pageCount = pageCount,
+                annotations = annotations,
                 onPageSelected = onPageSelected,
+                onAnnotationEdit = onAnnotationEdit,
+                onAnnotationDelete = onAnnotationDelete,
+                onAddBookmark = onAddBookmark,
                 modifier = Modifier.weight(1f)
             )
             PdfReaderDrawerTab.Images -> ReflowReaderImagesTab(
@@ -166,12 +171,6 @@ fun ReflowReaderNavigationDrawer(
                 modifier = Modifier.weight(1f)
             )
             Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = stringResource(R.string.search),
-                tint = Color.White
-            )
-            Spacer(modifier = Modifier.width(18.dp))
-            Icon(
                 imageVector = Icons.Filled.Settings,
                 contentDescription = stringResource(R.string.reader_settings),
                 tint = Color(0xFFEBC7E8)
@@ -185,7 +184,11 @@ fun PdfReaderNavigationDrawer(
     file: DeviceLibraryFile,
     currentPage: Int,
     pageCount: Int,
+    annotations: List<DeviceReaderAnnotation>,
     onPageSelected: (Int) -> Unit,
+    onAnnotationEdit: (DeviceReaderAnnotation) -> Unit,
+    onAnnotationDelete: (DeviceReaderAnnotation) -> Unit,
+    onAddBookmark: () -> Unit,
     onClose: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(PdfReaderDrawerTab.Chapters) }
@@ -263,10 +266,13 @@ fun PdfReaderNavigationDrawer(
                 modifier = Modifier.weight(1f)
             )
             PdfReaderDrawerTab.Bookmarks -> PdfReaderBookmarksTab(
-                file = file,
                 currentPage = currentPage,
                 pageCount = pageCount,
+                annotations = annotations,
                 onPageSelected = onPageSelected,
+                onAnnotationEdit = onAnnotationEdit,
+                onAnnotationDelete = onAnnotationDelete,
+                onAddBookmark = onAddBookmark,
                 modifier = Modifier.weight(1f)
             )
             PdfReaderDrawerTab.Images -> PdfReaderImagesTab(
@@ -291,12 +297,6 @@ fun PdfReaderNavigationDrawer(
                 color = Color.White,
                 modifier = Modifier.weight(1f)
             )
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = "Buscar",
-                tint = Color.White
-            )
-            Spacer(modifier = Modifier.width(18.dp))
             Icon(
                 imageVector = Icons.Filled.Settings,
                 contentDescription = "Ajustes",
@@ -539,19 +539,17 @@ private fun ReflowChapterRow(
 
 @Composable
 fun PdfReaderBookmarksTab(
-    file: DeviceLibraryFile,
     currentPage: Int,
     pageCount: Int,
+    annotations: List<DeviceReaderAnnotation>,
     onPageSelected: (Int) -> Unit,
+    onAnnotationEdit: (DeviceReaderAnnotation) -> Unit,
+    onAnnotationDelete: (DeviceReaderAnnotation) -> Unit,
+    onAddBookmark: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val repository = remember(file.uri) { DeviceLibraryRepository(context) }
-    var bookmarks by remember(file.uri) {
-        mutableStateOf(
-            repository.getAnnotations(file)
-                .filter { it.type == DeviceReaderAnnotationType.Bookmark }
-        )
+    val sortedAnnotations = remember(annotations) {
+        annotations.sortedWith(compareBy<DeviceReaderAnnotation> { it.page }.thenBy { it.createdAtMillis })
     }
 
     Column(
@@ -560,36 +558,44 @@ fun PdfReaderBookmarksTab(
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.weight(1f))
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(Color.White.copy(alpha = 0.28f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Filled.BookmarkBorder,
-                contentDescription = null,
-                tint = Color.Black.copy(alpha = 0.18f),
-                modifier = Modifier.size(54.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(42.dp))
-        if (bookmarks.isEmpty()) {
-            Text(
-                text = "No hay marcador de página",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = "Toque agregar nuevo para guardar la página actual\n(Subrayados y notas usan el mismo modelo de anotaciones)",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
+        if (sortedAnnotations.isEmpty()) {
+            // El icono grande solo aparece en el estado vacío; con anotaciones la lista aprovecha todo el panel.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.28f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.BookmarkBorder,
+                        contentDescription = null,
+                        tint = Color.Black.copy(alpha = 0.18f),
+                        modifier = Modifier.size(54.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(42.dp))
+                Text(
+                    text = "No hay marcador de página",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Toque agregar nuevo para guardar la página actual\n(Subrayados y notas usan el mismo modelo de anotaciones)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -597,20 +603,56 @@ fun PdfReaderBookmarksTab(
                     .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                items(bookmarks) { bookmark ->
-                    Text(
-                        text = "Página ${bookmark.page + 1}/${bookmark.pageCount}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
+                items(sortedAnnotations, key = { "${it.id}-${it.createdAtMillis}-${it.page}" }) { annotation ->
+                    // El panel usa el estado del lector para que los cambios se reflejen al instante en la página abierta.
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPageSelected(bookmark.page.coerceIn(0, pageCount - 1)) }
-                            .padding(horizontal = 8.dp, vertical = 8.dp)
-                    )
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .clickable { onPageSelected(annotation.page.coerceIn(0, pageCount - 1)) }
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "${annotation.type.readableName()} · Página ${annotation.page + 1}/${annotation.pageCount}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TarnishedGold,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        annotation.note.takeIf { it.isNotBlank() }?.let { note ->
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        annotation.selectedText.takeIf { it.isNotBlank() }?.let { selectedText ->
+                            Text(
+                                text = selectedText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.76f),
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { onAnnotationEdit(annotation) }) {
+                                Text(text = "EDITAR", color = Color.White)
+                            }
+                            TextButton(onClick = { onAnnotationDelete(annotation) }) {
+                                Text(text = "ELIMINAR", color = Color(0xFFFFB4A8))
+                            }
+                        }
+                    }
                 }
             }
         }
-        Spacer(modifier = Modifier.weight(1f))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -626,19 +668,7 @@ fun PdfReaderBookmarksTab(
                     .weight(1f)
                     .height(34.dp)
                     .background(Color(0xFF202020))
-                    .clickable {
-                        repository.addAnnotation(
-                            file = file,
-                            annotation = DeviceReaderAnnotation(
-                                type = DeviceReaderAnnotationType.Bookmark,
-                                page = currentPage,
-                                pageCount = pageCount,
-                                note = "Marcador de página"
-                            )
-                        )
-                        bookmarks = repository.getAnnotations(file)
-                            .filter { it.type == DeviceReaderAnnotationType.Bookmark }
-                    },
+                    .clickable(onClick = onAddBookmark),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -647,11 +677,6 @@ fun PdfReaderBookmarksTab(
                     color = Color.White
                 )
             }
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = "Buscar",
-                tint = Color.White
-            )
             Icon(
                 imageVector = Icons.Filled.Settings,
                 contentDescription = "Ajustes",

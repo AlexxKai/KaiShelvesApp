@@ -564,28 +564,28 @@ fun ReaderSelectionToolbar(
                 contentDescriptionRes = R.string.reader_selection_highlight,
                 iconSize = 28,
                 touchSize = 42,
-                onClick = { onHighlightSelection(selectedText, "#EBC7E8") }
+                onClick = { onHighlightSelection(selectedText, "#C7843E") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.FormatUnderlined,
                 contentDescriptionRes = R.string.reader_selection_underline,
                 iconSize = 28,
                 touchSize = 42,
-                onClick = { onHighlightSelection(selectedText, "underline:#EBC7E8") }
+                onClick = { onHighlightSelection(selectedText, "underline:#C7843E") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.FormatStrikethrough,
                 contentDescriptionRes = R.string.reader_selection_strikethrough,
                 iconSize = 28,
                 touchSize = 42,
-                onClick = { onHighlightSelection(selectedText, "strike:#EBC7E8") }
+                onClick = { onHighlightSelection(selectedText, "strike:#C7843E") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.Edit,
                 contentDescriptionRes = R.string.reader_selection_diagonal,
                 iconSize = 28,
                 touchSize = 42,
-                onClick = { onHighlightSelection(selectedText, "zigzag:#EBC7E8") }
+                onClick = { onHighlightSelection(selectedText, "zigzag:#C7843E") }
             )
         }
 
