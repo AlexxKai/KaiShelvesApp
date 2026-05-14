@@ -22,6 +22,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +67,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import org.json.JSONObject
 import org.json.JSONTokener
 @Composable
 fun DeviceBookReaderDialog(
@@ -357,11 +359,24 @@ private fun EpubWebReaderPage(
                 onSelectedTextChanged(safeText)
             },
             onHighlightSelected = { annotationId, text, rect ->
+                val safeText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+                val normalizedText = safeText.normalizeReaderSelectionText()
+
                 activeHighlight = latestAnnotations.firstOrNull { it.id == annotationId }
-                    ?: latestAnnotations.firstOrNull {
-                        it.type == DeviceReaderAnnotationType.Highlight && it.selectedText == text
+                    ?: latestAnnotations.firstOrNull { annotation ->
+                        annotation.type == DeviceReaderAnnotationType.Highlight &&
+                            annotation.selectedText.normalizeReaderSelectionText() == normalizedText
                     }
-                webSelectedText = text.take(READER_ANNOTATION_TEXT_LIMIT)
+                    ?: latestAnnotations.firstOrNull { annotation ->
+                        annotation.type == DeviceReaderAnnotationType.Highlight &&
+                            normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                    }
+                    ?: latestAnnotations.firstOrNull { annotation ->
+                        annotation.type == DeviceReaderAnnotationType.Highlight &&
+                            annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
+                    }
+
+                webSelectedText = safeText
                 selectedRect = rect
                 onSelectedTextChanged(webSelectedText)
             },
@@ -373,17 +388,34 @@ private fun EpubWebReaderPage(
         )
     }
 
-    Box(modifier = modifier.background(colorTheme.background.toReaderColor())) {
+    BoxWithConstraints(modifier = modifier.background(colorTheme.background.toReaderColor())) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 object : WebView(viewContext) {
                     override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
-                        return null
+                        return super.startActionMode(EpubSelectionActionModeCallback(callback) {
+                            captureEpubSelectionPreview { text, rect ->
+                                webSelectedText = text
+                                selectedRect = rect
+                                activeHighlight = null
+                                onSelectedTextChanged(text)
+                            }
+                        })
                     }
 
                     override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
-                        return null
+                        return super.startActionMode(
+                            EpubSelectionActionModeCallback(callback) {
+                                captureEpubSelectionPreview { text, rect ->
+                                    webSelectedText = text
+                                    selectedRect = rect
+                                    activeHighlight = null
+                                    onSelectedTextChanged(text)
+                                }
+                            },
+                            type
+                        )
                     }
                 }.apply {
                     activeWebView = this
@@ -444,7 +476,7 @@ private fun EpubWebReaderPage(
                             }
                             MotionEvent.ACTION_UP -> {
                                 if (selectionGestureActive) {
-                                    evaluateJavascript("window.kaiFinishSelection && window.kaiFinishSelection();", null)
+                                    postDelayed({ evaluateJavascript("window.kaiFinishSelection && window.kaiFinishSelection();", null) }, 120L)
                                     selectionGestureActive = false
                                     return@setOnTouchListener true
                                 }
@@ -518,11 +550,50 @@ private fun EpubWebReaderPage(
         )
 
         selectedRect?.takeIf { webSelectedText.isNotBlank() }?.let { rect ->
-            val toolbarWidthPx = with(density) { 342.dp.roundToPx() }
+            val toolbarWidthPx = with(density) { 338.dp.roundToPx() }
+            val toolbarHeightPx = with(density) { 122.dp.roundToPx() }
+            val gapPx = with(density) { 4.dp.roundToPx() }
+            val sideMarginPx = with(density) { 6.dp.roundToPx() }
+            val normalizedSelectedText = webSelectedText.normalizeReaderSelectionText()
+
+            val possibleHighlightToDelete = activeHighlight
+                ?: latestAnnotations.firstOrNull { annotation ->
+                    annotation.type == DeviceReaderAnnotationType.Highlight &&
+                        annotation.selectedText.normalizeReaderSelectionText() == normalizedSelectedText
+                }
+                ?: latestAnnotations.firstOrNull { annotation ->
+                    annotation.type == DeviceReaderAnnotationType.Highlight &&
+                        normalizedSelectedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                }
+                ?: latestAnnotations.firstOrNull { annotation ->
+                    annotation.type == DeviceReaderAnnotationType.Highlight &&
+                        annotation.selectedText.normalizeReaderSelectionText().contains(normalizedSelectedText)
+                }
+
+            val canDeleteHighlight = possibleHighlightToDelete != null
+
+            val maxX = (constraints.maxWidth - toolbarWidthPx - sideMarginPx)
+                .coerceAtLeast(sideMarginPx)
+
+            val maxY = (constraints.maxHeight - toolbarHeightPx - sideMarginPx)
+                .coerceAtLeast(sideMarginPx)
+
+            val popupX = (rect.centerX() - toolbarWidthPx / 2)
+                .coerceIn(sideMarginPx, maxX)
+
+            val aboveY = rect.top - toolbarHeightPx - gapPx
+            val belowY = rect.bottom + gapPx
+
+            val popupY = when {
+                aboveY >= sideMarginPx -> aboveY
+                belowY + toolbarHeightPx <= constraints.maxHeight - sideMarginPx -> belowY
+                else -> rect.top - toolbarHeightPx / 2
+            }.coerceIn(sideMarginPx, maxY)
+
             Popup(
                 offset = IntOffset(
-                    x = (rect.centerX() - toolbarWidthPx / 2).coerceAtLeast(8),
-                    y = (rect.top - with(density) { 126.dp.roundToPx() }).coerceAtLeast(24)
+                    x = popupX,
+                    y = popupY
                 ),
                 onDismissRequest = {
                     activeWebView?.cancelEpubSelection()
@@ -533,15 +604,19 @@ private fun EpubWebReaderPage(
             ) {
                 ReaderSelectionToolbar(
                     selectedText = webSelectedText,
+                    showDelete = canDeleteHighlight,
                     onHighlightSelection = { _, color ->
                         activeHighlight?.let { highlight ->
                             onHighlightUpdate(highlight, color)
                             activeWebView?.updateEpubHighlightStyle(highlight.id, color)
+
                             webSelectedText = ""
                             selectedRect = null
                             activeHighlight = null
+                            activeWebView?.cancelEpubSelection()
                         } ?: run {
                             val text = webSelectedText
+
                             if (text.isNotBlank()) {
                                 activeWebView?.createEpubHighlight(color) { tempId ->
                                     if (tempId.isNotBlank()) {
@@ -550,33 +625,54 @@ private fun EpubWebReaderPage(
                                             activeWebView?.replaceEpubHighlightId(tempId, storedId)
                                         }
                                     }
+
                                     webSelectedText = ""
                                     selectedRect = null
                                     activeHighlight = null
+                                    activeWebView?.cancelEpubSelection()
                                 }
                             } else {
                                 webSelectedText = ""
                                 selectedRect = null
                                 activeHighlight = null
+                                activeWebView?.cancelEpubSelection()
                             }
                         }
                     },
                     onNoteSelection = {
                         onNoteSelection(webSelectedText)
+
                         webSelectedText = ""
                         selectedRect = null
                         activeHighlight = null
                         activeWebView?.cancelEpubSelection()
                     },
-                    showDelete = activeHighlight != null,
                     onDeleteSelection = {
-                        activeHighlight?.let { highlight ->
-                            onHighlightDelete(highlight)
-                            activeWebView?.removeEpubHighlight(highlight.id)
+                        val normalizedText = webSelectedText.normalizeReaderSelectionText()
+
+                        val highlightToDelete = activeHighlight
+                            ?: latestAnnotations.firstOrNull { annotation ->
+                                annotation.type == DeviceReaderAnnotationType.Highlight &&
+                                    annotation.selectedText.normalizeReaderSelectionText() == normalizedText
+                            }
+                            ?: latestAnnotations.firstOrNull { annotation ->
+                                annotation.type == DeviceReaderAnnotationType.Highlight &&
+                                    normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                            }
+                            ?: latestAnnotations.firstOrNull { annotation ->
+                                annotation.type == DeviceReaderAnnotationType.Highlight &&
+                                    annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
+                            }
+
+                        if (highlightToDelete != null) {
+                            activeWebView?.removeEpubHighlight(highlightToDelete.id)
+                            onHighlightDelete(highlightToDelete)
                         }
+
                         webSelectedText = ""
                         selectedRect = null
                         activeHighlight = null
+                        activeWebView?.cancelEpubSelection()
                     }
                 )
             }
@@ -617,6 +713,76 @@ private class EpubJsBridge(
     fun onPageChanged(page: Int) {
         mainHandler.post { onPageChanged(page.coerceAtLeast(0)) }
     }
+}
+
+private fun String.normalizeReaderSelectionText(): String {
+    return trim()
+        .replace(Regex("\\s+"), " ")
+        .lowercase()
+}
+
+private class EpubSelectionActionModeCallback(
+    private val delegate: ActionMode.Callback?,
+    private val onSelectionStarted: () -> Unit
+) : ActionMode.Callback {
+    override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+        delegate?.onCreateActionMode(mode, menu)
+        menu?.clear()
+        onSelectionStarted()
+        return true
+    }
+
+    override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+        delegate?.onPrepareActionMode(mode, menu)
+        menu?.clear()
+        onSelectionStarted()
+        return true
+    }
+
+    override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+        return true
+    }
+
+    override fun onDestroyActionMode(mode: ActionMode?) {
+        delegate?.onDestroyActionMode(mode)
+    }
+}
+
+private fun WebView.captureEpubSelectionPreview(onPreview: (String, Rect) -> Unit) {
+    postDelayed({
+        evaluateJavascript(
+            """
+            (function() {
+                const sel = window.getSelection();
+                if (!sel || sel.isCollapsed || sel.rangeCount === 0) return '';
+                const range = sel.getRangeAt(0);
+                const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+                const rect = rects[0] || range.getBoundingClientRect();
+                if (!rect || rect.width === 0 || rect.height === 0) return '';
+                return JSON.stringify({
+                    text: sel.toString(),
+                    left: rect.left,
+                    top: rect.top,
+                    width: rect.width,
+                    height: rect.height
+                });
+            })();
+            """.trimIndent()
+        ) { rawJson ->
+            val json = rawJson.decodeJavascriptString()
+            if (json.isBlank()) return@evaluateJavascript
+            runCatching {
+                val obj = JSONObject(json)
+                val text = obj.optString("text").take(READER_ANNOTATION_TEXT_LIMIT)
+                if (text.isBlank()) return@runCatching
+                val left = obj.optDouble("left").toInt()
+                val top = obj.optDouble("top").toInt()
+                val width = obj.optDouble("width").toInt()
+                val height = obj.optDouble("height").toInt()
+                onPreview(text, Rect(left, top, left + width, top + height))
+            }
+        }
+    }, 80L)
 }
 
 // Construye un único documento HTML para que las columnas CSS paginen to-do el EPUB como páginas reales.
@@ -674,8 +840,9 @@ private fun buildEpubReaderHtml(
                     overflow-x: hidden;
                     overflow-y: hidden;
                     scrollbar-width: none;
-                    -webkit-user-select: none;
-                    user-select: none;
+                    -webkit-touch-callout: default;
+                    -webkit-user-select: text;
+                    user-select: text;
                 }
                 #kai-reader-content.kai-selection-active {
                     -webkit-user-select: text;
@@ -733,14 +900,53 @@ private fun buildEpubReaderHtml(
                 .kai-highlight {
                     border-radius: 2px;
                     pointer-events: auto;
+                    position: relative;
+                    z-index: 2;
+                    box-decoration-break: clone;
+                    -webkit-box-decoration-break: clone;
+                    text-decoration-color: var(--kai-highlight-color, #EBC7E8) !important;
                 }
-                .kai-highlight[data-style="underline"], .kai-highlight[data-style="diagonal"] {
-                    text-decoration: underline;
-                    background: transparent !important;
+
+                .kai-highlight[data-style="fill"] {
+                    background-color: var(--kai-highlight-color, #EBC7E8) !important;
+                    background-image: none !important;
                 }
+
+                .kai-highlight[data-style="underline"] {
+                    background-color: transparent !important;
+                    background-image: linear-gradient(
+                        to top,
+                        var(--kai-highlight-color, #EBC7E8) 0.14em,
+                        transparent 0.14em
+                    ) !important;
+                    background-repeat: repeat-x !important;
+                    background-position: 0 100% !important;
+                    text-decoration: none !important;
+                }
+
                 .kai-highlight[data-style="strike"] {
-                    text-decoration: line-through;
                     background: transparent !important;
+                    text-decoration-line: line-through !important;
+                    text-decoration-thickness: 0.12em !important;
+                    text-decoration-color: var(--kai-highlight-color, #EBC7E8) !important;
+                }
+
+                .kai-highlight[data-style="zigzag"] {
+                    background-color: transparent !important;
+                    text-decoration-line: underline !important;
+                    text-decoration-style: wavy !important;
+                    text-decoration-thickness: 0.11em !important;
+                    text-underline-offset: 0.18em !important;
+                    text-decoration-color: var(--kai-highlight-color, #EBC7E8) !important;
+                }
+
+                .kai-highlight[data-style="diagonal"] {
+                    background-color: transparent !important;
+                    text-decoration-line: underline !important;
+                    text-decoration-style: wavy !important;
+                    text-decoration-thickness: 0.11em !important;
+                    text-underline-offset: 0.18em !important;
+                    text-decoration-color: var(--kai-highlight-color, #EBC7E8) !important;
                 }
                 #kai-magnifier {
                     position: fixed;
@@ -774,8 +980,53 @@ private fun buildEpubReaderHtml(
                     const pageWidth = () => Math.max(1, window.innerWidth);
                     const pageIndex = () => Math.round((content ? content.scrollLeft : 0) / pageWidth());
                     const pageCount = () => Math.max(1, Math.ceil((content ? content.scrollWidth : document.body.scrollWidth) / pageWidth()));
-                    const highlightColor = (raw) => raw.indexOf(':') >= 0 ? raw.split(':').pop() : raw;
-                    const highlightStyle = (raw) => raw.indexOf(':') >= 0 ? raw.split(':')[0] : 'fill';
+                    const isCssColor = (value) => {
+                        if (!value) return false;
+                        const trimmed = String(value).trim();
+                        return trimmed.startsWith('#') ||
+                            trimmed.startsWith('rgb(') ||
+                            trimmed.startsWith('rgba(') ||
+                            trimmed.startsWith('hsl(') ||
+                            trimmed.startsWith('hsla(');
+                    };
+
+                    const highlightColor = (raw) => {
+                        if (!raw) return '#EBC7E8';
+                        const value = String(raw).trim();
+                        return value.indexOf(':') >= 0 ? value.split(':').pop() : value;
+                    };
+
+                    const highlightStyle = (raw) => {
+                        if (!raw) return 'fill';
+
+                        const value = String(raw).trim();
+
+                        if (value.indexOf(':') >= 0) {
+                            const style = value.split(':')[0];
+                            return style === 'diagonal' ? 'zigzag' : style;
+                        }
+
+                        if (isCssColor(value)) {
+                            return 'fill';
+                        }
+
+                        return value === 'diagonal' ? 'zigzag' : value;
+                    };
+
+                    function applyHighlightVisualStyle(span, color) {
+                        if (!span) return;
+
+                        const style = highlightStyle(color || '');
+                        const resolvedColor = highlightColor(color || '#EBC7E8');
+
+                        span.dataset.style = style;
+                        span.style.setProperty('--kai-highlight-color', resolvedColor);
+                        span.style.backgroundColor = style === 'fill' ? resolvedColor : 'transparent';
+                        span.style.backgroundImage = '';
+                        span.style.textDecorationLine = '';
+                        span.style.textDecorationStyle = '';
+                        span.style.textDecorationColor = resolvedColor;
+                    }
                     let selectionArmed = false;
                     let savedSelectionRange = null;
                     let savedSelectionText = '';
@@ -822,29 +1073,80 @@ private fun buildEpubReaderHtml(
                             const span = document.createElement('span');
                             span.className = 'kai-highlight';
                             span.dataset.id = annotation.id;
-                            span.dataset.style = highlightStyle(annotation.color || '');
-                            span.style.backgroundColor = highlightColor(annotation.color || '#EBC7E8');
-                            range.surroundContents(span);
+                            applyHighlightVisualStyle(span, annotation.color || '#EBC7E8');
+                            try {
+                                range.surroundContents(span);
+                            } catch (error) {
+                                const fragment = range.extractContents();
+                                span.appendChild(fragment);
+                                range.insertNode(span);
+                            }
+                            bindHighlight(span);
                             return;
                         }
                     }
 
                     function bindHighlight(span) {
-                        span.addEventListener('click', (event) => {
+                        const handler = (event) => {
                             event.preventDefault();
                             event.stopPropagation();
+                            event.stopImmediatePropagation();
                             openHighlightMenu(span);
+                            return false;
+                        };
+
+                        span.addEventListener('click', handler, true);
+                        span.addEventListener('touchstart', handler, { capture: true, passive: false });
+                        span.addEventListener('pointerdown', handler, true);
+                    }
+
+                    function bestVisibleRect(rects) {
+                        const visible = Array.from(rects || []).filter((rect) => {
+                            return rect.width > 0 &&
+                                rect.height > 0 &&
+                                rect.right >= 0 &&
+                                rect.left <= window.innerWidth &&
+                                rect.bottom >= 0 &&
+                                rect.top <= window.innerHeight;
                         });
+
+                        if (visible.length === 0) return null;
+
+                        visible.sort((a, b) => {
+                            const aDistance = Math.abs(a.top - window.innerHeight * 0.45) + Math.abs(a.left);
+                            const bDistance = Math.abs(b.top - window.innerHeight * 0.45) + Math.abs(b.left);
+                            return aDistance - bDistance;
+                        });
+
+                        return visible[0];
                     }
 
                     function openHighlightMenu(span) {
                         if (!span) return false;
-                        const rect = span.getBoundingClientRect();
+
+                        const rect = bestVisibleRect(span.getClientRects()) || span.getBoundingClientRect();
+
+                        if (!rect || rect.width === 0 || rect.height === 0) {
+                            return false;
+                        }
+
                         window.getSelection().removeAllRanges();
                         hideMagnifier();
                         selectionArmed = false;
-                        if (content) content.classList.remove('kai-selection-active');
-                        bridge.onHighlightTapped(span.dataset.id || '', span.innerText || span.textContent || '', rect.left, rect.top, rect.width, rect.height);
+
+                        if (content) {
+                            content.classList.remove('kai-selection-active');
+                        }
+
+                        bridge.onHighlightTapped(
+                            span.dataset.id || '',
+                            span.innerText || span.textContent || '',
+                            rect.left,
+                            rect.top,
+                            rect.width,
+                            rect.height
+                        );
+
                         return true;
                     }
 
@@ -857,8 +1159,7 @@ private fun buildEpubReaderHtml(
                         const span = document.createElement('span');
                         span.className = 'kai-highlight';
                         span.dataset.id = id;
-                        span.dataset.style = highlightStyle(color || '');
-                        span.style.backgroundColor = highlightColor(color || '#EBC7E8');
+                        applyHighlightVisualStyle(span, color || '#EBC7E8');
                         try {
                             range.surroundContents(span);
                         } catch (error) {
@@ -888,11 +1189,23 @@ private fun buildEpubReaderHtml(
 
                     function selectionRect() {
                         const selection = window.getSelection();
-                        if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+
+                        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+                            return null;
+                        }
+
                         const range = selection.getRangeAt(0);
-                        const rect = range.getBoundingClientRect();
-                        if (!rect || rect.width === 0 || rect.height === 0) return null;
-                        return { selection, rect, text: selection.toString() };
+                        const rect = bestVisibleRect(range.getClientRects()) || range.getBoundingClientRect();
+
+                        if (!rect || rect.width === 0 || rect.height === 0) {
+                            return null;
+                        }
+
+                        return {
+                            selection: selection,
+                            rect: rect,
+                            text: selection.toString()
+                        };
                     }
 
                     function rememberSelection(selected) {
@@ -906,9 +1219,19 @@ private fun buildEpubReaderHtml(
                     window.kaiGoToPage = goToPage;
                     window.kaiWheelPageTimer = 0;
                     window.kaiTapAt = function(x, y) {
-                        const element = document.elementFromPoint(x, y);
-                        const highlight = element ? element.closest('.kai-highlight') : null;
-                        return openHighlightMenu(highlight);
+                        const elements = document.elementsFromPoint
+                            ? document.elementsFromPoint(x, y)
+                            : [document.elementFromPoint(x, y)].filter(Boolean);
+
+                        const highlight = elements
+                            .map((element) => element && element.closest ? element.closest('.kai-highlight') : null)
+                            .find(Boolean);
+
+                        if (highlight) {
+                            return openHighlightMenu(highlight);
+                        }
+
+                        return false;
                     };
                     window.kaiEnableSelection = function() {
                         selectionArmed = true;
@@ -921,8 +1244,8 @@ private fun buildEpubReaderHtml(
                     window.kaiFinishSelection = function() {
                         const selected = selectionRect();
                         hideMagnifier();
-                        selectionArmed = false;
-                        if (content) content.classList.remove('kai-selection-active');
+                        selectionArmed = true;
+                        if (content) content.classList.add('kai-selection-active');
                         if (!selected || !selected.text.trim()) return;
                         rememberSelection(selected);
                         bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
@@ -937,13 +1260,15 @@ private fun buildEpubReaderHtml(
                     };
                     window.kaiUpdateHighlight = function(id, color) {
                         document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
-                            span.dataset.style = highlightStyle(color || '');
-                            span.style.backgroundColor = highlightColor(color || '#EBC7E8');
+                            applyHighlightVisualStyle(span, color || '#EBC7E8');
                         });
                     };
                     window.kaiApplySelectionHighlight = function(color) {
                         const selected = wrapCurrentSelection(color || '#EBC7E8');
                         if (!selected || !selected.text.trim()) return '';
+                        hideMagnifier();
+                        selectionArmed = false;
+                        if (content) content.classList.remove('kai-selection-active');
                         window.getSelection().removeAllRanges();
                         return selected.id || '';
                     };
@@ -954,9 +1279,18 @@ private fun buildEpubReaderHtml(
                         });
                     };
                     window.kaiRemoveHighlight = function(id) {
+                        if (!id) return;
+
                         document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
-                            span.replaceWith(document.createTextNode(span.textContent || ''));
+                            const textNode = document.createTextNode(span.textContent || '');
+                            span.replaceWith(textNode);
+
+                            if (textNode.parentNode) {
+                                textNode.parentNode.normalize();
+                            }
                         });
+
+                        window.getSelection().removeAllRanges();
                     };
 
                     document.addEventListener('selectionchange', () => {
@@ -972,6 +1306,18 @@ private fun buildEpubReaderHtml(
                         rememberSelection(selected);
                         showMagnifier(selected.text, selected.rect);
                         bridge.onSelectionChanged(selected.text, '', selected.rect.left, selected.rect.top, selected.rect.width, selected.rect.height);
+                    });
+                    document.addEventListener('touchend', () => {
+                        if (!selectionArmed) return;
+                        window.setTimeout(() => {
+                            if (window.kaiFinishSelection) window.kaiFinishSelection();
+                        }, 120);
+                    }, { passive: true });
+                    document.addEventListener('mouseup', () => {
+                        if (!selectionArmed) return;
+                        window.setTimeout(() => {
+                            if (window.kaiFinishSelection) window.kaiFinishSelection();
+                        }, 80);
                     });
                     if (content) {
                         content.addEventListener('scroll', () => window.clearTimeout(window.kaiScrollTimer) || (window.kaiScrollTimer = window.setTimeout(notifyPageChanged, 80)));

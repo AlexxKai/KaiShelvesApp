@@ -1,6 +1,7 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
 import android.graphics.Bitmap
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.FormatUnderlined
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,6 +49,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -539,15 +541,18 @@ fun ReaderSelectionToolbar(
     showDelete: Boolean = false,
     onDeleteSelection: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
     Column(
         modifier = modifier
-            .width(342.dp)
-            .clip(RoundedCornerShape(2.dp))
-            .background(Color(0xEE202020))
-            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.32f)), RoundedCornerShape(2.dp))
+            .width(338.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(Color(0xF21F1F1F))
+            .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)), RoundedCornerShape(3.dp))
             .clickable(onClick = {})
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -557,82 +562,99 @@ fun ReaderSelectionToolbar(
             SelectionToolIcon(
                 icon = Icons.Filled.FormatColorFill,
                 contentDescriptionRes = R.string.reader_selection_highlight,
+                iconSize = 28,
+                touchSize = 42,
                 onClick = { onHighlightSelection(selectedText, "#EBC7E8") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.FormatUnderlined,
                 contentDescriptionRes = R.string.reader_selection_underline,
+                iconSize = 28,
+                touchSize = 42,
                 onClick = { onHighlightSelection(selectedText, "underline:#EBC7E8") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.FormatStrikethrough,
                 contentDescriptionRes = R.string.reader_selection_strikethrough,
+                iconSize = 28,
+                touchSize = 42,
                 onClick = { onHighlightSelection(selectedText, "strike:#EBC7E8") }
             )
             SelectionToolIcon(
                 icon = Icons.Filled.Edit,
                 contentDescriptionRes = R.string.reader_selection_diagonal,
-                onClick = { onHighlightSelection(selectedText, "diagonal:#EBC7E8") }
+                iconSize = 28,
+                touchSize = 42,
+                onClick = { onHighlightSelection(selectedText, "zigzag:#EBC7E8") }
             )
-            SelectionToolIcon(Icons.Filled.MoreHoriz, R.string.reader_selection_more)
         }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            listOf("#17E879", "#FF8A10", "#D6A1C9", "#B8B8B8", "#8C00FF").forEach { color ->
+            listOf("#FF0000", "#FFFF00", "#8C00FF", "#B8B8B8", "#17E879").forEach { color ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(color.readerHighlightColor())
                         .clickable { onHighlightSelection(selectedText, color) }
                 )
             }
         }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (showDelete) {
-                IconButton(onClick = onDeleteSelection, modifier = Modifier.size(30.dp)) {
-                    Icon(
-                        imageVector = Icons.Filled.DeleteOutline,
-                        contentDescription = stringResource(R.string.reader_selection_delete),
-                        tint = Color.White
-                    )
-                }
+            IconButton(
+                onClick = {
+                    if (showDelete) {
+                        onDeleteSelection()
+                    }
+                },
+                modifier = Modifier
+                    .size(38.dp)
+                    .alpha(if (showDelete) 1f else 0.32f)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.DeleteOutline,
+                    contentDescription = stringResource(R.string.reader_selection_delete),
+                    tint = Color.White
+                )
             }
+
             Text(
                 text = stringResource(R.string.reader_selection_copy),
                 color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.clickable { }
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable {
+                        if (selectedText.isNotBlank()) {
+                            clipboardManager.setText(AnnotatedString(selectedText))
+                            Toast.makeText(
+                                context,
+                                "Texto copiado correctamente",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
             )
-            Text(
-                text = stringResource(R.string.reader_selection_highlight),
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.clickable { onHighlightSelection(selectedText, "#EBC7E8") }
-            )
+
             Text(
                 text = stringResource(R.string.reader_selection_note),
                 color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.clickable { onNoteSelection(selectedText) }
-            )
-            Text(
-                text = stringResource(R.string.reader_selection_dict),
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = stringResource(R.string.reader_selection_more),
-                color = Color.White,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onNoteSelection(selectedText) }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
             )
         }
     }
@@ -642,16 +664,24 @@ fun ReaderSelectionToolbar(
 private fun SelectionToolIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescriptionRes: Int,
+    iconSize: Int = 28,
+    touchSize: Int = 42,
     onClick: () -> Unit = {}
 ) {
-    Icon(
-        imageVector = icon,
-        contentDescription = stringResource(contentDescriptionRes),
-        tint = Color.White,
+    Box(
         modifier = Modifier
-            .size(22.dp)
-            .clickable(onClick = onClick)
-    )
+            .size(touchSize.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = stringResource(contentDescriptionRes),
+            tint = Color.White,
+            modifier = Modifier.size(iconSize.dp)
+        )
+    }
 }
 
 @Composable
