@@ -2,10 +2,13 @@ package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.ActivitySocialSummary
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.data.repository.FriendsRepository
+import com.google.firebase.firestore.FirebaseFirestoreException
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +21,8 @@ data class HomeUiState(
     val commentsByActivityId: Map<String, List<ActivityComment>> = emptyMap(),
     val loadingCommentIds: Set<String> = emptySet(),
     val socialActionIds: Set<String> = emptySet(),
-    val errorMessage: String? = null
+    val errorMessageRes: Int? = null,
+    val isOfflineError: Boolean = false
 )
 
 class HomeViewModel(
@@ -43,7 +47,8 @@ class HomeViewModel(
         _uiState.value = currentState.copy(
             isLoading = !isRefresh && currentState.activities.isEmpty(),
             isRefreshing = isRefresh,
-            errorMessage = null
+            errorMessageRes = null,
+            isOfflineError = currentState.isOfflineError
         )
 
         viewModelScope.launch {
@@ -53,14 +58,21 @@ class HomeViewModel(
                         isLoading = false,
                         isRefreshing = false,
                         activities = activities,
-                        errorMessage = null
+                        errorMessageRes = null,
+                        isOfflineError = false
                     )
                 }
                 .onFailure { error ->
+                    val isOffline = error.isOfflineFailure()
                     _uiState.value = currentState.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        errorMessage = error.message ?: "No se pudo cargar la actividad reciente"
+                        errorMessageRes = if (isOffline) {
+                            R.string.home_offline_dialog_body
+                        } else {
+                            R.string.home_recent_activity_load_error
+                        },
+                        isOfflineError = isOffline
                     )
                 }
         }
@@ -71,15 +83,22 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             socialActionIds = _uiState.value.socialActionIds + activityId,
-            errorMessage = null
+            errorMessageRes = null,
+            isOfflineError = false
         )
 
         viewModelScope.launch {
             repository.toggleActivityLike(activityId)
                 .onSuccess { summary -> updateActivitySocial(activityId, summary) }
                 .onFailure { error ->
+                    val isOffline = error.isOfflineFailure()
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "No se pudo actualizar el me gusta"
+                        errorMessageRes = if (isOffline) {
+                            R.string.home_offline_dialog_body
+                        } else {
+                            R.string.home_like_update_error
+                        },
+                        isOfflineError = isOffline
                     )
                 }
 
@@ -94,7 +113,8 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             loadingCommentIds = _uiState.value.loadingCommentIds + activityId,
-            errorMessage = null
+            errorMessageRes = null,
+            isOfflineError = false
         )
 
         viewModelScope.launch {
@@ -105,8 +125,14 @@ class HomeViewModel(
                     )
                 }
                 .onFailure { error ->
+                    val isOffline = error.isOfflineFailure()
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "No se pudieron cargar los comentarios"
+                        errorMessageRes = if (isOffline) {
+                            R.string.home_offline_dialog_body
+                        } else {
+                            R.string.home_comments_load_error
+                        },
+                        isOfflineError = isOffline
                     )
                 }
 
@@ -121,7 +147,8 @@ class HomeViewModel(
 
         _uiState.value = _uiState.value.copy(
             socialActionIds = _uiState.value.socialActionIds + activityId,
-            errorMessage = null
+            errorMessageRes = null,
+            isOfflineError = false
         )
 
         viewModelScope.launch {
@@ -133,8 +160,14 @@ class HomeViewModel(
                     )
                 }
                 .onFailure { error ->
+                    val isOffline = error.isOfflineFailure()
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "No se pudo publicar el comentario"
+                        errorMessageRes = if (isOffline) {
+                            R.string.home_offline_dialog_body
+                        } else {
+                            R.string.home_comment_publish_error
+                        },
+                        isOfflineError = isOffline
                     )
                 }
 
@@ -150,5 +183,20 @@ class HomeViewModel(
                 if (item.id == activityId) item.copy(social = summary) else item
             }
         )
+    }
+
+    private fun Throwable.isOfflineFailure(): Boolean {
+        if (this is FirebaseFirestoreException && code == FirebaseFirestoreException.Code.UNAVAILABLE) {
+            return true
+        }
+
+        // Firestore devuelve este texto cuando intenta leer datos remotos sin conexión.
+        val diagnosticText = listOfNotNull(message, cause?.message)
+            .joinToString(separator = " ")
+            .lowercase(Locale.ROOT)
+
+        return diagnosticText.contains("client is offline") ||
+            diagnosticText.contains("offline") ||
+            diagnosticText.contains("unavailable")
     }
 }

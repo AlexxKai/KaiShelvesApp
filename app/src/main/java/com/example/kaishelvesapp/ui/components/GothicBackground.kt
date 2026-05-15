@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.example.kaishelvesapp.R
@@ -16,6 +17,9 @@ import com.example.kaishelvesapp.ui.theme.NightBlack
 @Composable
 fun GothicBackground(
     modifier: Modifier = Modifier,
+    imageAlpha: Float = 0.24f,
+    mainScrimAlpha: Float = 0.62f,
+    secondaryScrimAlpha: Float = 0.12f,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
@@ -28,21 +32,25 @@ fun GothicBackground(
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(0.24f),
+                .alpha(imageAlpha),
             contentScale = ContentScale.Crop
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(NightBlack.copy(alpha = 0.62f))
-        )
+        if (mainScrimAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(NightBlack.copy(alpha = mainScrimAlpha))
+            )
+        }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(NightBlack.copy(alpha = 0.12f))
-        )
+        if (secondaryScrimAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = secondaryScrimAlpha))
+            )
+        }
 
         content()
     }

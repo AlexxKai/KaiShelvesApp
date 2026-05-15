@@ -61,6 +61,13 @@
     <string name="home_empty_activity_body">When your friends add books or accept friendships, their activity will show up here.</string>
     <string name="home_no_friends_title">No friends added yet</string>
     <string name="home_no_friends_body">Add readers to your circle so their reading activity can appear here.</string>
+    <string name="home_recent_activity_load_error">Could not load recent activity.</string>
+    <string name="home_like_update_error">Could not update the like.</string>
+    <string name="home_comments_load_error">Could not load the comments.</string>
+    <string name="home_comment_publish_error">Could not publish the comment.</string>
+    <string name="home_offline_dialog_title">You are offline</string>
+    <string name="home_offline_dialog_body">Kai Shelves needs an internet connection to load your online activity. Connect to the internet and try again, or open your device library.</string>
+    <string name="home_offline_outside_message">Connect to the internet or go to the library to continue.</string>
     <string name="home_feed_like">Like</string>
     <string name="home_feed_unlike">Unlike</string>
     <string name="home_feed_comment">Comment</string>

@@ -204,10 +204,10 @@ fun HomeScreen(
                         }
                     }
 
-                    uiState.errorMessage != null -> {
+                    uiState.errorMessageRes != null && !uiState.isOfflineError -> {
                         HomeMessageCard(
                             title = stringResource(R.string.home_recent_activity_title),
-                            message = uiState.errorMessage!!,
+                            message = stringResource(uiState.errorMessageRes!!),
                             actionLabel = stringResource(R.string.retry),
                             onAction = viewModel::loadFeed
                         )

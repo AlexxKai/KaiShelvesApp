@@ -75,6 +75,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Ajustes de privacidad y visibilidad social.
 - Amigos, sugerencias, solicitudes, perfiles públicos/privados y listas compartidas.
 - Feed social con actividad, likes, comentarios, respuestas a comentarios y aviso guiado para añadir amigos cuando el círculo lector está vacío.
+- Aviso offline bloqueante para cuentas registradas, con reintento de carga, refresco automático del destino solicitado al volver la conexión y acceso único a la biblioteca local del dispositivo.
 - Centro de notificaciones y notificaciones locales.
 - Ayuda integrada con FAQ, contexto de pantalla y chat asistido por Groq si hay API key configurada.
 - Internacionalización preparada con recursos en `values` y `values-es`.

@@ -1,9 +1,18 @@
 ﻿package com.example.kaishelvesapp.ui.navigation
 
 import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,7 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -22,11 +37,15 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.kaishelvesapp.data.help.HelpScreenContext
+import com.example.kaishelvesapp.BuildConfig
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
 import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.HelpChatOverlay
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
+import com.example.kaishelvesapp.ui.components.OfflineAccessDialog
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
 import com.example.kaishelvesapp.ui.screen.catalog.SearchResultsScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
@@ -70,8 +89,11 @@ import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.SearchResultsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
+import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 object Routes {
+    const val AUTH_LOADING = "auth_loading"
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val EMAIL_VERIFICATION = "email_verification"
@@ -136,7 +158,9 @@ fun AppNavigation(
     val friendsState by friendsViewModel.uiState.collectAsStateWithLifecycle()
     val friendRequestsState by friendRequestsViewModel.uiState.collectAsStateWithLifecycle()
     val helpChatState by helpChatViewModel.uiState.collectAsStateWithLifecycle()
+    val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val isGuestUser = authState.user?.isGuest == true
+    val isRegisteredOffline = authState.isLoggedIn && !isGuestUser && homeState.isOfflineError
     val guestRestrictedSections = remember(isGuestUser) {
         if (isGuestUser) {
             setOf(KaiSection.HOME, KaiSection.FRIENDS, KaiSection.GROUPS)
@@ -145,12 +169,15 @@ fun AppNavigation(
         }
     }
     var showGuestRestrictedNotice by remember { mutableStateOf(false) }
+    var showOfflineAccessNotice by remember { mutableStateOf(false) }
+    var pendingOfflineRoute by remember { mutableStateOf<String?>(null) }
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
     var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
 
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
-        authState.isLoggedIn -> Routes.DISCOVER
+        authState.isLoggedIn && authState.user == null -> Routes.AUTH_LOADING
+        authState.isLoggedIn -> if (authState.user?.isGuest == true) Routes.DISCOVER else Routes.HOME
         else -> Routes.LOGIN
     }
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
@@ -158,6 +185,53 @@ fun AppNavigation(
 
     fun authenticatedStartRoute(isGuest: Boolean): String {
         return if (isGuest) Routes.DISCOVER else Routes.HOME
+    }
+
+    fun routeForSection(section: KaiSection): String {
+        return when (section) {
+            KaiSection.HOME -> Routes.HOME
+            KaiSection.MY_BOOKS -> Routes.LISTS
+            KaiSection.DISCOVER -> Routes.DISCOVER
+            KaiSection.SEARCH -> Routes.SEARCH
+            KaiSection.LIBRARY -> Routes.LIBRARY
+            KaiSection.PROFILE -> Routes.PROFILE
+            KaiSection.STATS -> Routes.READING_STATS
+            KaiSection.FRIENDS -> Routes.FRIENDS
+            KaiSection.GROUPS -> Routes.GROUPS
+            KaiSection.FILE_CONVERTER -> Routes.FILE_CONVERTER
+            KaiSection.CHALLENGES -> Routes.CHALLENGES
+            KaiSection.FOR_YOU -> Routes.FOR_YOU
+            KaiSection.HELP -> Routes.HELP
+        }
+    }
+
+    fun navigateRoute(route: String) {
+        if (isRegisteredOffline && route != Routes.LIBRARY) {
+            pendingOfflineRoute = route
+            showOfflineAccessNotice = true
+            return
+        }
+
+        if (route == Routes.LIBRARY) {
+            showOfflineAccessNotice = false
+        }
+        navController.navigate(route)
+    }
+
+    fun refreshRecoveredRoute(route: String) {
+        // Al recuperar conexión, limpia errores remotos antiguos y muestra carga en el destino solicitado.
+        when (route) {
+            Routes.DISCOVER -> catalogViewModel.cargarLibros()
+            Routes.HOME -> homeViewModel.loadFeed()
+            Routes.FRIENDS -> friendsViewModel.loadFriends()
+            Routes.NOTIFICATION_CENTER -> {
+                friendRequestsViewModel.loadReceivedRequests()
+                friendRequestsViewModel.loadActivityNotifications()
+            }
+            Routes.FOR_YOU -> forYouViewModel.loadRecommendations(
+                personalizedSuggestionsEnabled = authState.user?.privacySettings?.personalizedSuggestions != false
+            )
+        }
     }
 
     LaunchedEffect(authState.pendingEmailVerificationEmail) {
@@ -228,9 +302,29 @@ fun AppNavigation(
         }
     }
 
+    LaunchedEffect(homeState.isOfflineError, authState.isLoggedIn, authState.user?.isGuest) {
+        if (!authState.isLoggedIn || authState.user?.isGuest == true || homeState.isOfflineError) {
+            return@LaunchedEffect
+        }
+
+        if (showOfflineAccessNotice || pendingOfflineRoute != null) {
+            val targetRoute = pendingOfflineRoute ?: Routes.HOME
+            showOfflineAccessNotice = false
+            pendingOfflineRoute = null
+            refreshRecoveredRoute(targetRoute)
+            navController.navigate(targetRoute)
+        }
+    }
+
     fun navigateSection(section: KaiSection) {
         if (guestRestrictedSections.contains(section)) {
             showGuestRestrictedNotice = true
+            return
+        }
+
+        if (isRegisteredOffline && section != KaiSection.LIBRARY) {
+            pendingOfflineRoute = routeForSection(section)
+            showOfflineAccessNotice = true
             return
         }
 
@@ -244,7 +338,10 @@ fun AppNavigation(
             KaiSection.SEARCH -> navController.navigate(Routes.SEARCH)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
-            KaiSection.LIBRARY -> navController.navigate(Routes.LIBRARY)
+            KaiSection.LIBRARY -> {
+                showOfflineAccessNotice = false
+                navController.navigate(Routes.LIBRARY)
+            }
             KaiSection.FRIENDS -> navController.navigate(Routes.FRIENDS)
             KaiSection.GROUPS -> navController.navigate(Routes.GROUPS)
             KaiSection.FILE_CONVERTER -> navController.navigate(Routes.FILE_CONVERTER)
@@ -286,10 +383,17 @@ fun AppNavigation(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val shouldShowOfflineAccessNotice =
+                isRegisteredOffline && (currentRoute != Routes.LIBRARY || showOfflineAccessNotice)
+
             NavHost(
                 navController = navController,
                 startDestination = startDestination
             ) {
+        composable(Routes.AUTH_LOADING) {
+            AuthLoadingScreen()
+        }
+
         composable(Routes.LOGIN) {
             LoginScreen(
                 viewModel = authViewModel,
@@ -346,17 +450,11 @@ fun AppNavigation(
                 onScanResult = ::scanFromSharedTopBar,
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
-                onGoToProfile = {
-                    navController.navigate(Routes.PROFILE)
-                },
-                onGoToSettingsPrivacy = {
-                    navController.navigate(Routes.SETTINGS_PRIVACY)
-                },
+                onGoToProfile = { navigateRoute(Routes.PROFILE) },
+                onGoToSettingsPrivacy = { navigateRoute(Routes.SETTINGS_PRIVACY) },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
-                onOpenNotifications = {
-                    navController.navigate(Routes.NOTIFICATION_CENTER)
-                },
+                onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 hasAddedFriends = friendsState.takeIf { it.hasLoadedFriends && it.errorMessage == null }
                     ?.friends
                     ?.isNotEmpty(),
@@ -389,17 +487,11 @@ fun AppNavigation(
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
                 onScanResult = ::scanFromSharedTopBar,
-                onGoToProfile = {
-                    navController.navigate(Routes.PROFILE)
-                },
-                onGoToSettingsPrivacy = {
-                    navController.navigate(Routes.SETTINGS_PRIVACY)
-                },
+                onGoToProfile = { navigateRoute(Routes.PROFILE) },
+                onGoToSettingsPrivacy = { navigateRoute(Routes.SETTINGS_PRIVACY) },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
-                onOpenNotifications = {
-                    navController.navigate(Routes.NOTIFICATION_CENTER)
-                },
+                onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 searchIntroAnimationEnabled = authState.user?.privacySettings?.searchIntroAnimationEnabled != false,
                 onSectionSelected = { navigateSection(it) }
             )
@@ -425,21 +517,15 @@ fun AppNavigation(
                 viewModel = catalogViewModel,
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
-                onGoToProfile = {
-                    navController.navigate(Routes.PROFILE)
-                },
-                onGoToSettingsPrivacy = {
-                    navController.navigate(Routes.SETTINGS_PRIVACY)
-                },
+                onGoToProfile = { navigateRoute(Routes.PROFILE) },
+                onGoToSettingsPrivacy = { navigateRoute(Routes.SETTINGS_PRIVACY) },
                 onLogout = ::logoutToLogin,
                 onBookClick = { libro ->
                     catalogViewModel.selectBook(libro)
                     navController.navigate(Routes.DETAIL)
                 },
                 pendingRequestCount = friendRequestsState.pendingCount,
-                onOpenNotifications = {
-                    navController.navigate(Routes.NOTIFICATION_CENTER)
-                },
+                onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -566,17 +652,11 @@ fun AppNavigation(
                 onScanResult = ::scanFromSharedTopBar,
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
-                onGoToProfile = {
-                    navController.navigate(Routes.PROFILE)
-                },
-                onGoToSettingsPrivacy = {
-                    navController.navigate(Routes.SETTINGS_PRIVACY)
-                },
+                onGoToProfile = { navigateRoute(Routes.PROFILE) },
+                onGoToSettingsPrivacy = { navigateRoute(Routes.SETTINGS_PRIVACY) },
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
-                onOpenNotifications = {
-                    navController.navigate(Routes.NOTIFICATION_CENTER)
-                },
+                onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 onSectionSelected = { navigateSection(it) }
             )
         }
@@ -960,6 +1040,32 @@ fun AppNavigation(
                 }
             }
 
+            if (shouldShowOfflineAccessNotice) {
+                // Bloquea las secciones remotas y mantiene como única salida la biblioteca local.
+                GothicBackground(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(8f),
+                    imageAlpha = 0.58f,
+                    mainScrimAlpha = 0.34f,
+                    secondaryScrimAlpha = 0.04f
+                ) {}
+
+                OfflineAccessDialog(
+                    isRetrying = homeState.isLoading || homeState.isRefreshing,
+                    onRetry = {
+                        if (pendingOfflineRoute == null) {
+                            pendingOfflineRoute = Routes.HOME
+                        }
+                        homeViewModel.loadFeed()
+                    },
+                    onOpenLibrary = {
+                        showOfflineAccessNotice = false
+                        navController.navigate(Routes.LIBRARY)
+                    }
+                )
+            }
+
             HelpChatOverlay(
                 state = helpChatState,
                 onExpand = { helpChatViewModel.expandChat() },
@@ -968,6 +1074,37 @@ fun AppNavigation(
                 onInputChange = { helpChatViewModel.onInputChange(it) },
                 onSend = { helpChatViewModel.sendMessage() }
             )
+        }
+    }
+}
+
+@Composable
+private fun AuthLoadingScreen() {
+    GothicBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.logo_kaishelves),
+                contentDescription = stringResource(R.string.app_name),
+                modifier = Modifier
+                    .size(168.dp)
+                    .clip(RoundedCornerShape(42.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "v${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.titleMedium,
+                color = TarnishedGold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            CircularProgressIndicator(color = TarnishedGold)
         }
     }
 }
