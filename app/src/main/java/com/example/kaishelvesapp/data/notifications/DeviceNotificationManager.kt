@@ -18,7 +18,9 @@ object DeviceNotificationManager {
 
     const val ACCOUNT_CHANNEL_ID = "account_updates"
     const val ACTIVITY_CHANNEL_ID = "activity_updates"
+    const val LIBRARY_IMPORT_CHANNEL_ID = "library_import"
     const val EXTRA_ACTIVITY_NOTIFICATION_ID = "activity_notification_id"
+    private const val LIBRARY_IMPORT_NOTIFICATION_ID = 3207
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -38,7 +40,14 @@ object DeviceNotificationManager {
         ).apply {
             description = "Notificaciones de me gusta y comentarios en tus publicaciones"
         }
-        manager.createNotificationChannels(listOf(accountChannel, activityChannel))
+        val libraryImportChannel = NotificationChannel(
+            LIBRARY_IMPORT_CHANNEL_ID,
+            "Importación de biblioteca",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Progreso de importaciones de libros desde otras plataformas"
+        }
+        manager.createNotificationChannels(listOf(accountChannel, activityChannel, libraryImportChannel))
     }
 
     fun canPostNotifications(context: Context): Boolean {
@@ -112,6 +121,61 @@ object DeviceNotificationManager {
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId.hashCode(), notification)
+        return true
+    }
+
+    fun showLibraryImportProgress(
+        context: Context,
+        processedBooks: Int,
+        totalBooks: Int
+    ): Boolean {
+        ensureChannels(context)
+        if (!canPostNotifications(context)) {
+            return false
+        }
+
+        val safeTotal = totalBooks.coerceAtLeast(1)
+        val safeProcessed = processedBooks.coerceIn(0, safeTotal)
+        val body = "$safeProcessed de $safeTotal libros importados"
+        val notification = NotificationCompat.Builder(context, LIBRARY_IMPORT_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Importando biblioteca")
+            .setContentText(body)
+            .setProgress(safeTotal, safeProcessed, false)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(LIBRARY_IMPORT_NOTIFICATION_ID, notification)
+        return true
+    }
+
+    fun showLibraryImportCompleted(
+        context: Context,
+        importedBooks: Int,
+        skippedRows: Int
+    ): Boolean {
+        ensureChannels(context)
+        if (!canPostNotifications(context)) {
+            return false
+        }
+
+        val body = if (skippedRows > 0) {
+            "$importedBooks libros añadidos. $skippedRows filas omitidas."
+        } else {
+            "$importedBooks libros añadidos."
+        }
+        val notification = NotificationCompat.Builder(context, LIBRARY_IMPORT_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Importación completada")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(LIBRARY_IMPORT_NOTIFICATION_ID, notification)
         return true
     }
 

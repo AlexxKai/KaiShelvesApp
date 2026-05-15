@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -38,6 +39,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
@@ -156,6 +158,11 @@ fun ProfileScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         pendingProfilePhotoUri = uri?.toString()
+    }
+    val csvImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importGoodreadsCsv(it.toString()) }
     }
 
     pendingProfilePhotoUri?.let { selectedPhotoUri ->
@@ -493,6 +500,25 @@ fun ProfileScreen(
                                                     onGoogleError = viewModel::showError
                                                 )
                                             }
+
+                                            Spacer(modifier = Modifier.height(20.dp))
+
+                                            DataImportSection(
+                                                isImporting = uiState.isImportingLibraryData,
+                                                processedRows = uiState.importProcessedRows,
+                                                totalRows = uiState.importTotalRows,
+                                                importedBooks = uiState.importImportedBooks,
+                                                onImportCsv = {
+                                                    csvImportLauncher.launch(
+                                                        arrayOf(
+                                                            "text/csv",
+                                                            "text/comma-separated-values",
+                                                            "text/*",
+                                                            "application/vnd.ms-excel"
+                                                        )
+                                                    )
+                                                }
+                                            )
                                         }
 
                                         ProfileTab.Settings -> {
@@ -572,6 +598,80 @@ fun ProfileScreen(
                 }
             }
             }
+        }
+    }
+}
+
+@Composable
+private fun DataImportSection(
+    isImporting: Boolean,
+    processedRows: Int,
+    totalRows: Int,
+    importedBooks: Int,
+    onImportCsv: () -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_data_import_section_title)) {
+        Text(
+            text = stringResource(R.string.profile_data_import_section_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory.copy(alpha = 0.76f)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (isImporting) {
+            val progress = if (totalRows > 0) {
+                processedRows.toFloat() / totalRows.toFloat()
+            } else {
+                0f
+            }
+            Text(
+                text = stringResource(
+                    R.string.profile_import_progress,
+                    processedRows,
+                    totalRows,
+                    importedBooks
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+                color = TarnishedGold,
+                trackColor = TarnishedGold.copy(alpha = 0.18f)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        OutlinedButton(
+            onClick = onImportCsv,
+            enabled = !isImporting,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            if (isImporting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = TarnishedGold,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.UploadFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = TarnishedGold
+                )
+            }
+
+            Spacer(modifier = Modifier.size(8.dp))
+
+            Text(
+                text = stringResource(R.string.profile_import_csv_action),
+                color = TarnishedGold
+            )
         }
     }
 }

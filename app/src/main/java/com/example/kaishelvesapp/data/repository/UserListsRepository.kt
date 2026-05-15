@@ -22,6 +22,13 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
+data class ImportedReadMetadata(
+    val readDate: String = "",
+    val rating: Int = 0,
+    val review: String = "",
+    val containsSpoilers: Boolean = false
+)
+
 class UserListsRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
@@ -230,7 +237,11 @@ class UserListsRepository(
         }.toSet()
     }
 
-    private fun localReadBookPayload(libro: Libro, safeBookId: String) = mapOf(
+    private fun localReadBookPayload(
+        libro: Libro,
+        safeBookId: String,
+        readMetadata: ImportedReadMetadata? = null
+    ) = mapOf(
         "id" to safeBookId,
         "isbn" to libro.isbn,
         "titulo" to libro.titulo,
@@ -241,20 +252,35 @@ class UserListsRepository(
         "paginas" to libro.paginas,
         "imagen" to libro.imagen,
         "pdf" to libro.pdf,
-        "fechaLeido" to localReadDate(),
-        "puntuacion" to 0,
-        "resena" to "",
-        "contieneSpoilers" to false,
+        "fechaLeido" to readMetadata?.readDate.orEmpty().ifBlank { localReadDate() },
+        "puntuacion" to (readMetadata?.rating ?: 0),
+        "resena" to readMetadata?.review.orEmpty(),
+        "contieneSpoilers" to (readMetadata?.containsSpoilers ?: false),
         "siNo" to "si"
     )
 
     private fun ensureLocalReadBook(
         state: GuestLibraryState,
         libro: Libro,
-        safeBookId: String
+        safeBookId: String,
+        readMetadata: ImportedReadMetadata? = null
     ): GuestLibraryState {
         if (state.readBooks.any { it.id == safeBookId }) {
-            return state
+            if (readMetadata == null) return state
+            return state.copy(
+                readBooks = state.readBooks.map { readBook ->
+                    if (readBook.id == safeBookId) {
+                        readBook.copy(
+                            fechaLeido = readMetadata.readDate.ifBlank { readBook.fechaLeido },
+                            puntuacion = readMetadata.rating.takeIf { it > 0 } ?: readBook.puntuacion,
+                            resena = readMetadata.review.ifBlank { readBook.resena },
+                            contieneSpoilers = readMetadata.containsSpoilers
+                        )
+                    } else {
+                        readBook
+                    }
+                }
+            )
         }
 
         val readBook = com.example.kaishelvesapp.data.model.LibroLeido(
@@ -268,10 +294,10 @@ class UserListsRepository(
             paginas = libro.paginas,
             imagen = libro.imagen,
             pdf = libro.pdf,
-            fechaLeido = localReadDate(),
-            puntuacion = 0,
-            resena = "",
-            contieneSpoilers = false,
+            fechaLeido = readMetadata?.readDate.orEmpty().ifBlank { localReadDate() },
+            puntuacion = readMetadata?.rating ?: 0,
+            resena = readMetadata?.review.orEmpty(),
+            contieneSpoilers = readMetadata?.containsSpoilers ?: false,
             siNo = "si"
         )
 
@@ -368,13 +394,17 @@ class UserListsRepository(
         )
     }
 
-    private fun buildReadBookPayload(libro: Libro, safeBookId: String): Map<String, Any> {
+    private fun buildReadBookPayload(
+        libro: Libro,
+        safeBookId: String,
+        readMetadata: ImportedReadMetadata? = null
+    ): Map<String, Any> {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         return buildBookPayload(libro, safeBookId) + mapOf(
-            "fechaLeido" to today,
-            "puntuacion" to 0,
-            "resena" to "",
-            "contieneSpoilers" to false,
+            "fechaLeido" to readMetadata?.readDate.orEmpty().ifBlank { today },
+            "puntuacion" to (readMetadata?.rating ?: 0),
+            "resena" to readMetadata?.review.orEmpty(),
+            "contieneSpoilers" to (readMetadata?.containsSpoilers ?: false),
             "siNo" to "si"
         )
     }
@@ -928,6 +958,87 @@ class UserListsRepository(
         }
     }
 
+    suspend fun getOrCreateCustomList(name: String, description: String): Result<String> {
+        val trimmedName = name.trim()
+        val trimmedDescription = description.trim()
+        if (trimmedName.isBlank()) {
+            return Result.failure(IllegalArgumentException("El nombre de la lista no puede estar vacio"))
+        }
+
+        return try {
+            if (isGuestSessionActive()) {
+                var targetId = ""
+                GuestLocalStore.updateState { currentState ->
+                    val existingList = currentState.lists.firstOrNull { list ->
+                        !list.isSystem && list.name.equals(trimmedName, ignoreCase = true)
+                    }
+                    if (existingList != null) {
+                        targetId = existingList.id
+                        return@updateState currentState
+                    }
+
+                    val currentPositions = currentState.lists
+                        .filterNot { it.isSystem }
+                        .map { it.position }
+                    val nextPosition = (currentPositions.maxOrNull() ?: 2) + 1
+                    val newList = UserBookList(
+                        id = UUID.randomUUID().toString(),
+                        name = trimmedName,
+                        description = trimmedDescription,
+                        bookCount = 0,
+                        position = nextPosition
+                    )
+                    targetId = newList.id
+                    currentState.copy(lists = currentState.lists + newList)
+                }
+                cachedListsOwnerId = null
+                cachedUserLists = null
+                return Result.success(targetId)
+            }
+
+            val uid = requireUid()
+            ensureDefaultLists(uid)
+
+            val existingList = userListsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .firstNotNullOfOrNull { document ->
+                    val list = document.toObject(UserBookList::class.java)
+                    document.id.takeIf {
+                        list?.isSystem != true && list?.name.equals(trimmedName, ignoreCase = true)
+                    }
+                }
+            if (existingList != null) {
+                return Result.success(existingList)
+            }
+
+            val newDocument = userListsCollection(uid).document()
+            val currentPositions = userListsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { it.toObject(UserBookList::class.java) }
+                .filterNot { it.isSystem }
+                .map { it.position }
+            val nextPosition = (currentPositions.maxOrNull() ?: 2) + 1
+            val newList = UserBookList(
+                id = newDocument.id,
+                name = trimmedName,
+                description = trimmedDescription,
+                bookCount = 0,
+                position = nextPosition
+            )
+
+            newDocument.set(newList).await()
+            cachedListsOwnerId = null
+            cachedUserLists = null
+            Result.success(newDocument.id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private suspend fun nextListPosition(uid: String, listId: String): Long {
         return userListsCollection(uid)
             .document(listId)
@@ -944,6 +1055,18 @@ class UserListsRepository(
     suspend fun updateBookAssignments(
         libro: Libro,
         selectedListIds: Set<String>
+    ): Result<Unit> {
+        return updateBookAssignments(
+            libro = libro,
+            selectedListIds = selectedListIds,
+            readMetadata = null
+        )
+    }
+
+    suspend fun updateBookAssignments(
+        libro: Libro,
+        selectedListIds: Set<String>,
+        readMetadata: ImportedReadMetadata?
     ): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {
@@ -976,7 +1099,7 @@ class UserListsRepository(
 
                     val updatedState = currentState.copy(listBooks = mutableListBooks)
                     if (normalizedSelectedIds.contains(SYSTEM_LIST_READ_ID)) {
-                        ensureLocalReadBook(updatedState, libro, safeBookId)
+                        ensureLocalReadBook(updatedState, libro, safeBookId, readMetadata)
                     } else {
                         updatedState
                     }
@@ -1048,13 +1171,19 @@ class UserListsRepository(
                     if (readDocExists) {
                         batch.set(
                             readDocRef,
-                            buildBookPayload(libro, safeBookId) + mapOf("activityAt" to FieldValue.serverTimestamp()),
+                            if (readMetadata == null) {
+                                buildBookPayload(libro, safeBookId) + mapOf("activityAt" to FieldValue.serverTimestamp())
+                            } else {
+                                buildReadBookPayload(libro, safeBookId, readMetadata) +
+                                    mapOf("activityAt" to FieldValue.serverTimestamp())
+                            },
                             SetOptions.merge()
                         )
                     } else {
                         batch.set(
                             readDocRef,
-                            buildReadBookPayload(libro, safeBookId) + mapOf("activityAt" to FieldValue.serverTimestamp())
+                            buildReadBookPayload(libro, safeBookId, readMetadata) +
+                                mapOf("activityAt" to FieldValue.serverTimestamp())
                         )
                     }
                 }

@@ -1,11 +1,15 @@
 ﻿package com.example.kaishelvesapp.ui.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
+import com.example.kaishelvesapp.data.local.AppContextProvider
+import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
+import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.repository.AuthRepository
+import com.example.kaishelvesapp.data.repository.GoodreadsCsvImportRepository
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
 import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
 import com.example.kaishelvesapp.data.repository.LoginProviderState
@@ -38,11 +42,17 @@ data class AuthUiState(
     val hasGoogleLogin: Boolean = false,
     val loginProviders: List<LoginProviderState> = emptyList(),
     val pendingGuestMergeDecision: GuestMergeDecision? = null,
-    val pendingEmailVerificationEmail: String? = null
+    val pendingEmailVerificationEmail: String? = null,
+    val isImportingLibraryData: Boolean = false,
+    val importProcessedRows: Int = 0,
+    val importTotalRows: Int = 0,
+    val importImportedBooks: Int = 0,
+    val importSkippedRows: Int = 0
 )
 
 class AuthViewModel(
-    private val repository: AuthRepository = AuthRepository()
+    private val repository: AuthRepository = AuthRepository(),
+    private val goodreadsCsvImportRepository: GoodreadsCsvImportRepository = GoodreadsCsvImportRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -739,6 +749,60 @@ class AuthViewModel(
         }
     }
 
+    fun importGoodreadsCsv(uriString: String) {
+        if (uriString.isBlank()) return
+
+        _uiState.value = _uiState.value.copy(
+            isImportingLibraryData = true,
+            importProcessedRows = 0,
+            importTotalRows = 0,
+            importImportedBooks = 0,
+            importSkippedRows = 0,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val context = AppContextProvider.requireContext()
+            goodreadsCsvImportRepository.importFromUri(Uri.parse(uriString)) { progress ->
+                _uiState.value = _uiState.value.copy(
+                    importProcessedRows = progress.processedRows,
+                    importTotalRows = progress.totalRows,
+                    importImportedBooks = progress.importedBooks,
+                    importSkippedRows = progress.skippedRows
+                )
+                DeviceNotificationManager.showLibraryImportProgress(
+                    context = context,
+                    processedBooks = progress.processedRows,
+                    totalBooks = progress.totalRows
+                )
+            }
+                .onSuccess { result ->
+                    DeviceNotificationManager.showLibraryImportCompleted(
+                        context = context,
+                        importedBooks = result.importedBooks,
+                        skippedRows = result.skippedRows
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        isImportingLibraryData = false,
+                        importProcessedRows = _uiState.value.importTotalRows,
+                        successMessage = authText(
+                            AuthMessage.GoodreadsImportSuccess,
+                            result.importedBooks,
+                            result.skippedRows
+                        )
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isImportingLibraryData = false,
+                        errorMessage = error.message?.takeIf { it.isNotBlank() }
+                            ?: authText(AuthMessage.GoodreadsImportFailed)
+                    )
+                }
+        }
+    }
+
     fun logout() {
         repository.logout()
         _uiState.value = AuthUiState(isLoggedIn = false)
@@ -876,6 +940,10 @@ class AuthViewModel(
         } else {
             message.spanish
         }
+    }
+
+    private fun authText(message: AuthMessage, vararg formatArgs: Any): String {
+        return authText(message).format(*formatArgs)
     }
 
     private suspend fun handleAuthOperationResult(result: AuthOperationResult) {
@@ -1112,6 +1180,14 @@ private enum class AuthMessage(
     PrivacyUpdateFailed(
         spanish = "No se pudo actualizar la privacidad",
         english = "Privacy settings could not be updated"
+    ),
+    GoodreadsImportSuccess(
+        spanish = "Importación completada: %1\$d libros añadidos, %2\$d filas omitidas",
+        english = "Import complete: %1\$d books added, %2\$d rows skipped"
+    ),
+    GoodreadsImportFailed(
+        spanish = "No se pudo importar el archivo CSV",
+        english = "The CSV file could not be imported"
     ),
     NetworkError(
         spanish = "Revisa tu conexión e inténtalo de nuevo",

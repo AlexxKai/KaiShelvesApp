@@ -477,6 +477,10 @@
     <string name="profile_confirm_password">Confirmar contraseña</string>
     <string name="profile_change_password">Cambiar contraseña</string>
     <string name="profile_link_login_action">Asociar acceso con email</string>
+    <string name="profile_data_import_section_title">Importar datos</string>
+    <string name="profile_data_import_section_body">Importa un CSV exportado desde Goodreads y añade cada libro a su lista correspondiente en Kai Shelves.</string>
+    <string name="profile_import_csv_action">Importar archivo CSV</string>
+    <string name="profile_import_progress">%1$d de %2$d filas procesadas · %3$d libros añadidos</string>
     <string name="profile_settings_language">Idioma</string>
     <string name="profile_settings_session_preferences">Preferencias de sesión</string>
     <string name="profile_settings_social_safety">Seguridad social</string>
