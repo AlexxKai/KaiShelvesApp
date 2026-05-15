@@ -102,7 +102,7 @@ fun PdfReaderTopControls(
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
-                        contentDescription = "Más opciones",
+                        contentDescription = stringResource(R.string.more_option),
                         tint = Color.White
                     )
                 }
@@ -201,7 +201,7 @@ fun PdfReaderBottomControls(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Replay,
-                        contentDescription = "Volver a la página anterior",
+                        contentDescription = stringResource(R.string.reader_return_to_previous_page),
                         tint = Color(0xFFEBC7E8)
                     )
                 }
@@ -221,9 +221,9 @@ fun PdfReaderBottomControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderToolButton(Icons.AutoMirrored.Filled.VolumeUp, "Lectura en voz alta")
+            ReaderToolButton(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.reader_read_aloud))
             Box {
-                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Capítulos y marcadores", onOpenNavigation)
+                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, stringResource(R.string.reader_chapters_and_bookmarks), onOpenNavigation)
                 if (annotationsCount > 0) {
                     Text(
                         text = annotationsCount.toString(),
@@ -233,11 +233,11 @@ fun PdfReaderBottomControls(
                     )
                 }
             }
-            ReaderToolButton(Icons.Filled.Brightness6, "Brillo", onOpenDisplaySettings)
-            ReaderToolButton(Icons.Filled.FormatSize, "Tamaño del texto", onOpenTextSizeSettings)
+            ReaderToolButton(Icons.Filled.Brightness6, stringResource(R.string.reader_brightness), onOpenDisplaySettings)
+            ReaderToolButton(Icons.Filled.FormatSize, stringResource(R.string.reader_text_size), onOpenTextSizeSettings)
             ReaderToolButton(
                 icon = Icons.Filled.BookmarkBorder,
-                contentDescription = "Añadir marcador",
+                contentDescription = stringResource(R.string.reader_add_bookmark),
                 onClick = {
                     onAddBookmark()
                     bookmarkPulseTick += 1
@@ -250,10 +250,10 @@ fun PdfReaderBottomControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, "Alineación")
-            ReaderToolButton(Icons.Filled.Star, "Subrayar selección", onAddHighlight)
-            ReaderToolButton(Icons.Filled.MoreHoriz, "Añadir nota", onAddNote)
-            ReaderToolButton(Icons.Filled.TableRows, "Vista de página")
+            ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, stringResource(R.string.reader_alignment))
+            ReaderToolButton(Icons.Filled.Star, stringResource(R.string.reader_highlight_selection), onAddHighlight)
+            ReaderToolButton(Icons.Filled.MoreHoriz, stringResource(R.string.reader_add_note), onAddNote)
+            ReaderToolButton(Icons.Filled.TableRows, stringResource(R.string.reader_page_view))
         }
     }
 }
@@ -450,20 +450,20 @@ fun ReflowReaderBottomControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderToolButton(Icons.Filled.FormatSize, "Tamaño del texto", onOpenTextSizeSettings)
+            ReaderToolButton(Icons.Filled.FormatSize, stringResource(R.string.reader_text_size), onOpenTextSizeSettings)
             ReaderToolButton(
                 icon = Icons.Filled.BookmarkBorder,
-                contentDescription = "Añadir marcador",
+                contentDescription = stringResource(R.string.reader_add_bookmark),
                 onClick = {
                     onAddBookmark()
                     bookmarkPulseTick += 1
                 },
                 pulseActive = bookmarkPulseActive
             )
-            ReaderToolButton(Icons.Filled.Star, "Subrayar página", onAddHighlight)
-            ReaderToolButton(Icons.Filled.MoreHoriz, "Añadir nota", onAddNote)
+            ReaderToolButton(Icons.Filled.Star, stringResource(R.string.reader_highlight_page), onAddHighlight)
+            ReaderToolButton(Icons.Filled.MoreHoriz, stringResource(R.string.reader_add_note), onAddNote)
             Box {
-                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "Capítulos y marcadores", onOpenNavigation)
+                ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, stringResource(R.string.reader_chapters_and_bookmarks), onOpenNavigation)
                 if (annotationsCount > 0) {
                     Text(
                         text = annotationsCount.toString(),

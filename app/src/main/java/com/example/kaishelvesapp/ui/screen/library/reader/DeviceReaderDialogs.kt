@@ -38,11 +38,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotationType
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
@@ -72,13 +74,13 @@ fun ReflowAnnotationsDialog(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "Anotaciones",
+                text = stringResource(R.string.reader_annotations_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White
             )
             if (annotations.isEmpty()) {
                 Text(
-                    text = "Todavía no hay marcadores, subrayados ni notas.",
+                    text = stringResource(R.string.reader_no_annotations),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.72f),
                     modifier = Modifier.weight(1f)
@@ -98,7 +100,12 @@ fun ReflowAnnotationsDialog(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "${annotation.type.readableName()} · Página ${annotation.page + 1}/${annotation.pageCount}",
+                                text = stringResource(
+                                    R.string.reader_annotation_page_summary,
+                                    annotation.type.localizedReaderName(),
+                                    annotation.page + 1,
+                                    annotation.pageCount
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TarnishedGold
                             )
@@ -122,13 +129,13 @@ fun ReflowAnnotationsDialog(
                                 horizontalArrangement = Arrangement.End
                             ) {
                                 TextButton(onClick = { onAnnotationSelected(annotation) }) {
-                                    Text(text = "IR", color = TarnishedGold)
+                                    Text(text = stringResource(R.string.go).uppercase(), color = TarnishedGold)
                                 }
                                 TextButton(onClick = { onAnnotationEdit(annotation) }) {
-                                    Text(text = "EDITAR", color = Color.White)
+                                    Text(text = stringResource(R.string.edit_review_button).uppercase(), color = Color.White)
                                 }
                                 TextButton(onClick = { onAnnotationDelete(annotation) }) {
-                                    Text(text = "ELIMINAR", color = Color(0xFFFFB4A8))
+                                    Text(text = stringResource(R.string.delete).uppercase(), color = Color(0xFFFFB4A8))
                                 }
                             }
                         }
@@ -139,7 +146,7 @@ fun ReflowAnnotationsDialog(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.End)
             ) {
-                Text(text = "CERRAR", color = Color.White)
+                Text(text = stringResource(R.string.close).uppercase(), color = Color.White)
             }
         }
     }
@@ -164,7 +171,7 @@ fun ReaderNoteDialog(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Nueva nota",
+                text = stringResource(R.string.reader_new_note),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White
             )
@@ -173,20 +180,20 @@ fun ReaderNoteDialog(
                 onValueChange = { noteText = it.take(500) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                placeholder = { Text("Escribe una nota de lectura") }
+                placeholder = { Text(stringResource(R.string.reader_note_placeholder)) }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text(text = "CANCELAR", color = Color.White)
+                    Text(text = stringResource(R.string.cancel).uppercase(), color = Color.White)
                 }
                 TextButton(
                     onClick = { onSave(noteText.trim()) },
                     enabled = noteText.isNotBlank()
                 ) {
-                    Text(text = "GUARDAR", color = TarnishedGold)
+                    Text(text = stringResource(R.string.save).uppercase(), color = TarnishedGold)
                 }
             }
         }
@@ -216,7 +223,12 @@ fun ReaderAnnotationEditDialog(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "${annotation.type.readableName()} · Página ${annotation.page + 1}/${annotation.pageCount}",
+                text = stringResource(
+                    R.string.reader_annotation_page_summary,
+                    annotation.type.localizedReaderName(),
+                    annotation.page + 1,
+                    annotation.pageCount
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 color = TarnishedGold
             )
@@ -227,25 +239,25 @@ fun ReaderAnnotationEditDialog(
                     .fillMaxWidth()
                     .weight(1f),
                 minLines = 5,
-                label = { Text("Texto seleccionado") }
+                label = { Text(stringResource(R.string.reader_selected_text)) }
             )
             TextField(
                 value = noteText,
                 onValueChange = { noteText = it.take(800) },
                 modifier = Modifier.fillMaxWidth(),
                 minLines = 3,
-                label = { Text("Nota") }
+                label = { Text(stringResource(R.string.reader_selection_note)) }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 TextButton(onClick = onDelete) {
-                    Text(text = "ELIMINAR", color = Color(0xFFFFB4A8))
+                    Text(text = stringResource(R.string.delete).uppercase(), color = Color(0xFFFFB4A8))
                 }
                 Row {
                     TextButton(onClick = onDismiss) {
-                        Text(text = "CANCELAR", color = Color.White)
+                        Text(text = stringResource(R.string.cancel).uppercase(), color = Color.White)
                     }
                     TextButton(
                         onClick = {
@@ -257,7 +269,7 @@ fun ReaderAnnotationEditDialog(
                             )
                         }
                     ) {
-                        Text(text = "GUARDAR", color = TarnishedGold)
+                        Text(text = stringResource(R.string.save).uppercase(), color = TarnishedGold)
                     }
                 }
             }
@@ -265,11 +277,12 @@ fun ReaderAnnotationEditDialog(
     }
 }
 
-fun DeviceReaderAnnotationType.readableName(): String {
+@Composable
+fun DeviceReaderAnnotationType.localizedReaderName(): String {
     return when (this) {
-        DeviceReaderAnnotationType.Bookmark -> "Marcador"
-        DeviceReaderAnnotationType.Highlight -> "Subrayado"
-        DeviceReaderAnnotationType.Note -> "Nota"
+        DeviceReaderAnnotationType.Bookmark -> stringResource(R.string.reader_annotation_bookmark)
+        DeviceReaderAnnotationType.Highlight -> stringResource(R.string.reader_annotation_highlight)
+        DeviceReaderAnnotationType.Note -> stringResource(R.string.reader_annotation_note)
     }
 }
 
@@ -289,7 +302,41 @@ fun PdfBookInfoDialog(
     val title = userMetadata.title.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.')
     val author = userMetadata.author.takeIf { it.isNotBlank() }
     val description = userMetadata.description.takeIf { it.isNotBlank() }
-        ?: "Información del libro pendiente de completar. Podrás ampliar estos datos desde las opciones del libro."
+        ?: stringResource(R.string.reader_book_info_default_description)
+    val notAvailable = stringResource(R.string.not_available)
+    val fileNameLine = stringResource(R.string.reader_book_info_file_name, file.name)
+    val locationLine = stringResource(R.string.reader_book_info_location, file.location)
+    val fileSizeLine = stringResource(
+        R.string.reader_book_info_file_size,
+        file.sizeBytes?.let { Formatter.formatShortFileSize(context, it) } ?: notAvailable
+    )
+    val totalPagesLine = stringResource(R.string.reader_book_info_total_pages, pageCount)
+    val currentPageLine = stringResource(R.string.reader_book_info_current_page, currentPage + 1)
+    val progressLine = stringResource(R.string.reader_book_info_progress, progress)
+    val lastModifiedLine = file.modifiedAtMillis?.let {
+        stringResource(R.string.reader_book_info_last_modified, DateFormat.getDateTimeInstance().format(Date(it)))
+    }
+    val readingHoursLine = stringResource(R.string.reader_book_info_reading_hours_pending)
+    val readingSpeedLine = stringResource(R.string.reader_book_info_reading_speed_pending)
+    val readingHistoryLine = stringResource(R.string.reader_book_info_reading_history_days)
+    val currentChapterLine = stringResource(R.string.reader_book_info_current_chapter_pending)
+    val bookmarksLine = stringResource(R.string.reader_book_info_bookmarks_pending)
+    val bookInfoDetails = buildString {
+        appendLine(fileNameLine)
+        appendLine(locationLine)
+        appendLine(fileSizeLine)
+        appendLine(totalPagesLine)
+        appendLine(currentPageLine)
+        appendLine(progressLine)
+        lastModifiedLine?.let(::appendLine)
+        appendLine()
+        appendLine(readingHoursLine)
+        appendLine(readingSpeedLine)
+        appendLine(readingHistoryLine)
+        appendLine()
+        appendLine(currentChapterLine)
+        appendLine(bookmarksLine)
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -316,7 +363,7 @@ fun PdfBookInfoDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Información del libro",
+                        text = stringResource(R.string.reader_menu_book_info),
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                         modifier = Modifier.weight(1f)
@@ -368,24 +415,7 @@ fun PdfBookInfoDialog(
                         lineHeight = MaterialTheme.typography.bodySmall.lineHeight
                     )
                     Text(
-                        text = buildString {
-                            appendLine("Nombre del archivo: ${file.name}")
-                            appendLine("Ubicación: ${file.location}")
-                            appendLine("Tamaño del archivo: ${file.sizeBytes?.let { Formatter.formatShortFileSize(context, it) } ?: "No disponible"}")
-                            appendLine("Páginas totales: $pageCount")
-                            appendLine("Página actual: ${currentPage + 1}")
-                            appendLine("Progreso: $progress%")
-                            file.modifiedAtMillis?.let {
-                                appendLine("Última modificación: ${DateFormat.getDateTimeInstance().format(Date(it))}")
-                            }
-                            appendLine()
-                            appendLine("Horas de lectura: --")
-                            appendLine("Velocidad de lectura (p/m): --")
-                            appendLine("Historial de lectura en días:")
-                            appendLine()
-                            appendLine("Capítulo actual: pendiente de detectar")
-                            appendLine("Marcadores: pendiente de implementar")
-                        },
+                        text = bookInfoDetails,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White
                     )
@@ -397,13 +427,13 @@ fun PdfBookInfoDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onMore) {
-                        Text(text = "MÁS...", color = Color.White)
+                        Text(text = stringResource(R.string.more_option).uppercase() + "...", color = Color.White)
                     }
                     TextButton(onClick = {}) {
-                        Text(text = "FAVORITO", color = Color.White)
+                        Text(text = stringResource(R.string.favorite).uppercase(), color = Color.White)
                     }
                     TextButton(onClick = onDismiss) {
-                        Text(text = "ACEPTAR", color = Color.White)
+                        Text(text = stringResource(R.string.ok).uppercase(), color = Color.White)
                     }
                 }
             }
@@ -434,19 +464,19 @@ fun PdfBookInfoMoreDialog(
                     .padding(vertical = 10.dp)
             ) {
                 listOf(
-                    "Google Información del libro",
-                    "Wikipedia Información del libro",
-                    "Facebook Información del libro",
-                    "Twitter Información del libro",
-                    "GoodReads Información del libro",
-                    "Compartir",
-                    "Enviar archivo",
-                    "Limpiar “Estadísticas”",
-                    "Calendario",
-                    "Crear acceso directo en escritorio"
+                    R.string.reader_book_info_google,
+                    R.string.reader_book_info_wikipedia,
+                    R.string.reader_book_info_facebook,
+                    R.string.reader_book_info_twitter,
+                    R.string.reader_book_info_goodreads,
+                    R.string.reader_menu_share,
+                    R.string.reader_book_info_send_file,
+                    R.string.reader_book_info_clear_statistics,
+                    R.string.reader_book_info_calendar,
+                    R.string.reader_book_info_create_shortcut
                 ).forEach { label ->
                     Text(
-                        text = label,
+                        text = stringResource(label),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White,
                         modifier = Modifier

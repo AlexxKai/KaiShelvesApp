@@ -535,7 +535,7 @@ fun BrightnessAdvancedSettingsDialog(
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Text(
-                    text = "Brillo:",
+                    text = stringResource(R.string.reader_brightness_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White
                 )
@@ -546,7 +546,7 @@ fun BrightnessAdvancedSettingsDialog(
                     horizontalArrangement = Arrangement.Start
                 ) {
                     Text(
-                        text = "Ajustar brillo a",
+                        text = stringResource(R.string.reader_adjust_brightness_to),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White
                     )
@@ -560,7 +560,7 @@ fun BrightnessAdvancedSettingsDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = selectedEdge,
+                                text = readerBrightnessEdgeLabel(selectedEdge),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color.White
                             )
@@ -579,7 +579,7 @@ fun BrightnessAdvancedSettingsDialog(
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = option,
+                                            text = readerBrightnessEdgeLabel(option),
                                             color = Color.White
                                         )
                                     },
@@ -607,9 +607,17 @@ fun BrightnessAdvancedSettingsDialog(
                         )
                     )
                     Text(
-                        text = "Reanudar el brillo\nautomático después de ${
-                            formatReaderDuration(resumeAutoBrightnessMinutes)
-                        }\nde inactividad",
+                        text = stringResource(
+                            R.string.reader_resume_auto_brightness_after_inactivity,
+                            formatReaderDuration(
+                                minutesText = resumeAutoBrightnessMinutes,
+                                minuteSingular = stringResource(R.string.reader_minute),
+                                minutePlural = stringResource(R.string.reader_minutes),
+                                hourSingular = stringResource(R.string.reader_hour),
+                                hourPlural = stringResource(R.string.reader_hours),
+                                conjunction = stringResource(R.string.reader_duration_conjunction)
+                            )
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White,
                         modifier = Modifier.weight(1f)
@@ -620,7 +628,7 @@ fun BrightnessAdvancedSettingsDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
-                            contentDescription = "Ajustar minutos",
+                            contentDescription = stringResource(R.string.reader_adjust_minutes),
                             tint = Color(0xFFEBC7E8),
                             modifier = Modifier.size(20.dp)
                         )
@@ -632,7 +640,7 @@ fun BrightnessAdvancedSettingsDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text(text = "ACEPTAR", color = Color.White)
+                        Text(text = stringResource(R.string.ok).uppercase(), color = Color.White)
                     }
                 }
             }
@@ -680,7 +688,7 @@ fun AutoBrightnessMinutesDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TimePickerColumn(
-                        label = "Horas",
+                        label = stringResource(R.string.reader_hours),
                         values = 0..23,
                         selectedValue = selectedHour,
                         onValueSelected = { hour ->
@@ -689,7 +697,7 @@ fun AutoBrightnessMinutesDialog(
                     )
                     TimePickerSeparator()
                     TimePickerColumn(
-                        label = "Minutos",
+                        label = stringResource(R.string.reader_minutes),
                         values = 0..59,
                         selectedValue = selectedMinute,
                         onValueSelected = { minute ->
@@ -702,7 +710,7 @@ fun AutoBrightnessMinutesDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text(text = "CANCELAR", color = Color.White)
+                        Text(text = stringResource(R.string.cancel).uppercase(), color = Color.White)
                     }
                     TextButton(
                         onClick = {
@@ -710,7 +718,7 @@ fun AutoBrightnessMinutesDialog(
                             onDismiss()
                         }
                     ) {
-                        Text(text = "ACEPTAR", color = Color.White)
+                        Text(text = stringResource(R.string.ok).uppercase(), color = Color.White)
                     }
                 }
             }
@@ -869,14 +877,31 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-fun formatReaderDuration(minutesText: String): String {
+@Composable
+private fun readerBrightnessEdgeLabel(edge: String): String {
+    return when (edge) {
+        "Borde derecho" -> stringResource(R.string.reader_brightness_edge_right)
+        "Borde superior" -> stringResource(R.string.reader_brightness_edge_top)
+        "Borde inferior" -> stringResource(R.string.reader_brightness_edge_bottom)
+        else -> stringResource(R.string.reader_brightness_edge_left)
+    }
+}
+
+fun formatReaderDuration(
+    minutesText: String,
+    minuteSingular: String,
+    minutePlural: String,
+    hourSingular: String,
+    hourPlural: String,
+    conjunction: String
+): String {
     val totalMinutes = minutesText.toIntOrNull()?.coerceAtLeast(0) ?: 60
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
     return when {
-        hours <= 0 -> "$minutes minutos"
-        minutes == 0 -> "$hours ${if (hours == 1) "hora" else "horas"}"
-        else -> "$hours ${if (hours == 1) "hora" else "horas"} y $minutes minutos"
+        hours <= 0 -> "$minutes ${if (minutes == 1) minuteSingular else minutePlural}"
+        minutes == 0 -> "$hours ${if (hours == 1) hourSingular else hourPlural}"
+        else -> "$hours ${if (hours == 1) hourSingular else hourPlural} $conjunction $minutes ${if (minutes == 1) minuteSingular else minutePlural}"
     }
 }
 

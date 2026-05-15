@@ -85,6 +85,10 @@ class UserListsRepository(
         return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
     }
 
+    fun currentLibraryOwnerId(): String {
+        return currentOwnerIdOrNull() ?: "anonymous"
+    }
+
     private fun isGuestSessionActive(): Boolean {
         return auth.currentUser == null && GuestLocalStore.isSessionActive()
     }

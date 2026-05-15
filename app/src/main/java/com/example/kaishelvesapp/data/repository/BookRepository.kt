@@ -553,6 +553,62 @@ class BookRepository(
         }
     }
 
+    suspend fun completarGenerosFaltantes(libros: List<Libro>): Result<List<Libro>> {
+        return try {
+            val enrichedBooks = libros.map { libro ->
+                if (libro.genero.isNotBlank()) {
+                    libro
+                } else {
+                    // Reutiliza las fuentes del catálogo para que las estadísticas no dependan de datos antiguos incompletos.
+                    resolveGenreForBook(libro)?.let { genre -> libro.copy(genero = genre) } ?: libro
+                }
+            }
+
+            Result.success(enrichedBooks)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun resolveGenreForBook(libro: Libro): String? {
+        val fromIsbn = libro.isbn
+            .takeIf { it.isNotBlank() }
+            ?.let { isbn ->
+                searchBooksByIsbn(isbn)
+                    .getOrDefault(emptyList())
+                    .firstNotBlankGenre()
+            }
+        if (!fromIsbn.isNullOrBlank()) return fromIsbn
+
+        val query = listOf(libro.titulo, libro.autor)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        if (query.isBlank()) return null
+
+        return searchBooksForResults(query = query, maxResults = 10)
+            .getOrDefault(BookSearchResult(totalItems = 0, books = emptyList()))
+            .books
+            .filter { candidate -> candidate.matchesBook(libro) }
+            .firstNotBlankGenre()
+    }
+
+    private fun List<Libro>.firstNotBlankGenre(): String? {
+        return firstOrNull { it.genero.isNotBlank() }?.genero
+    }
+
+    private fun Libro.matchesBook(other: Libro): Boolean {
+        val sameIsbn = isbn.isNotBlank() && other.isbn.isNotBlank() &&
+            isbn.equals(other.isbn, ignoreCase = true)
+        val sameTitle = titulo.isNotBlank() && other.titulo.isNotBlank() &&
+            titulo.trim().equals(other.titulo.trim(), ignoreCase = true)
+        val sameAuthor = autor.isBlank() || other.autor.isBlank() ||
+            autor.trim().equals(other.autor.trim(), ignoreCase = true) ||
+            autor.trim().contains(other.autor.trim(), ignoreCase = true) ||
+            other.autor.trim().contains(autor.trim(), ignoreCase = true)
+
+        return sameIsbn || (sameTitle && sameAuthor)
+    }
+
     suspend fun actualizarPuntuacion(bookId: String, puntuacion: Int): Result<Unit> {
         return try {
             if (isGuestSessionActive()) {

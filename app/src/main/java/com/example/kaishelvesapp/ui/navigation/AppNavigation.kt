@@ -452,7 +452,7 @@ fun AppNavigation(
         composable(Routes.HOME) {
             HomeScreen(
                 viewModel = homeViewModel,
-                subtitle = "Aquí mostraremos la actividad de tus amigos muy pronto.",
+                subtitle = stringResource(R.string.home_placeholder_subtitle),
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -758,8 +758,8 @@ fun AppNavigation(
                 )
             } else {
                 PlaceholderScreen(
-                    title = "Acceso restringido",
-                    subtitle = "Necesitas permisos de administrador para entrar en este panel.",
+                    title = stringResource(R.string.restricted_access_title),
+                    subtitle = stringResource(R.string.admin_restricted_access_subtitle),
                     currentSection = KaiSection.PROFILE,
                     searchQuery = catalogState.searchQuery,
                     onSearchQueryChange = ::searchFromSharedTopBar,
@@ -785,7 +785,7 @@ fun AppNavigation(
 
         composable(Routes.FRIENDS) {
             FriendsScreen(
-                subtitle = "Aquí mostraremos tu red, su actividad y nuevas conexiones.",
+                subtitle = stringResource(R.string.friends_placeholder_subtitle),
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
                 onSearch = ::openCatalogAndSearch,
@@ -925,8 +925,8 @@ fun AppNavigation(
 
         composable(Routes.GROUPS) {
             PlaceholderScreen(
-                title = "Grupos",
-                subtitle = "Aquí reuniremos tus grupos de lectura y sus conversaciones.",
+                title = stringResource(R.string.groups),
+                subtitle = stringResource(R.string.groups_placeholder_subtitle),
                 currentSection = KaiSection.GROUPS,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
@@ -970,8 +970,8 @@ fun AppNavigation(
 
         composable(Routes.CHALLENGES) {
             PlaceholderScreen(
-                title = "Desafíos de lectura",
-                subtitle = "Aquí aparecerán tus retos, objetivos y progreso lector.",
+                title = stringResource(R.string.reading_challenges),
+                subtitle = stringResource(R.string.reading_challenges_placeholder_subtitle),
                 currentSection = KaiSection.CHALLENGES,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,
@@ -997,7 +997,7 @@ fun AppNavigation(
         composable(Routes.FOR_YOU) {
             ForYouScreen(
                 viewModel = forYouViewModel,
-                subtitle = "Aquí prepararemos recomendaciones y selecciones personalizadas.",
+                subtitle = stringResource(R.string.for_you_placeholder_subtitle),
                 personalizedSuggestionsEnabled = authState.user?.privacySettings?.personalizedSuggestions == true,
                 searchQuery = catalogState.searchQuery,
                 onSearchQueryChange = ::searchFromSharedTopBar,

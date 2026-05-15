@@ -217,19 +217,19 @@ fun PdfReaderNavigationDrawer(
                 )
             }
             PdfDrawerTabButton(
-                text = "Capítulos",
+                text = stringResource(R.string.reader_tab_chapters),
                 selected = selectedTab == PdfReaderDrawerTab.Chapters,
                 onClick = { selectedTab = PdfReaderDrawerTab.Chapters }
             )
             PdfDrawerTabButton(
-                text = "Marcadores",
+                text = stringResource(R.string.reader_tab_bookmarks),
                 selected = selectedTab == PdfReaderDrawerTab.Bookmarks,
                 onClick = { selectedTab = PdfReaderDrawerTab.Bookmarks }
             )
             IconButton(onClick = { selectedTab = PdfReaderDrawerTab.Images }) {
                 Icon(
                     imageVector = Icons.Filled.ImageIcon,
-                    contentDescription = "Imágenes",
+                    contentDescription = stringResource(R.string.reader_tab_images),
                     tint = if (selectedTab == PdfReaderDrawerTab.Images) Color.White else Color.White.copy(alpha = 0.72f)
                 )
             }
@@ -292,14 +292,14 @@ fun PdfReaderNavigationDrawer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Página ${currentPage + 1}/$pageCount",
+                text = stringResource(R.string.reader_page_progress, currentPage + 1, pageCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White,
                 modifier = Modifier.weight(1f)
             )
             Icon(
                 imageVector = Icons.Filled.Settings,
-                contentDescription = "Ajustes",
+                contentDescription = stringResource(R.string.reader_settings),
                 tint = Color(0xFFEBC7E8)
             )
         }
@@ -337,7 +337,7 @@ fun PdfReaderChaptersTab(
     ) {
         item {
             Text(
-                text = "Cubierta",
+                text = stringResource(R.string.reader_cover),
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
                 modifier = Modifier
@@ -357,7 +357,7 @@ fun PdfReaderChaptersTab(
         }
         item {
             Text(
-                text = "No hay capítulos detectados en este PDF.",
+                text = stringResource(R.string.reader_no_pdf_chapters),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.72f),
                 modifier = Modifier.padding(start = 18.dp, top = 12.dp)
@@ -583,14 +583,14 @@ fun PdfReaderBookmarksTab(
                 }
                 Spacer(modifier = Modifier.height(42.dp))
                 Text(
-                    text = "No hay marcador de página",
+                    text = stringResource(R.string.reader_no_bookmark),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Toque agregar nuevo para guardar la página actual\n(Subrayados y notas usan el mismo modelo de anotaciones)",
+                    text = stringResource(R.string.reader_add_bookmark_extended_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White,
                     textAlign = TextAlign.Center
@@ -615,7 +615,12 @@ fun PdfReaderBookmarksTab(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "${annotation.type.readableName()} · Página ${annotation.page + 1}/${annotation.pageCount}",
+                            text = stringResource(
+                                R.string.reader_annotation_page_summary,
+                                annotation.type.localizedReaderName(),
+                                annotation.page + 1,
+                                annotation.pageCount
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = TarnishedGold,
                             fontWeight = FontWeight.SemiBold
@@ -643,10 +648,10 @@ fun PdfReaderBookmarksTab(
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = { onAnnotationEdit(annotation) }) {
-                                Text(text = "EDITAR", color = Color.White)
+                                Text(text = stringResource(R.string.edit_review_button).uppercase(), color = Color.White)
                             }
                             TextButton(onClick = { onAnnotationDelete(annotation) }) {
-                                Text(text = "ELIMINAR", color = Color(0xFFFFB4A8))
+                                Text(text = stringResource(R.string.delete).uppercase(), color = Color(0xFFFFB4A8))
                             }
                         }
                     }
@@ -672,14 +677,14 @@ fun PdfReaderBookmarksTab(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "AGREGAR NUEVO",
+                    text = stringResource(R.string.reader_add_new),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White
                 )
             }
             Icon(
                 imageVector = Icons.Filled.Settings,
-                contentDescription = "Ajustes",
+                contentDescription = stringResource(R.string.reader_settings),
                 tint = Color(0xFFEBC7E8)
             )
         }
@@ -771,7 +776,7 @@ fun PdfReaderImagesTab(
                     .clickable(onClick = onCoverSelected)
             )
         }
-        item { PdfImagePlaceholderLabel("imagen detectada: cubierta") }
+        item { PdfImagePlaceholderLabel(stringResource(R.string.reader_detected_cover)) }
         items(listOf("ePUB", "T", "☕", "━━━━━━", "⋯")) { label ->
             PdfImagePlaceholderLabel(label)
         }
