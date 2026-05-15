@@ -2,6 +2,8 @@ package com.example.kaishelvesapp.ui.screen.stats
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -140,10 +142,17 @@ fun ReadingStatsScreen(
                     }
 
                     else -> {
-                        val stats = rememberReadingStats(uiState.libros)
+                        val stats = rememberReadingStats(
+                            books = uiState.libros,
+                            totalUniqueBooksInLists = uiState.totalUniqueBooksInLists
+                        )
                         val stacked = maxWidth < 700.dp
 
                         Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(bottom = 24.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             StatsHero(totalBooks = stats.totalBooks)
@@ -179,7 +188,10 @@ private data class ReadingStats(
 )
 
 @Composable
-private fun rememberReadingStats(books: List<LibroLeido>): ReadingStats {
+private fun rememberReadingStats(
+    books: List<LibroLeido>,
+    totalUniqueBooksInLists: Int
+): ReadingStats {
     val ratedBooks = books.filter { it.puntuacion > 0 }
     val averageRating = if (ratedBooks.isNotEmpty()) {
         String.format("%.1f/5", ratedBooks.map { it.puntuacion }.average())
@@ -195,7 +207,7 @@ private fun rememberReadingStats(books: List<LibroLeido>): ReadingStats {
         ?: stringResource(R.string.no_books_found)
 
     return ReadingStats(
-        totalBooks = books.size,
+        totalBooks = totalUniqueBooksInLists,
         averageRating = averageRating,
         favoriteGenre = favoriteGenre,
         totalPages = books.sumOf { it.paginas }

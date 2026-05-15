@@ -253,8 +253,8 @@
     <string name="implementation_in_progress">This view is still being implemented.</string>
     <string name="reading_statistics">Reading statistics</string>
     <string name="reading_statistics_subtitle">Review your pace, your ratings and the shape of your library.</string>
-    <string name="reading_statistics_summary">You have %1$d recorded volumes in your reading archive.</string>
-    <string name="total_books_read">Books read</string>
+    <string name="reading_statistics_summary">You have %1$d unique books added to your lists.</string>
+    <string name="total_books_read">Books in lists</string>
     <string name="average_rating">Average rating</string>
     <string name="favorite_genre">Most repeated genre</string>
     <string name="total_pages_read">Pages read</string>

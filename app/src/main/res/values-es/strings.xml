@@ -253,8 +253,8 @@
     <string name="implementation_in_progress">Esta vista está en proceso de implementarse.</string>
     <string name="reading_statistics">Estadísticas de lectura</string>
     <string name="reading_statistics_subtitle">Revisa tu ritmo, tus valoraciones y la forma que toma tu biblioteca.</string>
-    <string name="reading_statistics_summary">Tienes %1$d volúmenes registrados en tu archivo de lecturas.</string>
-    <string name="total_books_read">Libros leídos</string>
+    <string name="reading_statistics_summary">Tienes %1$d libros únicos añadidos a tus listas.</string>
+    <string name="total_books_read">Libros en listas</string>
     <string name="average_rating">Valoración media</string>
     <string name="favorite_genre">Género más repetido</string>
     <string name="total_pages_read">Páginas leídas</string>
