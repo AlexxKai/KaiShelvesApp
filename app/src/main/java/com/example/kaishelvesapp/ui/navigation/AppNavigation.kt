@@ -133,6 +133,7 @@ fun AppNavigation(
     val bookDetailViewModel: BookDetailViewModel = viewModel()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
+    val friendsState by friendsViewModel.uiState.collectAsStateWithLifecycle()
     val friendRequestsState by friendRequestsViewModel.uiState.collectAsStateWithLifecycle()
     val helpChatState by helpChatViewModel.uiState.collectAsStateWithLifecycle()
     val isGuestUser = authState.user?.isGuest == true
@@ -196,6 +197,7 @@ fun AppNavigation(
 
     LaunchedEffect(authState.isLoggedIn, authState.user?.uid, authState.user?.isGuest) {
         if (authState.isLoggedIn && authState.user?.isGuest != true) {
+            friendsViewModel.loadFriends()
             friendRequestsViewModel.loadReceivedRequests()
             friendRequestsViewModel.loadActivityNotifications()
             friendRequestsViewModel.observeActivityNotificationChanges()
@@ -354,6 +356,12 @@ fun AppNavigation(
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = {
                     navController.navigate(Routes.NOTIFICATION_CENTER)
+                },
+                hasAddedFriends = friendsState.takeIf { it.hasLoadedFriends && it.errorMessage == null }
+                    ?.friends
+                    ?.isNotEmpty(),
+                onOpenFriendSuggestions = {
+                    navController.navigate(Routes.FRIEND_SUGGESTIONS)
                 },
                 onOpenFriendProfile = { friendUid ->
                     navController.navigate(friendProfileRoute(friendUid))

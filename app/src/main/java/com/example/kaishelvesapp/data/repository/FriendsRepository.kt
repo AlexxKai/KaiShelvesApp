@@ -85,12 +85,24 @@ data class ActivityComment(
     val id: String = "",
     val user: Usuario = Usuario(),
     val text: String = "",
+    val timestampMillis: Long? = null,
+    val likeCount: Int = 0,
+    val likedByCurrentUser: Boolean = false,
+    val replies: List<ActivityCommentReply> = emptyList()
+)
+
+data class ActivityCommentReply(
+    val id: String = "",
+    val user: Usuario = Usuario(),
+    val text: String = "",
     val timestampMillis: Long? = null
 )
 
 enum class ActivityNotificationType {
     LIKE,
-    COMMENT
+    COMMENT,
+    COMMENT_LIKE,
+    COMMENT_REPLY
 }
 
 data class ActivityNotificationItem(
@@ -100,6 +112,8 @@ data class ActivityNotificationItem(
     val user: Usuario,
     val activity: FriendActivityItem,
     val text: String = "",
+    val commentId: String = "",
+    val replyId: String = "",
     val timestampMillis: Long? = null,
     val isRead: Boolean = false
 )
@@ -230,6 +244,17 @@ class FriendsRepository(
 
     private fun activityCommentsCollection(activityId: String) = activitySocialDocument(activityId)
         .collection("comments")
+
+    private fun activityCommentDocument(activityId: String, commentId: String) = activityCommentsCollection(activityId)
+        .document(commentId)
+
+    private fun activityCommentLikesCollection(activityId: String, commentId: String) =
+        activityCommentDocument(activityId, commentId)
+            .collection("likes")
+
+    private fun activityCommentRepliesCollection(activityId: String, commentId: String) =
+        activityCommentDocument(activityId, commentId)
+            .collection("replies")
 
     private fun activityNotificationReadsCollection(uid: String) = usersCollection()
         .document(uid)
@@ -621,6 +646,45 @@ class FriendsRepository(
         return activities.map { item ->
             item.copy(social = socialSummary(item.id, currentUid))
         }
+    }
+
+    private suspend fun loadActivityForNotification(
+        activityId: String,
+        viewerUid: String
+    ): FriendActivityItem? {
+        val ownerUid = activityOwnerUid(activityId)
+        if (ownerUid.isBlank()) return null
+        val owner = getUserProfile(ownerUid) ?: return null
+
+        val friendshipActivities = friendsCollection(ownerUid)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document ->
+                val friendUid = document.getString("uid").orEmpty().ifBlank { document.id }
+                if (friendUid.isBlank()) return@mapNotNull null
+                val timestamp = document.timestampMillis("createdAt")
+                FriendActivityItem(
+                    id = activityId(
+                        ownerUid = ownerUid,
+                        type = FriendActivityType.FRIENDSHIP,
+                        sourceId = friendUid,
+                        timestampMillis = timestamp
+                    ),
+                    type = FriendActivityType.FRIENDSHIP,
+                    user = owner.visibleTo(viewerUid),
+                    timestampMillis = timestamp,
+                    relatedUserName = document.getString("usuario").orEmpty()
+                )
+            }
+
+        return enrichWithSocial(
+            visibleActivityUpdates(
+                ownerUid = ownerUid,
+                activities = friendshipActivities + bookListActivities(ownerUid, owner, viewerUid)
+            ),
+            viewerUid
+        ).firstOrNull { it.id == activityId }
     }
 
     private suspend fun visibleActivityUpdates(
@@ -1568,6 +1632,27 @@ class FriendsRepository(
                 .map { document ->
                     val commentUid = document.getString("uid").orEmpty()
                     val commenter = getUserProfile(commentUid)
+                    val likes = activityCommentLikesCollection(activityId, document.id).get().await()
+                    val replies = activityCommentRepliesCollection(activityId, document.id)
+                        .get()
+                        .await()
+                        .documents
+                        .map { replyDocument ->
+                            val replyUid = replyDocument.getString("uid").orEmpty()
+                            val replyUser = getUserProfile(replyUid)
+                            ActivityCommentReply(
+                                id = replyDocument.id,
+                                user = (replyUser ?: Usuario(
+                                    uid = replyUid,
+                                    usuario = replyDocument.getString("usuario").orEmpty(),
+                                    email = replyDocument.getString("email").orEmpty(),
+                                    photoUrl = replyDocument.getString("photoUrl").orEmpty()
+                                )).visibleTo(currentUid),
+                                text = replyDocument.getString("text").orEmpty(),
+                                timestampMillis = replyDocument.timestampMillis("createdAt")
+                            )
+                        }
+                        .sortedBy { it.timestampMillis ?: Long.MAX_VALUE }
                     ActivityComment(
                         id = document.id,
                         user = (commenter ?: Usuario(
@@ -1577,7 +1662,10 @@ class FriendsRepository(
                             photoUrl = document.getString("photoUrl").orEmpty()
                         )).visibleTo(currentUid),
                         text = document.getString("text").orEmpty(),
-                        timestampMillis = document.timestampMillis("createdAt")
+                        timestampMillis = document.timestampMillis("createdAt"),
+                        likeCount = likes.size(),
+                        likedByCurrentUser = likes.documents.any { it.id == currentUid },
+                        replies = replies
                     )
                 }
                 .sortedBy { it.timestampMillis ?: Long.MAX_VALUE }
@@ -1689,14 +1777,162 @@ class FriendsRepository(
                                 user = actor.visibleTo(uid),
                                 activity = activity,
                                 text = commentDocument.getString("text").orEmpty(),
+                                commentId = commentDocument.id,
                                 timestampMillis = commentDocument.timestampMillis("createdAt"),
                                 isRead = notificationId(activityId, "comment", commentDocument.id) in readNotificationIds
                             )
                         }
 
-                    likes + comments
+                    val replies = activityCommentsCollection(activityId)
+                        .get()
+                        .await()
+                        .documents
+                        .filter { commentDocument -> commentDocument.getString("uid").orEmpty() == uid }
+                        .flatMap { commentDocument ->
+                            activityCommentRepliesCollection(activityId, commentDocument.id)
+                                .get()
+                                .await()
+                                .documents
+                                .mapNotNull { replyDocument ->
+                                    val actorUid = replyDocument.getString("uid").orEmpty()
+                                    if (actorUid.isBlank() || actorUid == uid) return@mapNotNull null
+
+                                    val actor = getUserProfile(actorUid) ?: Usuario(
+                                        uid = actorUid,
+                                        usuario = replyDocument.getString("usuario").orEmpty(),
+                                        email = replyDocument.getString("email").orEmpty(),
+                                        photoUrl = replyDocument.getString("photoUrl").orEmpty()
+                                    )
+                                    val sourceId = "${commentDocument.id}_${replyDocument.id}"
+
+                                    ActivityNotificationItem(
+                                        id = notificationId(activityId, "reply", sourceId),
+                                        type = ActivityNotificationType.COMMENT_REPLY,
+                                        activityId = activityId,
+                                        user = actor.visibleTo(uid),
+                                        activity = activity,
+                                        text = replyDocument.getString("text").orEmpty(),
+                                        commentId = commentDocument.id,
+                                        replyId = replyDocument.id,
+                                        timestampMillis = replyDocument.timestampMillis("createdAt"),
+                                        isRead = notificationId(activityId, "reply", sourceId) in readNotificationIds
+                                    )
+                                }
+                        }
+
+                    val commentLikes = activityCommentsCollection(activityId)
+                        .get()
+                        .await()
+                        .documents
+                        .filter { commentDocument -> commentDocument.getString("uid").orEmpty() == uid }
+                        .flatMap { commentDocument ->
+                            activityCommentLikesCollection(activityId, commentDocument.id)
+                                .get()
+                                .await()
+                                .documents
+                                .mapNotNull { likeDocument ->
+                                    val actorUid = likeDocument.getString("uid").orEmpty().ifBlank { likeDocument.id }
+                                    if (actorUid.isBlank() || actorUid == uid) return@mapNotNull null
+
+                                    val actor = getUserProfile(actorUid) ?: Usuario(
+                                        uid = actorUid,
+                                        usuario = likeDocument.getString("usuario").orEmpty(),
+                                        email = likeDocument.getString("email").orEmpty(),
+                                        photoUrl = likeDocument.getString("photoUrl").orEmpty()
+                                    )
+                                    val sourceId = "${commentDocument.id}_${likeDocument.id}"
+
+                                    ActivityNotificationItem(
+                                        id = notificationId(activityId, "comment_like", sourceId),
+                                        type = ActivityNotificationType.COMMENT_LIKE,
+                                        activityId = activityId,
+                                        user = actor.visibleTo(uid),
+                                        activity = activity,
+                                        text = commentDocument.getString("text").orEmpty(),
+                                        commentId = commentDocument.id,
+                                        timestampMillis = likeDocument.timestampMillis("createdAt"),
+                                        isRead = notificationId(activityId, "comment_like", sourceId) in readNotificationIds
+                                    )
+                                }
+                        }
+
+                    likes + comments + replies + commentLikes
                 }
-                .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
+                .let { ownActivityNotifications ->
+                    val commentLikeNotifications = firestore.collectionGroup("likes")
+                        .get()
+                        .await()
+                        .documents
+                        .mapNotNull { likeDocument ->
+                            if (likeDocument.getString("targetUid").orEmpty() != uid) return@mapNotNull null
+                            val actorUid = likeDocument.getString("uid").orEmpty().ifBlank { likeDocument.id }
+                            if (actorUid.isBlank() || actorUid == uid) return@mapNotNull null
+                            val commentRef = likeDocument.reference.parent.parent ?: return@mapNotNull null
+                            if (commentRef.parent.id != "comments") return@mapNotNull null
+                            val activityRef = commentRef.parent.parent ?: return@mapNotNull null
+                            val activityId = activityRef.id
+                            if (activityOwnerUid(activityId) == uid) return@mapNotNull null
+                            val activity = loadActivityForNotification(activityId, uid) ?: return@mapNotNull null
+                            val actor = getUserProfile(actorUid) ?: Usuario(
+                                uid = actorUid,
+                                usuario = likeDocument.getString("usuario").orEmpty(),
+                                email = likeDocument.getString("email").orEmpty(),
+                                photoUrl = likeDocument.getString("photoUrl").orEmpty()
+                            )
+                            val sourceId = "${commentRef.id}_${likeDocument.id}"
+
+                            ActivityNotificationItem(
+                                id = notificationId(activityId, "comment_like", sourceId),
+                                type = ActivityNotificationType.COMMENT_LIKE,
+                                activityId = activityId,
+                                user = actor.visibleTo(uid),
+                                activity = activity,
+                                text = likeDocument.getString("targetText").orEmpty(),
+                                commentId = commentRef.id,
+                                timestampMillis = likeDocument.timestampMillis("createdAt"),
+                                isRead = notificationId(activityId, "comment_like", sourceId) in readNotificationIds
+                            )
+                        }
+
+                    val replyNotifications = firestore.collectionGroup("replies")
+                        .get()
+                        .await()
+                        .documents
+                        .mapNotNull { replyDocument ->
+                            if (replyDocument.getString("targetUid").orEmpty() != uid) return@mapNotNull null
+                            val actorUid = replyDocument.getString("uid").orEmpty()
+                            if (actorUid.isBlank() || actorUid == uid) return@mapNotNull null
+                            val commentRef = replyDocument.reference.parent.parent ?: return@mapNotNull null
+                            val activityRef = commentRef.parent.parent ?: return@mapNotNull null
+                            val activityId = activityRef.id
+                            if (activityOwnerUid(activityId) == uid) return@mapNotNull null
+                            val activity = loadActivityForNotification(activityId, uid) ?: return@mapNotNull null
+                            val actor = getUserProfile(actorUid) ?: Usuario(
+                                uid = actorUid,
+                                usuario = replyDocument.getString("usuario").orEmpty(),
+                                email = replyDocument.getString("email").orEmpty(),
+                                photoUrl = replyDocument.getString("photoUrl").orEmpty()
+                            )
+                            val sourceId = "${commentRef.id}_${replyDocument.id}"
+
+                            ActivityNotificationItem(
+                                id = notificationId(activityId, "reply", sourceId),
+                                type = ActivityNotificationType.COMMENT_REPLY,
+                                activityId = activityId,
+                                user = actor.visibleTo(uid),
+                                activity = activity,
+                                text = replyDocument.getString("text").orEmpty(),
+                                commentId = commentRef.id,
+                                replyId = replyDocument.id,
+                                timestampMillis = replyDocument.timestampMillis("createdAt"),
+                                isRead = notificationId(activityId, "reply", sourceId) in readNotificationIds
+                            )
+                        }
+
+                    (ownActivityNotifications + commentLikeNotifications + replyNotifications)
+                        .distinctBy { it.id }
+                        .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
+                }
 
             Result.success(notifications)
         } catch (e: Exception) {
@@ -1724,8 +1960,12 @@ class FriendsRepository(
             val hasOwnLikeChange = snapshot
                 ?.documentChanges
                 ?.any { change ->
-                    val activityId = change.document.reference.parent.parent?.id.orEmpty()
-                    activityOwnerUid(activityId) == uid
+                    val parentDocument = change.document.reference.parent.parent
+                    val activityLikeId = parentDocument?.id.orEmpty()
+                    val commentActivityId = parentDocument?.parent?.parent?.id.orEmpty()
+                    activityOwnerUid(activityLikeId) == uid ||
+                        activityOwnerUid(commentActivityId) == uid ||
+                        change.document.getString("targetUid").orEmpty() == uid
                 } == true
             if (hasOwnLikeChange) {
                 onChange()
@@ -1743,6 +1983,18 @@ class FriendsRepository(
                 onChange()
             }
         }
+        val repliesListener = firestore.collectionGroup("replies").addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            val hasRelevantReplyChange = snapshot
+                ?.documentChanges
+                ?.any { change ->
+                    val activityId = change.document.reference.parent.parent?.parent?.parent?.id.orEmpty()
+                    activityOwnerUid(activityId) == uid || change.document.getString("targetUid").orEmpty() == uid
+                } == true
+            if (hasRelevantReplyChange) {
+                onChange()
+            }
+        }
         val readsListener = activityNotificationReadsCollection(uid).addSnapshotListener { snapshot, error ->
             if (error != null) return@addSnapshotListener
             if (snapshot?.documentChanges?.isNotEmpty() == true) {
@@ -1751,7 +2003,7 @@ class FriendsRepository(
         }
 
         return CompositeListenerRegistration(
-            listOf(socialListener, likesListener, commentsListener, readsListener)
+            listOf(socialListener, likesListener, commentsListener, repliesListener, readsListener)
         )
     }
 
@@ -1818,6 +2070,97 @@ class FriendsRepository(
             Result.success(
                 socialSummary(activityId, uid) to loadActivityComments(activityId).getOrElse { emptyList() }
             )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun toggleActivityCommentLike(activityId: String, commentId: String): Result<List<ActivityComment>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesión para indicar que te gusta un comentario"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            if (activityId.isBlank() || commentId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el comentario"))
+            }
+            activitySocialInteractionError(activityId)?.let { error ->
+                return Result.failure(Exception(error))
+            }
+
+            val likeRef = activityCommentLikesCollection(activityId, commentId).document(uid)
+            val likeSnapshot = likeRef.get().await()
+            if (likeSnapshot.exists()) {
+                likeRef.delete().await()
+            } else {
+                val user = getUserProfile(uid) ?: Usuario(uid = uid)
+                val commentSnapshot = activityCommentDocument(activityId, commentId).get().await()
+                likeRef.set(
+                    mapOf(
+                        "uid" to user.uid,
+                        "usuario" to user.usuario,
+                        "email" to user.email,
+                        "photoUrl" to user.photoUrl,
+                        "targetUid" to commentSnapshot.getString("uid").orEmpty(),
+                        "targetText" to commentSnapshot.getString("text").orEmpty(),
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                ).await()
+            }
+
+            Result.success(loadActivityComments(activityId).getOrElse { emptyList() })
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addActivityCommentReply(
+        activityId: String,
+        commentId: String,
+        text: String
+    ): Result<List<ActivityComment>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesión para responder comentarios"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val trimmedText = text.trim()
+            if (activityId.isBlank() || commentId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el comentario"))
+            }
+            if (trimmedText.isBlank()) {
+                return Result.failure(Exception("Escribe una respuesta"))
+            }
+            activitySocialInteractionError(activityId)?.let { error ->
+                return Result.failure(Exception(error))
+            }
+
+            val commentSnapshot = activityCommentDocument(activityId, commentId).get().await()
+            if (!commentSnapshot.exists()) {
+                return Result.failure(Exception("El comentario ya no está disponible"))
+            }
+            val targetUid = commentSnapshot.getString("uid").orEmpty()
+            val user = getUserProfile(uid) ?: Usuario(uid = uid)
+            activityCommentRepliesCollection(activityId, commentId)
+                .document()
+                .set(
+                    mapOf(
+                        "uid" to user.uid,
+                        "usuario" to user.usuario,
+                        "email" to user.email,
+                        "photoUrl" to user.photoUrl,
+                        "targetUid" to targetUid,
+                        "text" to trimmedText,
+                        "createdAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                .await()
+
+            Result.success(loadActivityComments(activityId).getOrElse { emptyList() })
         } catch (e: Exception) {
             Result.failure(e)
         }

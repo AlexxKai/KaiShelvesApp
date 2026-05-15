@@ -16,10 +16,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChatBubbleOutline
@@ -27,14 +32,18 @@ import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -45,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -55,6 +65,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +75,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.repository.ActivityNotificationItem
 import com.example.kaishelvesapp.data.repository.ActivityNotificationType
+import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.ui.components.ActivitySocialActions
@@ -74,17 +86,19 @@ import com.example.kaishelvesapp.ui.components.KaiTopBar
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsUiState
 import com.example.kaishelvesapp.ui.viewmodel.FriendRequestsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private enum class NotificationCenterTab {
     NOTIFICATIONS,
-    MESSAGES,
     REQUESTS
 }
 
@@ -99,26 +113,57 @@ fun NotificationCenterScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedTab by rememberSaveable { mutableStateOf(NotificationCenterTab.REQUESTS) }
+    var selectedTab by rememberSaveable { mutableStateOf(initialNotificationCenterTab(uiState)) }
+    var initialTabResolved by rememberSaveable {
+        mutableStateOf(
+            !initialSelectedNotificationId.isNullOrBlank() ||
+                (uiState.hasLoadedReceivedRequests && uiState.hasLoadedActivityNotifications)
+        )
+    }
     var selectedNotificationId by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val notificationsListState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val closeSelectedNotification = {
         selectedNotificationId?.let(viewModel::markNotificationAsRead)
         selectedNotificationId = null
     }
 
     LaunchedEffect(Unit) {
-        viewModel.loadReceivedRequests()
-        viewModel.loadActivityNotifications()
+        viewModel.ensureReceivedRequestsLoaded()
+        viewModel.ensureActivityNotificationsLoaded()
     }
 
     LaunchedEffect(initialSelectedNotificationId) {
         val notificationId = initialSelectedNotificationId?.takeIf { it.isNotBlank() }
             ?: return@LaunchedEffect
         selectedTab = NotificationCenterTab.NOTIFICATIONS
+        initialTabResolved = true
         selectedNotificationId = notificationId
         viewModel.loadActivityNotifications()
         onInitialSelectedNotificationHandled()
+    }
+
+    LaunchedEffect(
+        initialSelectedNotificationId,
+        uiState.isLoading,
+        uiState.isLoadingNotifications,
+        uiState.hasLoadedReceivedRequests,
+        uiState.hasLoadedActivityNotifications,
+        uiState.unreadNotifications.size,
+        uiState.receivedRequests.size
+    ) {
+        if (initialTabResolved || !initialSelectedNotificationId.isNullOrBlank()) return@LaunchedEffect
+        if (!uiState.hasLoadedReceivedRequests || !uiState.hasLoadedActivityNotifications) return@LaunchedEffect
+        if (uiState.isLoading || uiState.isLoadingNotifications) return@LaunchedEffect
+
+        // Prioriza solicitudes solo cuando no hay actividad pendiente de leer.
+        selectedTab = if (uiState.unreadNotifications.isEmpty() && uiState.receivedRequests.isNotEmpty()) {
+            NotificationCenterTab.REQUESTS
+        } else {
+            NotificationCenterTab.NOTIFICATIONS
+        }
+        initialTabResolved = true
     }
 
     selectedNotificationId
@@ -128,11 +173,19 @@ fun NotificationCenterScreen(
             notification = notification,
             comments = uiState.commentsByActivityId[notification.activityId].orEmpty(),
             isLoadingComments = notification.activityId in uiState.loadingCommentIds,
-            isSaving = notification.activityId in uiState.socialActionIds,
+            isSaving = uiState.socialActionIds.any { actionId ->
+                actionId == notification.activityId || actionId.startsWith("${notification.activityId}:")
+            },
             onDismiss = closeSelectedNotification,
+            onOpenUserProfile = { userUid ->
+                closeSelectedNotification()
+                onOpenFriendProfile(userUid)
+            },
             onToggleLike = viewModel::toggleLike,
             onLoadComments = viewModel::loadComments,
-            onAddComment = viewModel::addComment
+            onAddComment = viewModel::addComment,
+            onToggleCommentLike = viewModel::toggleCommentLike,
+            onReplyToComment = viewModel::replyToComment
         )
     }
 
@@ -210,46 +263,64 @@ fun NotificationCenterScreen(
                         }
 
                         else -> {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (uiState.unreadNotifications.isNotEmpty()) {
-                                    items(
-                                        items = uiState.unreadNotifications,
-                                        key = { it.id }
-                                    ) { notification ->
-                                        ActivityNotificationCard(
-                                            notification = notification,
-                                            onClick = { selectedNotificationId = notification.id }
-                                        )
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    state = notificationsListState,
+                                    contentPadding = PaddingValues(bottom = 88.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    if (uiState.unreadNotifications.isNotEmpty()) {
+                                        items(
+                                            items = uiState.unreadNotifications,
+                                            key = { it.id }
+                                        ) { notification ->
+                                            ActivityNotificationCard(
+                                                notification = notification,
+                                                onClick = { selectedNotificationId = notification.id }
+                                            )
+                                        }
+                                    }
+
+                                    if (uiState.readNotifications.isNotEmpty()) {
+                                        item {
+                                            NotificationHistoryHeader()
+                                        }
+                                        items(
+                                            items = uiState.readNotifications,
+                                            key = { it.id }
+                                        ) { notification ->
+                                            ActivityNotificationCard(
+                                                notification = notification,
+                                                onClick = { selectedNotificationId = notification.id }
+                                            )
+                                        }
                                     }
                                 }
 
-                                if (uiState.readNotifications.isNotEmpty()) {
-                                    item {
-                                        NotificationHistoryHeader()
-                                    }
-                                    items(
-                                        items = uiState.readNotifications,
-                                        key = { it.id }
-                                    ) { notification ->
-                                        ActivityNotificationCard(
-                                            notification = notification,
-                                            onClick = { selectedNotificationId = notification.id }
+                                if (
+                                    notificationsListState.firstVisibleItemIndex > 0 ||
+                                    notificationsListState.firstVisibleItemScrollOffset > 0
+                                ) {
+                                    FloatingActionButton(
+                                        onClick = {
+                                            scope.launch { notificationsListState.animateScrollToItem(0) }
+                                        },
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(16.dp),
+                                        containerColor = BloodWine,
+                                        contentColor = OldIvory
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.ArrowUpward,
+                                            contentDescription = stringResource(R.string.scroll_to_top)
                                         )
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                NotificationCenterTab.MESSAGES -> {
-                    NotificationPlaceholder(
-                        text = stringResource(R.string.messages_coming_soon)
-                    )
                 }
 
                 NotificationCenterTab.REQUESTS -> {
@@ -295,6 +366,19 @@ fun NotificationCenterScreen(
     }
 }
 
+private fun initialNotificationCenterTab(uiState: FriendRequestsUiState): NotificationCenterTab {
+    return if (
+        uiState.hasLoadedReceivedRequests &&
+        uiState.hasLoadedActivityNotifications &&
+        uiState.unreadNotifications.isEmpty() &&
+        uiState.receivedRequests.isNotEmpty()
+    ) {
+        NotificationCenterTab.REQUESTS
+    } else {
+        NotificationCenterTab.NOTIFICATIONS
+    }
+}
+
 @Composable
 private fun NotificationTabs(
     selectedTab: NotificationCenterTab,
@@ -308,12 +392,6 @@ private fun NotificationTabs(
             label = stringResource(R.string.notifications_tab),
             selected = selectedTab == NotificationCenterTab.NOTIFICATIONS,
             onClick = { onSelect(NotificationCenterTab.NOTIFICATIONS) },
-            modifier = Modifier.weight(1f)
-        )
-        NotificationTabItem(
-            label = stringResource(R.string.messages_tab),
-            selected = selectedTab == NotificationCenterTab.MESSAGES,
-            onClick = { onSelect(NotificationCenterTab.MESSAGES) },
             modifier = Modifier.weight(1f)
         )
         NotificationTabItem(
@@ -461,25 +539,55 @@ private fun ActivityNotificationDialog(
     isLoadingComments: Boolean,
     isSaving: Boolean,
     onDismiss: () -> Unit,
+    onOpenUserProfile: (String) -> Unit,
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit
 ) {
+    LaunchedEffect(notification.activityId, notification.commentId, notification.type) {
+        if (notification.type == ActivityNotificationType.COMMENT ||
+            notification.type == ActivityNotificationType.COMMENT_LIKE ||
+            notification.type == ActivityNotificationType.COMMENT_REPLY
+        ) {
+            onLoadComments(notification.activityId)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            NotificationInteractionHeader(notification = notification)
+            NotificationInteractionHeader(
+                notification = notification,
+                onOpenUserProfile = onOpenUserProfile
+            )
         },
         text = {
-            OriginalActivityCard(
-                item = notification.activity,
-                comments = comments,
-                isLoadingComments = isLoadingComments,
-                isSaving = isSaving,
-                onToggleLike = onToggleLike,
-                onLoadComments = onLoadComments,
-                onAddComment = onAddComment
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (notification.type == ActivityNotificationType.COMMENT ||
+                    notification.type == ActivityNotificationType.COMMENT_LIKE ||
+                    notification.type == ActivityNotificationType.COMMENT_REPLY
+                ) {
+                    NotificationCommentActions(
+                        notification = notification,
+                        comment = comments.firstOrNull { it.id == notification.commentId },
+                        isSaving = isSaving,
+                        onToggleCommentLike = onToggleCommentLike,
+                        onReplyToComment = onReplyToComment
+                    )
+                }
+
+                OriginalActivityCard(
+                    item = notification.activity,
+                    comments = comments,
+                    isLoadingComments = isLoadingComments,
+                    isSaving = isSaving,
+                    onToggleLike = onToggleLike,
+                    onLoadComments = onLoadComments,
+                    onAddComment = onAddComment
+                )
+            }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
@@ -494,13 +602,20 @@ private fun ActivityNotificationDialog(
 
 @Composable
 private fun NotificationInteractionHeader(
-    notification: ActivityNotificationItem
+    notification: ActivityNotificationItem,
+    onOpenUserProfile: (String) -> Unit
 ) {
+    val userUid = notification.user.uid
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box {
+        Box(
+            modifier = Modifier.clickable(
+                enabled = userUid.isNotBlank(),
+                onClick = { onOpenUserProfile(userUid) }
+            )
+        ) {
             KaiUserAvatar(
                 displayName = notification.user.usuario.ifBlank { notification.user.email },
                 imageUrl = notification.user.photoUrl,
@@ -535,7 +650,12 @@ private fun NotificationInteractionHeader(
                 fontWeight = FontWeight.SemiBold
             )
 
-            if (notification.type == ActivityNotificationType.COMMENT && notification.text.isNotBlank()) {
+            if (
+                (notification.type == ActivityNotificationType.COMMENT ||
+                    notification.type == ActivityNotificationType.COMMENT_LIKE ||
+                    notification.type == ActivityNotificationType.COMMENT_REPLY) &&
+                notification.text.isNotBlank()
+            ) {
                 Text(
                     text = "\"${notification.text}\"",
                     style = MaterialTheme.typography.bodyMedium,
@@ -547,6 +667,144 @@ private fun NotificationInteractionHeader(
                         .background(TarnishedGold.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationCommentActions(
+    notification: ActivityNotificationItem,
+    comment: ActivityComment?,
+    isSaving: Boolean,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit
+) {
+    var replyText by rememberSaveable(notification.id) { mutableStateOf("") }
+    val canInteract = notification.commentId.isNotBlank()
+    val displayComment = comment?.text?.takeIf { it.isNotBlank() } ?: notification.text
+    val likedByCurrentUser = comment?.likedByCurrentUser == true
+    val likeCount = comment?.likeCount ?: 0
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = DeepWalnut.copy(alpha = 0.72f)),
+        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.22f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (displayComment.isNotBlank()) {
+                Text(
+                    text = "\"$displayComment\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.clickable(enabled = canInteract && !isSaving) {
+                        onToggleCommentLike(notification.activityId, notification.commentId)
+                    },
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ThumbUp,
+                        contentDescription = if (likedByCurrentUser) {
+                            stringResource(R.string.comment_unlike)
+                        } else {
+                            stringResource(R.string.comment_like)
+                        },
+                        tint = if (likedByCurrentUser) Color(0xFF66D6D6) else OldIvory.copy(alpha = 0.75f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (likeCount > 0) likeCount.toString() else stringResource(R.string.home_feed_like),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF66D6D6)
+                    )
+                }
+            }
+
+            comment?.replies?.takeIf { it.isNotEmpty() }?.let { replies ->
+                Text(
+                    text = stringResource(R.string.comment_replies_title),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TarnishedGold,
+                    fontWeight = FontWeight.SemiBold
+                )
+                replies.forEach { reply ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = reply.user.usuario.ifBlank { reply.user.email }
+                                .ifBlank { stringResource(R.string.unknown_username) },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color(0xFF66D6D6),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = reply.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = replyText,
+                    onValueChange = { replyText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.comment_reply_hint)) },
+                    singleLine = true,
+                    enabled = canInteract && !isSaving,
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            val text = replyText.trim()
+                            if (text.isNotBlank() && canInteract) {
+                                onReplyToComment(notification.activityId, notification.commentId, text)
+                                replyText = ""
+                            }
+                        }
+                    ),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+                IconButton(
+                    onClick = {
+                        val text = replyText.trim()
+                        if (text.isNotBlank() && canInteract) {
+                            onReplyToComment(notification.activityId, notification.commentId, text)
+                            replyText = ""
+                        }
+                    },
+                    enabled = canInteract && !isSaving && replyText.isNotBlank()
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = stringResource(R.string.send_reply),
+                        tint = if (replyText.isBlank()) OldIvory.copy(alpha = 0.45f) else OldIvory
+                    )
+                }
             }
         }
     }
@@ -649,6 +907,8 @@ private fun notificationMessage(notification: ActivityNotificationItem): String 
     return when (notification.type) {
         ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicaci\u00f3n"
         ActivityNotificationType.COMMENT -> "$userName ha comentado en tu publicaci\u00f3n."
+        ActivityNotificationType.COMMENT_LIKE -> "$userName le ha dado me gusta a tu comentario."
+        ActivityNotificationType.COMMENT_REPLY -> "$userName ha respondido a tu comentario."
     }
 }
 
@@ -677,6 +937,8 @@ private fun notificationIcon(type: ActivityNotificationType): ImageVector {
     return when (type) {
         ActivityNotificationType.LIKE -> Icons.Filled.Favorite
         ActivityNotificationType.COMMENT -> Icons.Filled.ChatBubbleOutline
+        ActivityNotificationType.COMMENT_LIKE -> Icons.Filled.ThumbUp
+        ActivityNotificationType.COMMENT_REPLY -> Icons.AutoMirrored.Filled.FormatListBulleted
     }
 }
 
@@ -684,6 +946,8 @@ private fun notificationIconTint(type: ActivityNotificationType): Color {
     return when (type) {
         ActivityNotificationType.LIKE -> BloodWine
         ActivityNotificationType.COMMENT -> Color(0xFF0E7C86)
+        ActivityNotificationType.COMMENT_LIKE -> Color(0xFF5B6EA6)
+        ActivityNotificationType.COMMENT_REPLY -> Color(0xFF0D7C79)
     }
 }
 

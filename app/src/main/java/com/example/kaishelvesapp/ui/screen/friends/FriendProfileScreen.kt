@@ -213,7 +213,9 @@ fun FriendProfileScreen(
                             socialActionIds = uiState.socialActionIds,
                             onToggleLike = viewModel::toggleLike,
                             onLoadComments = viewModel::loadComments,
-                            onAddComment = viewModel::addComment
+                            onAddComment = viewModel::addComment,
+                            onToggleCommentLike = viewModel::toggleCommentLike,
+                            onReplyToComment = viewModel::replyToComment
                         )
                     }
 
@@ -364,6 +366,8 @@ fun FriendProfileContent(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     deletingActivityIds: Set<String> = emptySet(),
     onDeleteActivityUpdate: (String) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -446,6 +450,8 @@ fun FriendProfileContent(
                 onToggleLike = onToggleLike,
                 onLoadComments = onLoadComments,
                 onAddComment = onAddComment,
+                onToggleCommentLike = onToggleCommentLike,
+                onReplyToComment = onReplyToComment,
                 deletingActivityIds = deletingActivityIds,
                 onDeleteActivityUpdate = onDeleteActivityUpdate,
                 showActivityDeleteActions = showActivityDeleteActions,
@@ -1208,6 +1214,8 @@ private fun UpdatesSection(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     deletingActivityIds: Set<String>,
     onDeleteActivityUpdate: (String) -> Unit,
     showActivityDeleteActions: Boolean,
@@ -1239,6 +1247,8 @@ private fun UpdatesSection(
                         onToggleLike = onToggleLike,
                         onLoadComments = onLoadComments,
                         onAddComment = onAddComment,
+                        onToggleCommentLike = onToggleCommentLike,
+                        onReplyToComment = onReplyToComment,
                         isDeleting = item.id in deletingActivityIds,
                         canDelete = showActivityDeleteActions,
                         onDeleteActivityUpdate = onDeleteActivityUpdate,
@@ -1259,6 +1269,8 @@ private fun UpdateItem(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     isDeleting: Boolean,
     canDelete: Boolean,
     onDeleteActivityUpdate: (String) -> Unit,
@@ -1420,7 +1432,9 @@ private fun UpdateItem(
                     isSaving = isSocialActionRunning,
                     onToggleLike = onToggleLike,
                     onLoadComments = onLoadComments,
-                    onAddComment = onAddComment
+                    onAddComment = onAddComment,
+                    onToggleCommentLike = onToggleCommentLike,
+                    onReplyToComment = onReplyToComment
                 )
             }
         }

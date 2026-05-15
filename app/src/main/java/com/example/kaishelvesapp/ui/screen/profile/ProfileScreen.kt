@@ -388,6 +388,8 @@ fun ProfileScreen(
                                                         onToggleLike = myProfileViewModel::toggleLike,
                                                         onLoadComments = myProfileViewModel::loadComments,
                                                         onAddComment = myProfileViewModel::addComment,
+                                                        onToggleCommentLike = myProfileViewModel::toggleCommentLike,
+                                                        onReplyToComment = myProfileViewModel::replyToComment,
                                                         deletingActivityIds = myProfileState.deletingActivityIds,
                                                         onDeleteActivityUpdate = myProfileViewModel::hideActivityUpdate,
                                                         showFriendActions = false,

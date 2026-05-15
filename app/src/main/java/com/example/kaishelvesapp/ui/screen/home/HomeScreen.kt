@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +115,8 @@ fun HomeScreen(
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
+    hasAddedFriends: Boolean? = null,
+    onOpenFriendSuggestions: () -> Unit = {},
     onOpenFriendProfile: (String) -> Unit,
     onOpenBook: (Libro) -> Unit,
     onSectionSelected: (KaiSection) -> Unit
@@ -211,12 +214,23 @@ fun HomeScreen(
                     }
 
                     uiState.activities.isEmpty() -> {
-                        HomeMessageCard(
-                            title = stringResource(R.string.home_empty_activity_title),
-                            message = stringResource(R.string.home_empty_activity_body),
-                            actionLabel = stringResource(R.string.retry),
-                            onAction = viewModel::loadFeed
-                        )
+                        // Mantiene el mensaje de actividad vacía cuando la lista de amigos aún no está confirmada.
+                        if (hasAddedFriends == false) {
+                            HomeMessageCard(
+                                title = stringResource(R.string.home_no_friends_title),
+                                message = stringResource(R.string.home_no_friends_body),
+                                actionLabel = stringResource(R.string.add_friend),
+                                primaryAction = true,
+                                onAction = onOpenFriendSuggestions
+                            )
+                        } else {
+                            HomeMessageCard(
+                                title = stringResource(R.string.home_empty_activity_title),
+                                message = stringResource(R.string.home_empty_activity_body),
+                                actionLabel = stringResource(R.string.retry),
+                                onAction = viewModel::loadFeed
+                            )
+                        }
                     }
 
                     else -> {
@@ -274,6 +288,7 @@ private fun HomeMessageCard(
     title: String,
     message: String,
     actionLabel: String,
+    primaryAction: Boolean = false,
     onAction: () -> Unit
 ) {
     Box(
@@ -308,8 +323,17 @@ private fun HomeMessageCard(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                TextButton(onClick = onAction) {
-                    Text(text = actionLabel, color = Color(0xFF66D6D6))
+                if (primaryAction) {
+                    Button(
+                        onClick = onAction,
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        Text(text = actionLabel)
+                    }
+                } else {
+                    TextButton(onClick = onAction) {
+                        Text(text = actionLabel, color = Color(0xFF66D6D6))
+                    }
                 }
             }
         }

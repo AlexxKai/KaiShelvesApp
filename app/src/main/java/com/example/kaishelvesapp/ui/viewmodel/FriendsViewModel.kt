@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 data class FriendsUiState(
     val isLoading: Boolean = false,
     val friends: List<FriendListItem> = emptyList(),
+    val hasLoadedFriends: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -38,6 +39,7 @@ class FriendsViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         friends = data.friends,
+                        hasLoadedFriends = true,
                         errorMessage = null
                     )
                 }

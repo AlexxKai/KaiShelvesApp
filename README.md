@@ -74,7 +74,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Perfil de usuario con edición de datos, foto y métodos de inicio de sesión.
 - Ajustes de privacidad y visibilidad social.
 - Amigos, sugerencias, solicitudes, perfiles públicos/privados y listas compartidas.
-- Feed social con actividad, likes y comentarios.
+- Feed social con actividad, likes, comentarios, respuestas a comentarios y aviso guiado para añadir amigos cuando el círculo lector está vacío.
 - Centro de notificaciones y notificaciones locales.
 - Ayuda integrada con FAQ, contexto de pantalla y chat asistido por Groq si hay API key configurada.
 - Internacionalización preparada con recursos en `values` y `values-es`.

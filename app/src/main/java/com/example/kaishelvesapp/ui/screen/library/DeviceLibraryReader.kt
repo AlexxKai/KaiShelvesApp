@@ -1322,7 +1322,13 @@ private fun buildEpubReaderHtml(
                         range.setEnd(node, end);
 
                         const span = createHighlightSpan(id, color);
-                        range.surroundContents(span);
+                        try {
+                            range.surroundContents(span);
+                        } catch (error) {
+                            const fragment = range.extractContents();
+                            span.appendChild(fragment);
+                            range.insertNode(span);
+                        }
                         bindHighlight(span);
                         return span;
                     }

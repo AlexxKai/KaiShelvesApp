@@ -312,6 +312,62 @@ class FriendProfileViewModel(
         }
     }
 
+    fun toggleCommentLike(activityId: String, commentId: String) {
+        val actionId = "$activityId:$commentId:comment_like"
+        if (activityId.isBlank() || commentId.isBlank() || actionId in _uiState.value.socialActionIds) return
+
+        _uiState.value = _uiState.value.copy(
+            socialActionIds = _uiState.value.socialActionIds + actionId,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.toggleActivityCommentLike(activityId, commentId)
+                .onSuccess { comments ->
+                    _uiState.value = _uiState.value.copy(
+                        commentsByActivityId = _uiState.value.commentsByActivityId + (activityId to comments)
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo actualizar el me gusta del comentario"
+                    )
+                }
+
+            _uiState.value = _uiState.value.copy(
+                socialActionIds = _uiState.value.socialActionIds - actionId
+            )
+        }
+    }
+
+    fun replyToComment(activityId: String, commentId: String, text: String) {
+        val actionId = "$activityId:$commentId:comment_reply"
+        if (activityId.isBlank() || commentId.isBlank() || text.isBlank() || actionId in _uiState.value.socialActionIds) return
+
+        _uiState.value = _uiState.value.copy(
+            socialActionIds = _uiState.value.socialActionIds + actionId,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.addActivityCommentReply(activityId, commentId, text)
+                .onSuccess { comments ->
+                    _uiState.value = _uiState.value.copy(
+                        commentsByActivityId = _uiState.value.commentsByActivityId + (activityId to comments)
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo publicar la respuesta"
+                    )
+                }
+
+            _uiState.value = _uiState.value.copy(
+                socialActionIds = _uiState.value.socialActionIds - actionId
+            )
+        }
+    }
+
     fun blockCurrentProfile(onSuccess: () -> Unit = {}) {
         val profile = _uiState.value.profile ?: return
         if (profile.user.uid.isBlank() || _uiState.value.isBlockingMember) return

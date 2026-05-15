@@ -59,6 +59,8 @@
     <string name="home_recent_activity_subtitle">Lo último que ha pasado en tu círculo lector.</string>
     <string name="home_empty_activity_title">Aún no hay movimiento</string>
     <string name="home_empty_activity_body">Cuando tus amigos añadan libros o acepten amistades, su actividad aparecerá aquí.</string>
+    <string name="home_no_friends_title">Aún no tienes amigos añadidos</string>
+    <string name="home_no_friends_body">Añade lectores a tu círculo para que su actividad de lectura pueda aparecer aquí.</string>
     <string name="home_feed_like">Me gusta</string>
     <string name="home_feed_unlike">Ya no me gusta</string>
     <string name="home_feed_comment">Comentar</string>
@@ -68,6 +70,12 @@
     <string name="no_comments_yet">Sin comentarios aún.</string>
     <string name="write_comment_hint">Comentar</string>
     <string name="send_comment">Enviar comentario</string>
+    <string name="comment_reply_hint">Responder a este comentario</string>
+    <string name="comment_reply_action">Responder</string>
+    <string name="send_reply">Enviar respuesta</string>
+    <string name="comment_like">Me gusta el comentario</string>
+    <string name="comment_unlike">Ya no me gusta el comentario</string>
+    <string name="comment_replies_title">Respuestas</string>
     <string name="friends">Amigos</string>
     <string name="friends_screen_subtitle">Conecta con tu círculo lector y descubre sus bibliotecas.</string>
     <string name="search_friends">Buscar amigos</string>
@@ -77,10 +85,8 @@
     <string name="open_notifications_center">Abrir centro de notificaciones</string>
     <string name="notification_center_title">Centro de notificaciones</string>
     <string name="notifications_tab">Notificaciones</string>
-    <string name="messages_tab">Mensajes</string>
     <string name="requests_tab">Solicitudes</string>
     <string name="notifications_coming_soon">Aquí mostraremos las notificaciones más adelante.</string>
-    <string name="messages_coming_soon">Aquí mostraremos los mensajes más adelante.</string>
     <string name="no_friend_requests">No tienes ninguna solicitud de amistad.</string>
     <string name="unknown_username">Usuario desconocido</string>
     <string name="no_email_available">Sin correo disponible</string>

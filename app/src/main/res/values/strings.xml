@@ -59,6 +59,8 @@
     <string name="home_recent_activity_subtitle">The latest from your reading circle.</string>
     <string name="home_empty_activity_title">No movement yet</string>
     <string name="home_empty_activity_body">When your friends add books or accept friendships, their activity will show up here.</string>
+    <string name="home_no_friends_title">No friends added yet</string>
+    <string name="home_no_friends_body">Add readers to your circle so their reading activity can appear here.</string>
     <string name="home_feed_like">Like</string>
     <string name="home_feed_unlike">Unlike</string>
     <string name="home_feed_comment">Comment</string>
@@ -68,6 +70,12 @@
     <string name="no_comments_yet">No comments yet.</string>
     <string name="write_comment_hint">Comment</string>
     <string name="send_comment">Send comment</string>
+    <string name="comment_reply_hint">Reply to this comment</string>
+    <string name="comment_reply_action">Reply</string>
+    <string name="send_reply">Send reply</string>
+    <string name="comment_like">Like comment</string>
+    <string name="comment_unlike">Unlike comment</string>
+    <string name="comment_replies_title">Replies</string>
     <string name="friends">Friends</string>
     <string name="friends_screen_subtitle">Connect with your reading circle and discover their libraries.</string>
     <string name="search_friends">Search friends</string>
@@ -77,10 +85,8 @@
     <string name="open_notifications_center">Open notification center</string>
     <string name="notification_center_title">Notification center</string>
     <string name="notifications_tab">Notifications</string>
-    <string name="messages_tab">Messages</string>
     <string name="requests_tab">Requests</string>
     <string name="notifications_coming_soon">Notifications will be available here soon.</string>
-    <string name="messages_coming_soon">Messages will be available here soon.</string>
     <string name="no_friend_requests">You do not have any friend requests.</string>
     <string name="unknown_username">Unknown username</string>
     <string name="no_email_available">No email available</string>
