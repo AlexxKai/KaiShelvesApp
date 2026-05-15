@@ -89,7 +89,8 @@ fun CatalogScreen(
     onBookClick: (Libro) -> Unit = {},
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
-    onSectionSelected: (KaiSection) -> Unit
+    onSectionSelected: (KaiSection) -> Unit,
+    onOpenScanner: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(CatalogViewMode.DETAILED) }
@@ -136,6 +137,7 @@ fun CatalogScreen(
                         viewModel.ejecutarBusqueda()
                     },
                     onScanResult = viewModel::buscarPorIsbn,
+                    onOpenScanner = onOpenScanner,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     notificationCount = pendingRequestCount,
                     onOpenNotifications = onOpenNotifications

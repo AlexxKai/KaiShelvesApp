@@ -7,6 +7,10 @@ import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.remote.googlebooks.GoogleBooksClient
 import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
 import com.example.kaishelvesapp.data.remote.googlebooks.toLibro
+import com.example.kaishelvesapp.data.remote.inventaire.InventaireClient
+import com.example.kaishelvesapp.data.remote.inventaire.inventaireBookFromResponse
+import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
+import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -29,6 +33,8 @@ class BookRepository(
 
     private val api = GoogleBooksClient.api
     private val publicApi = GoogleBooksClient.publicApi
+    private val inventaireApi = InventaireClient.api
+    private val openLibraryApi = OpenLibraryClient.api
 
     data class BookSearchResult(
         val totalItems: Int,
@@ -182,6 +188,50 @@ class BookRepository(
                 langRestrict = currentGoogleBooksLanguage()
             )
         }
+    }
+
+    private suspend fun searchGoogleBooksPublicOnce(
+        query: String,
+        maxResults: Int,
+        startIndex: Int = 0,
+        orderBy: String? = null,
+        langRestrict: String? = currentGoogleBooksLanguage()
+    ) = publicApi.searchBooks(
+        query = query,
+        maxResults = maxResults,
+        startIndex = startIndex,
+        orderBy = orderBy,
+        langRestrict = langRestrict
+    )
+
+    private suspend fun searchOpenLibraryByIsbn(isbn: String): Libro? {
+        val normalizedIsbn = normalizeIsbnQuery(isbn)
+        if (normalizedIsbn.isBlank()) return null
+
+        val response = openLibraryApi.getBooksByBibkeys(
+            bibkeys = "ISBN:$normalizedIsbn"
+        )
+
+        return response["ISBN:$normalizedIsbn"]
+            ?.toLibro(normalizedIsbn)
+            ?.takeIf { book ->
+                book.titulo.isNotBlank() || book.autor.isNotBlank() || book.imagen.isNotBlank()
+            }
+    }
+
+    private suspend fun searchInventaireByIsbn(isbn: String): Libro? {
+        val normalizedIsbn = normalizeIsbnQuery(isbn)
+        if (normalizedIsbn.isBlank()) return null
+
+        val response = inventaireApi.getEntitiesByUris(
+            uris = "isbn:$normalizedIsbn",
+            refresh = false
+        )
+
+        return inventaireBookFromResponse(response, normalizedIsbn)
+            ?.takeIf { book ->
+                book.titulo.isNotBlank() || book.autor.isNotBlank()
+            }
     }
 
     suspend fun obtenerLibros(): Result<List<Libro>> {
@@ -393,10 +443,27 @@ class BookRepository(
                 return Result.success(emptyList())
             }
 
-            val response = searchGoogleBooks(
-                query = "isbn:$normalizedIsbn",
-                maxResults = 10
-            )
+            searchInventaireByIsbn(normalizedIsbn)?.let { inventaireBook ->
+                return Result.success(listOf(inventaireBook))
+            }
+
+            searchOpenLibraryByIsbn(normalizedIsbn)?.let { openLibraryBook ->
+                return Result.success(listOf(openLibraryBook))
+            }
+
+            val response = if (GoogleBooksClient.hasApiKey) {
+                api.searchBooks(
+                    query = "isbn:$normalizedIsbn",
+                    maxResults = 10,
+                    startIndex = 0,
+                    langRestrict = currentGoogleBooksLanguage()
+                )
+            } else {
+                searchGoogleBooksPublicOnce(
+                    query = "isbn:$normalizedIsbn",
+                    maxResults = 10
+                )
+            }
 
             val libros = response.items
                 .map { it.toLibro() }

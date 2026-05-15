@@ -1,10 +1,5 @@
 package com.example.kaishelvesapp.ui.components
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -56,7 +51,7 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +59,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -72,7 +66,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
@@ -80,8 +73,8 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
+
+val LocalOpenScanner = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -89,68 +82,16 @@ fun KaiPrimaryTopBar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onScanResult: (String) -> Unit,
+    onScanResult: (String) -> Unit = {},
     onOpenMenu: () -> Unit,
     notificationCount: Int = 0,
     onOpenNotifications: (() -> Unit)? = null,
-    showSearchBar: Boolean = true
+    showSearchBar: Boolean = true,
+    onOpenScanner: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val scanOptions = remember {
-        ScanOptions().apply {
-            setDesiredBarcodeFormats(ScanOptions.EAN_13, ScanOptions.EAN_8, ScanOptions.UPC_A, ScanOptions.UPC_E)
-            setPrompt(context.getString(R.string.scan_isbn_prompt))
-            setBeepEnabled(false)
-            setOrientationLocked(false)
-        }
-    }
-    val barcodeLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
-        val scannedValue = result.contents
-            .orEmpty()
-            .trim()
-            .replace("-", "")
-            .replace(" ", "")
-
-        when {
-            scannedValue.isBlank() -> Unit
-            scannedValue.length == 10 || scannedValue.length == 13 -> onScanResult(scannedValue)
-            else -> {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.invalid_isbn_barcode),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-    }
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            barcodeLauncher.launch(scanOptions)
-        } else {
-            Toast.makeText(
-                context,
-                context.getString(R.string.camera_permission_required),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    fun launchScanner() {
-        val hasCameraPermission = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (hasCameraPermission) {
-            barcodeLauncher.launch(scanOptions)
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
+    val scannerOpener = onOpenScanner ?: LocalOpenScanner.current
 
     fun submitSearch() {
         focusManager.clearFocus(force = true)
@@ -262,7 +203,10 @@ fun KaiPrimaryTopBar(
                             }
                         }
 
-                        IconButton(onClick = ::launchScanner) {
+                        IconButton(
+                            onClick = { scannerOpener?.invoke() },
+                            enabled = scannerOpener != null
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.CameraAlt,
                                 contentDescription = stringResource(R.string.scan_isbn),

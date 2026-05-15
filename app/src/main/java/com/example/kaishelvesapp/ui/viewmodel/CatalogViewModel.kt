@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
 import com.example.kaishelvesapp.data.repository.BookRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,10 @@ data class CatalogUiState(
     val selectedGenero: String = "Todos",
     val searchQuery: String = "",
     val selectedBook: Libro? = null,
+    val scannedBook: Libro? = null,
+    val scannedIsbn: String? = null,
+    val isIsbnLookupLoading: Boolean = false,
+    val isbnLookupError: String? = null,
     val errorMessage: String? = null
 )
 
@@ -31,6 +36,9 @@ class CatalogViewModel(
         )
     )
     val uiState: StateFlow<CatalogUiState> = _uiState.asStateFlow()
+
+    private var isbnLookupJob: Job? = null
+    private val isbnCache = mutableMapOf<String, Libro?>()
 
     init {
         cargarLibros()
@@ -118,32 +126,90 @@ class CatalogViewModel(
     fun buscarPorIsbn(isbn: String) {
         val normalizedIsbn = isbn
             .trim()
+            .uppercase()
+            .removePrefix("ISBN")
+            .replace(":", "")
             .replace("-", "")
             .replace(" ", "")
 
-        _uiState.value = _uiState.value.copy(
-            isLoading = true,
-            isRefreshing = false,
-            errorMessage = null,
-            searchQuery = normalizedIsbn,
+        if (normalizedIsbn.isBlank()) return
+
+        val currentState = _uiState.value
+
+        if (
+            currentState.isIsbnLookupLoading &&
+            currentState.scannedIsbn == normalizedIsbn
+        ) {
+            return
+        }
+
+        if (
+            currentState.scannedBook != null &&
+            currentState.scannedIsbn == normalizedIsbn
+        ) {
+            return
+        }
+
+        if (isbnCache.containsKey(normalizedIsbn)) {
+            val cachedBook = isbnCache[normalizedIsbn]
+
+            _uiState.value = currentState.copy(
+                scannedIsbn = normalizedIsbn,
+                scannedBook = cachedBook,
+                isIsbnLookupLoading = false,
+                isbnLookupError = if (cachedBook == null) {
+                    "No se encontró ningún libro para este ISBN"
+                } else {
+                    null
+                }
+            )
+
+            return
+        }
+
+        isbnLookupJob?.cancel()
+
+        _uiState.value = currentState.copy(
+            scannedIsbn = normalizedIsbn,
+            scannedBook = null,
+            isIsbnLookupLoading = true,
+            isbnLookupError = null,
             selectedGenero = "Todos"
         )
 
-        viewModelScope.launch {
+        isbnLookupJob = viewModelScope.launch {
             val result = repository.searchBooksByIsbn(normalizedIsbn)
 
             result
                 .onSuccess { libros ->
+                    val book = libros.firstOrNull()
+                    isbnCache[normalizedIsbn] = book
+
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        libros = libros,
-                        errorMessage = null
+                        isIsbnLookupLoading = false,
+                        scannedIsbn = normalizedIsbn,
+                        scannedBook = book,
+                        isbnLookupError = if (book == null) {
+                            "No se encontró ningún libro para este ISBN"
+                        } else {
+                            null
+                        },
+                        libros = if (book != null) listOf(book) else _uiState.value.libros
                     )
                 }
                 .onFailure { error ->
+                    val message = error.message.orEmpty()
+
                     _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Error al buscar el ISBN"
+                        isIsbnLookupLoading = false,
+                        scannedBook = null,
+                        isbnLookupError = when {
+                            message.contains("429", ignoreCase = true) ->
+                                "Demasiadas búsquedas seguidas. Espera unos segundos y vuelve a intentarlo."
+
+                            message.isNotBlank() -> message
+                            else -> "Error al buscar el ISBN"
+                        }
                     )
                 }
         }
@@ -167,6 +233,17 @@ class CatalogViewModel(
 
     fun selectBook(libro: Libro) {
         _uiState.value = _uiState.value.copy(selectedBook = libro)
+    }
+
+    fun clearScannedBook() {
+        isbnLookupJob?.cancel()
+
+        _uiState.value = _uiState.value.copy(
+            scannedBook = null,
+            scannedIsbn = null,
+            isIsbnLookupLoading = false,
+            isbnLookupError = null
+        )
     }
 
     fun getGenreCounts(): Map<String, Int> {

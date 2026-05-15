@@ -291,9 +291,17 @@
     <string name="unknown_title">Unknown title</string>
     <string name="year">Year</string>
     <string name="scan_isbn">Scan ISBN</string>
-    <string name="scan_isbn_prompt">Align the book barcode inside the frame</string>
-    <string name="camera_permission_required">Camera permission is required to scan barcodes</string>
-    <string name="invalid_isbn_barcode">The scanned barcode does not look like a valid ISBN</string>
+    <string name="scan_books_title">Scan books</string>
+    <string name="scan_tab_scan">SCAN</string>
+    <string name="scan_tab_history">HISTORY</string>
+    <string name="scan_camera_permission_message">Camera permission is required to scan the ISBN.</string>
+    <string name="grant_permission">Grant permission</string>
+    <string name="scan_history_placeholder">Your scanned ISBN history will appear here.</string>
+    <string name="scan_book_searching">Looking up book...</string>
+    <string name="scan_book_not_found">No book found for this ISBN</string>
+    <string name="isbn_value">ISBN %1$s</string>
+    <string name="retry_lookup">Retry lookup</string>
+    <string name="scan_another_book">Scan another book</string>
 
     <string name="book_record">Volume record</string>
     <string name="book_description_section">Book description</string>

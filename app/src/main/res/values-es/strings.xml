@@ -291,9 +291,17 @@
     <string name="unknown_title">Título desconocido</string>
     <string name="year">Año</string>
     <string name="scan_isbn">Escanear ISBN</string>
-    <string name="scan_isbn_prompt">Alinea el código de barras del libro dentro del marco</string>
-    <string name="camera_permission_required">Hace falta permiso de cámara para escanear códigos</string>
-    <string name="invalid_isbn_barcode">El código escaneado no parece un ISBN válido</string>
+    <string name="scan_books_title">Escanear libros</string>
+    <string name="scan_tab_scan">ESCANEAR</string>
+    <string name="scan_tab_history">HISTORIAL</string>
+    <string name="scan_camera_permission_message">Necesito permiso de cámara para escanear el ISBN.</string>
+    <string name="grant_permission">Conceder permiso</string>
+    <string name="scan_history_placeholder">Aquí aparecerá el historial de ISBN escaneados.</string>
+    <string name="scan_book_searching">Buscando libro...</string>
+    <string name="scan_book_not_found">No se encontró ningún libro para este ISBN</string>
+    <string name="isbn_value">ISBN %1$s</string>
+    <string name="retry_lookup">Reintentar búsqueda</string>
+    <string name="scan_another_book">Escanear otro libro</string>
 
     <string name="book_record">Ficha del volumen</string>
     <string name="book_description_section">Descripción del libro</string>

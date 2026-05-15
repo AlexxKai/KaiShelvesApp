@@ -44,9 +44,11 @@ import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
 import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.HelpChatOverlay
+import com.example.kaishelvesapp.ui.components.LocalOpenScanner
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.OfflineAccessDialog
 import com.example.kaishelvesapp.ui.screen.catalog.CatalogScreen
+import com.example.kaishelvesapp.ui.screen.catalog.IsbnScannerScreen
 import com.example.kaishelvesapp.ui.screen.catalog.SearchResultsScreen
 import com.example.kaishelvesapp.ui.screen.detail.BookDetailScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
@@ -101,6 +103,7 @@ object Routes {
     const val SEARCH = "search"
     const val SEARCH_RESULTS = "search_results"
     const val DISCOVER = "discover"
+    const val SCAN_BOOKS = "scan_books"
     const val LISTS = "lists"
     const val LIST_DETAIL = "list_detail/{listId}"
     const val DETAIL = "detail"
@@ -376,6 +379,11 @@ fun AppNavigation(
     }
 
     androidx.compose.runtime.CompositionLocalProvider(
+        LocalOpenScanner provides {
+            if (navController.currentBackStackEntry?.destination?.route != Routes.SCAN_BOOKS) {
+                navController.navigate(Routes.SCAN_BOOKS)
+            }
+        },
         LocalGuestUiRestrictions provides GuestUiRestrictions(
             disabledSections = guestRestrictedSections,
             onBlockedSectionClick = {
@@ -527,6 +535,19 @@ fun AppNavigation(
                 },
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
+                onSectionSelected = { navigateSection(it) },
+                onOpenScanner = { navController.navigate(Routes.SCAN_BOOKS) }
+            )
+        }
+
+        composable(Routes.SCAN_BOOKS) {
+            IsbnScannerScreen(
+                viewModel = catalogViewModel,
+                onBack = { navController.popBackStack() },
+                onBookClick = { libro ->
+                    catalogViewModel.selectBook(libro)
+                    navController.navigate(Routes.DETAIL)
+                },
                 onSectionSelected = { navigateSection(it) }
             )
         }
