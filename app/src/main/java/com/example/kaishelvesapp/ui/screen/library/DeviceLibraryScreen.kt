@@ -193,6 +193,12 @@ enum class DeviceLibraryFileTypeFilter(
     Html(setOf("html", "htm", "mhtml", "mht"), R.string.device_library_file_type_html)
 }
 
+enum class DeviceLibraryReadingStatus {
+    Unread,
+    Reading,
+    Finished
+}
+
 fun DeviceLibraryFile.matchesFileTypeFilters(selectedTypes: Set<DeviceLibraryFileTypeFilter>): Boolean {
     if (selectedTypes.isEmpty()) return true
     val extension = name.substringAfterLast('.', missingDelimiterValue = "").lowercase(Locale.ROOT)
@@ -213,6 +219,8 @@ fun DeviceLibraryScreen(
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit,
+    openBookUri: String? = null,
+    onOpenBookUriConsumed: () -> Unit = {},
     viewModel: DeviceLibraryViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -225,6 +233,9 @@ fun DeviceLibraryScreen(
     var sortOption by remember { mutableStateOf(DeviceLibrarySortOption.Title) }
     var sortDescending by remember { mutableStateOf(false) }
     var selectedFileTypes by remember { mutableStateOf(readDeviceLibraryFileTypeFilters(context)) }
+    var selectedReadingStatuses by remember {
+        mutableStateOf(DeviceLibraryReadingStatus.entries.toSet())
+    }
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
     var showImportBooksDialog by remember { mutableStateOf(false) }
@@ -244,8 +255,20 @@ fun DeviceLibraryScreen(
                 }
         }
     }
-    val sortedFiles = remember(uiState.filteredFiles, fileMetadata, sortOption, sortDescending, selectedFileTypes) {
-        val formatFilteredFiles = uiState.filteredFiles.filter { it.matchesFileTypeFilters(selectedFileTypes) }
+    val sortedFiles = remember(
+        uiState.filteredFiles,
+        fileMetadata,
+        sortOption,
+        sortDescending,
+        selectedFileTypes,
+        selectedReadingStatuses,
+        progressRevision
+    ) {
+        val formatFilteredFiles = uiState.filteredFiles
+            .filter { it.matchesFileTypeFilters(selectedFileTypes) }
+            .filter { file ->
+                readingStatusForProgress(readDeviceBookProgressPercent(context, file)) in selectedReadingStatuses
+            }
         val sorted = when (sortOption) {
             DeviceLibrarySortOption.Title -> formatFilteredFiles.sortedBy { file ->
                 fileMetadata[file.uri.toString()]?.title?.takeIf { it.isNotBlank() }?.lowercase(Locale.ROOT)
@@ -263,6 +286,17 @@ fun DeviceLibraryScreen(
             DeviceLibrarySortOption.RecentList -> formatFilteredFiles.sortedBy { it.uri.toString() }
         }
         if (sortDescending) sorted.asReversed() else sorted
+    }
+
+    LaunchedEffect(openBookUri, uiState.files, uiState.isLoading) {
+        val requestedUri = openBookUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val targetFile = uiState.files.firstOrNull { it.uri.toString() == requestedUri }
+        if (targetFile != null) {
+            readerFile = targetFile
+            onOpenBookUriConsumed()
+        } else if (!uiState.isLoading && uiState.selectedFolderUri != null) {
+            onOpenBookUriConsumed()
+        }
     }
 
     val folderLauncher = rememberLauncherForActivityResult(
@@ -372,17 +406,19 @@ fun DeviceLibraryScreen(
             }
 
             if (showFilterPanel) {
-                DeviceLibraryFilterOverlay(
+                    DeviceLibraryFilterOverlay(
                     layoutMode = layoutMode,
                     sortOption = sortOption,
                     sortDescending = sortDescending,
                     selectedFileTypes = selectedFileTypes,
+                    selectedReadingStatuses = selectedReadingStatuses,
                     onLayoutModeChange = {
                         layoutMode = it
                         saveDeviceLibraryLayoutMode(context, it)
                     },
                     onSortOptionChange = { sortOption = it },
                     onToggleSortDirection = { sortDescending = !sortDescending },
+                    onReadingStatusesChange = { selectedReadingStatuses = it },
                     onFileTypesChange = {
                         selectedFileTypes = it
                         saveDeviceLibraryFileTypeFilters(context, it)

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,15 +66,22 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.BookShelfActions
+import com.example.kaishelvesapp.ui.screen.library.FilePagePreview
+import com.example.kaishelvesapp.ui.screen.library.readDeviceBookUserMetadata
+import com.example.kaishelvesapp.ui.screen.library.readDeviceBookProgressPercent
+import com.example.kaishelvesapp.ui.screen.library.readingStatusForProgress
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -80,12 +90,14 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
+import android.net.Uri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private enum class ListDetailSortOption {
     TITLE,
     AUTHOR,
+    FORMAT,
     RATING,
     READ_DATE
 }
@@ -96,7 +108,8 @@ fun UserListDetailScreen(
     viewModel: UserListDetailViewModel,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     onBack: () -> Unit,
-    onBookClick: (Libro) -> Unit
+    onBookClick: (Libro) -> Unit,
+    onReadOwnedBook: (UserListDetailBookItem) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -106,6 +119,7 @@ fun UserListDetailScreen(
     var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
     val isReadList = listId == UserListsRepository.SYSTEM_LIST_READ_ID
     val isPendingList = listId == UserListsRepository.SYSTEM_LIST_PENDING_ID
+    val isOwnedList = listId == UserListsRepository.SYSTEM_LIST_OWNED_ID
     val displayedPendingBooks = remember { mutableStateListOf<UserListDetailBookItem>() }
     var isPendingEditMode by rememberSaveable(listId) { mutableStateOf(false) }
     var showCoverView by rememberSaveable(listId) { mutableStateOf(false) }
@@ -115,13 +129,18 @@ fun UserListDetailScreen(
     var draggingTranslationX by remember { mutableFloatStateOf(0f) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
     var autoScrollDelta by remember { mutableFloatStateOf(0f) }
-    val sortedBooks = remember(uiState.books, sortOption, isReadList, isPendingList) {
+    var selectedOwnedItem by remember { mutableStateOf<UserListDetailBookItem?>(null) }
+    val sortedBooks = remember(uiState.books, sortOption, isReadList, isPendingList, isOwnedList) {
         if (isPendingList) {
             uiState.books
         } else {
             when (sortOption) {
                 ListDetailSortOption.TITLE -> uiState.books.sortedBy { it.book.titulo.lowercase() }
                 ListDetailSortOption.AUTHOR -> uiState.books.sortedBy { it.book.autor.lowercase() }
+                ListDetailSortOption.FORMAT -> uiState.books.sortedWith(
+                    compareBy<UserListDetailBookItem> { formatSortKey(it.ownedFormats) }
+                        .thenBy { it.book.titulo.lowercase() }
+                )
                 ListDetailSortOption.RATING -> uiState.books.sortedWith(
                     compareByDescending<UserListDetailBookItem> { it.rating ?: -1 }
                         .thenBy { it.book.titulo.lowercase() }
@@ -137,7 +156,11 @@ fun UserListDetailScreen(
 
     LaunchedEffect(listId) {
         viewModel.loadListDetail(listId)
-        sortOption = if (isReadList) ListDetailSortOption.READ_DATE else ListDetailSortOption.TITLE
+        sortOption = when {
+            isOwnedList -> ListDetailSortOption.FORMAT
+            isReadList -> ListDetailSortOption.READ_DATE
+            else -> ListDetailSortOption.TITLE
+        }
     }
 
     LaunchedEffect(uiState.books, isPendingList) {
@@ -177,6 +200,17 @@ fun UserListDetailScreen(
         }
     }
 
+    selectedOwnedItem?.let { item ->
+        OwnedBookDetailDialog(
+            item = item,
+            onDismiss = { selectedOwnedItem = null },
+            onRead = {
+                selectedOwnedItem = null
+                onReadOwnedBook(item)
+            }
+        )
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -212,6 +246,7 @@ fun UserListDetailScreen(
                     sortOption = sortOption,
                     isReadList = isReadList,
                     isPendingList = isPendingList,
+                    isOwnedList = isOwnedList,
                     isPendingEditMode = isPendingEditMode,
                     showCoverView = showCoverView,
                     onBack = onBack,
@@ -231,6 +266,9 @@ fun UserListDetailScreen(
                     },
                     onSortChange = {
                         sortOption = when {
+                            isOwnedList && sortOption == ListDetailSortOption.FORMAT -> ListDetailSortOption.TITLE
+                            isOwnedList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
+                            isOwnedList -> ListDetailSortOption.FORMAT
                             !isReadList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
                             !isReadList -> ListDetailSortOption.TITLE
                             sortOption == ListDetailSortOption.READ_DATE -> ListDetailSortOption.RATING
@@ -339,7 +377,14 @@ fun UserListDetailScreen(
                                         }
                                     }
                                 },
-                                onBookClick = { book -> onBookClick(book) },
+                                canOpenBooks = true,
+                                onBookClick = { book ->
+                                    if (isOwnedList) {
+                                        rowItems.firstOrNull { it.book.id == book.id }?.let { selectedOwnedItem = it }
+                                    } else {
+                                        onBookClick(book)
+                                    }
+                                },
                                 dragModifierFor = { bookId ->
                                     if (isPendingList) {
                                         Modifier.pointerInput(bookId, visibleBooks.size) {
@@ -449,10 +494,17 @@ fun UserListDetailScreen(
                             item = item,
                             isReadList = isReadList,
                             isPendingList = isPendingList,
+                            isOwnedList = isOwnedList,
                             isPendingEditMode = isPendingEditMode,
                             isDragging = isDragging,
                             draggingOffset = if (isDragging) draggingTranslationY else 0f,
-                            onOpen = { onBookClick(item.book) },
+                            onOpen = {
+                                if (isOwnedList) {
+                                    selectedOwnedItem = item
+                                } else {
+                                    onBookClick(item.book)
+                                }
+                            },
                             onOrganizationChanged = { viewModel.loadListDetail(listId) },
                             dragHandleModifier = if (isPendingList && isPendingEditMode) {
                                 Modifier.pointerInput(bookId, visibleBooks.size) {
@@ -557,6 +609,7 @@ private fun ListDetailHeaderCard(
     sortOption: ListDetailSortOption,
     isReadList: Boolean,
     isPendingList: Boolean,
+    isOwnedList: Boolean,
     isPendingEditMode: Boolean,
     showCoverView: Boolean,
     onBack: () -> Unit,
@@ -662,6 +715,32 @@ private fun ListDetailHeaderCard(
                     )
                 }
 
+                if (isOwnedList) {
+                    OutlinedButton(
+                        onClick = onSortChange,
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = stringResource(R.string.sort_action),
+                            tint = TarnishedGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = sortOptionLabel(sortOption, isReadList = false),
+                            color = TarnishedGold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
                 if (isPendingList && !showCoverView) {
                     OutlinedButton(
                         onClick = onTogglePendingEditMode,
@@ -688,7 +767,7 @@ private fun ListDetailHeaderCard(
                 }
             }
 
-            if (!isPendingList) {
+            if (!isPendingList && !isOwnedList) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -710,13 +789,7 @@ private fun ListDetailHeaderCard(
                     Spacer(modifier = Modifier.width(10.dp))
 
                     Text(
-                        text = when {
-                            !isReadList && sortOption == ListDetailSortOption.AUTHOR -> stringResource(R.string.sort_option_author)
-                            !isReadList -> stringResource(R.string.sort_option_title)
-                            sortOption == ListDetailSortOption.READ_DATE -> stringResource(R.string.sort_option_read_date)
-                            sortOption == ListDetailSortOption.RATING -> stringResource(R.string.sort_option_rating)
-                            else -> stringResource(R.string.sort_option_title)
-                        },
+                        text = sortOptionLabel(sortOption, isReadList),
                         style = MaterialTheme.typography.bodyMedium,
                         color = TarnishedGold,
                         fontWeight = FontWeight.SemiBold,
@@ -744,6 +817,7 @@ private fun CoverRow(
     draggingOffsetX: Float,
     draggingOffsetY: Float,
     visualOffsetFor: (Int) -> Pair<Float, Float>,
+    canOpenBooks: Boolean,
     onBookClick: (Libro) -> Unit,
     dragModifierFor: (String) -> Modifier
 ) {
@@ -776,7 +850,7 @@ private fun CoverRow(
                         offsetY = visualOffset.second,
                         dragModifier = dragModifierFor(itemBookId.orEmpty()),
                         onBookClick = onBookClick,
-                        enabled = draggingBookId == null
+                        enabled = draggingBookId == null && canOpenBooks
                     )
                 } else {
                     Spacer(
@@ -813,14 +887,221 @@ private fun CoverCell(
             .clickable(enabled = enabled) { onBookClick(item.book) },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BookCover(
-            imageUrl = item.book.imagen,
-            title = item.book.titulo,
-            showFrame = false,
-            modifier = Modifier
-                .width(92.dp)
-                .height(138.dp)
+        if (item.ownedUri.isNotBlank()) {
+            OwnedBookCover(
+                item = item,
+                modifier = Modifier
+                    .width(92.dp)
+                    .height(138.dp)
+            )
+        } else {
+            BookCover(
+                imageUrl = item.book.imagen,
+                title = item.book.titulo,
+                showFrame = false,
+                modifier = Modifier
+                    .width(92.dp)
+                    .height(138.dp)
+            )
+        }
+
+        if (item.ownedFormats.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            FormatBadge(text = formatSummary(item.ownedFormats))
+        }
+    }
+}
+
+@Composable
+private fun OwnedBookCover(
+    item: UserListDetailBookItem,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val file = remember(item.ownedUri) { ownedDeviceLibraryFile(item) }
+    val metadata = remember(item.ownedUri) { readDeviceBookUserMetadata(context, file) }
+
+    FilePagePreview(
+        file = file,
+        coverText = metadata.coverText,
+        overrideCoverId = metadata.coverId.takeIf { it.isNotBlank() },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun OwnedBookDetailDialog(
+    item: UserListDetailBookItem,
+    onDismiss: () -> Unit,
+    onRead: () -> Unit
+) {
+    val context = LocalContext.current
+    val file = remember(item.ownedUri) { ownedDeviceLibraryFile(item) }
+    val progress = remember(item.ownedUri) { readDeviceBookProgressPercent(context, file) }
+    val statusText = when (readingStatusForProgress(progress)) {
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Unread -> stringResource(R.string.reading_status_unread)
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Reading -> stringResource(R.string.reading_status_reading)
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Finished -> stringResource(R.string.reading_status_finished)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(R.string.owned_book_details),
+                color = TarnishedGold
+            )
+        },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                OwnedBookCover(
+                    item = item,
+                    modifier = Modifier
+                        .width(78.dp)
+                        .height(116.dp)
+                )
+
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = item.book.titulo.ifBlank { item.ownedFileName.substringBeforeLast('.') },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TarnishedGold,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = item.book.autor.ifBlank { stringResource(R.string.owned_book_author_unknown) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OldIvory
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FormatBadge(text = formatSummary(item.ownedFormats))
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OldIvory.copy(alpha = 0.88f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onRead) {
+                Text(
+                    text = stringResource(R.string.read_owned_book),
+                    color = TarnishedGold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = stringResource(R.string.cancel),
+                    color = OldIvory
+                )
+            }
+        },
+        containerColor = Obsidian
+    )
+}
+
+private fun ownedDeviceLibraryFile(item: UserListDetailBookItem): DeviceLibraryFile {
+    return DeviceLibraryFile(
+        name = item.ownedFileName.ifBlank { item.book.titulo },
+        location = item.ownedLocation,
+        mimeType = item.ownedMimeType,
+        sizeBytes = item.ownedSizeBytes,
+        modifiedAtMillis = item.ownedModifiedAtMillis,
+        uri = Uri.parse(item.ownedUri)
+    )
+}
+
+@Composable
+private fun FormatBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                color = BloodWine.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(6.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = TarnishedGold,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+private fun formatSummary(formats: List<DeviceBookFormat>): String {
+    return formats
+        .ifEmpty { listOf(DeviceBookFormat.Unsupported) }
+        .joinToString(" + ") { format ->
+            when (format) {
+                DeviceBookFormat.Pdf -> "PDF"
+                DeviceBookFormat.Epub -> "EPUB"
+                DeviceBookFormat.Txt -> "TXT"
+                DeviceBookFormat.Fb2 -> "FB2"
+                DeviceBookFormat.Mobi -> "MOBI"
+                DeviceBookFormat.Azw -> "AZW"
+                DeviceBookFormat.Azw3 -> "AZW3"
+                DeviceBookFormat.Cbz -> "CBZ"
+                DeviceBookFormat.Unsupported -> "Archivo"
+            }
+        }
+}
+
+private fun formatSortKey(formats: List<DeviceBookFormat>): String {
+    return formats
+        .ifEmpty { listOf(DeviceBookFormat.Unsupported) }
+        .minBy { formatSortOrder(it) }
+        .let { "${formatSortOrder(it).toString().padStart(2, '0')}_${formatSummary(listOf(it))}" }
+}
+
+private fun formatSortOrder(format: DeviceBookFormat): Int {
+    return when (format) {
+        DeviceBookFormat.Epub -> 0
+        DeviceBookFormat.Pdf -> 1
+        DeviceBookFormat.Txt -> 2
+        DeviceBookFormat.Fb2 -> 3
+        DeviceBookFormat.Mobi -> 4
+        DeviceBookFormat.Azw -> 5
+        DeviceBookFormat.Azw3 -> 6
+        DeviceBookFormat.Cbz -> 7
+        DeviceBookFormat.Unsupported -> 99
+    }
+}
+
+@Composable
+private fun sortOptionLabel(
+    sortOption: ListDetailSortOption,
+    isReadList: Boolean
+): String {
+    return when {
+        sortOption == ListDetailSortOption.FORMAT -> stringResource(R.string.sort_option_format)
+        !isReadList && sortOption == ListDetailSortOption.AUTHOR -> stringResource(R.string.sort_option_author)
+        !isReadList -> stringResource(R.string.sort_option_title)
+        sortOption == ListDetailSortOption.READ_DATE -> stringResource(R.string.sort_option_read_date)
+        sortOption == ListDetailSortOption.RATING -> stringResource(R.string.sort_option_rating)
+        else -> stringResource(R.string.sort_option_title)
     }
 }
 
@@ -829,6 +1110,7 @@ private fun ListBookCard(
     item: UserListDetailBookItem,
     isReadList: Boolean,
     isPendingList: Boolean,
+    isOwnedList: Boolean,
     isPendingEditMode: Boolean,
     isDragging: Boolean,
     draggingOffset: Float,
@@ -859,14 +1141,23 @@ private fun ListBookCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BookCover(
-                    imageUrl = libro.imagen,
-                    title = libro.titulo,
-                    showFrame = false,
-                    modifier = Modifier
-                        .width(if (isPendingEditMode) 48.dp else 62.dp)
-                        .height(if (isPendingEditMode) 72.dp else 92.dp)
-                )
+                if (isOwnedList && item.ownedUri.isNotBlank()) {
+                    OwnedBookCover(
+                        item = item,
+                        modifier = Modifier
+                            .width(if (isPendingEditMode) 48.dp else 62.dp)
+                            .height(if (isPendingEditMode) 72.dp else 92.dp)
+                    )
+                } else {
+                    BookCover(
+                        imageUrl = libro.imagen,
+                        title = libro.titulo,
+                        showFrame = false,
+                        modifier = Modifier
+                            .width(if (isPendingEditMode) 48.dp else 62.dp)
+                            .height(if (isPendingEditMode) 72.dp else 92.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(if (isPendingEditMode) 10.dp else 14.dp))
 
@@ -887,6 +1178,12 @@ private fun ListBookCard(
                             style = MaterialTheme.typography.bodyMedium,
                             color = OldIvory
                         )
+                    }
+
+                    if (isOwnedList) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // En "Tengo" el formato sustituye a las acciones de estanteria.
+                        FormatBadge(text = formatSummary(item.ownedFormats))
                     }
 
                     if (!isPendingEditMode && libro.genero.isNotBlank()) {
@@ -943,7 +1240,7 @@ private fun ListBookCard(
                 }
             }
 
-            if (!isPendingEditMode) {
+            if (!isPendingEditMode && !isOwnedList) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 BookShelfActions(

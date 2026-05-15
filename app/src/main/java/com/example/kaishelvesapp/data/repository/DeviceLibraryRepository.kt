@@ -51,6 +51,10 @@ class DeviceLibraryRepository(
         return readBookRecords().firstOrNull { it.id == id }
     }
 
+    fun getBookRecords(): List<DeviceLibraryBookRecord> {
+        return readBookRecords()
+    }
+
     fun upsertBookRecord(file: DeviceLibraryFile) {
         val id = deviceBookId(file.uri.toString())
         val records = readBookRecords().filterNot { it.id == id }.toMutableList()
@@ -158,6 +162,10 @@ class DeviceLibraryRepository(
             name.endsWith(".epub") || mime == "application/epub+zip" -> DeviceBookFormat.Epub
             name.endsWith(".txt") || mime.startsWith("text/") -> DeviceBookFormat.Txt
             name.endsWith(".fb2") -> DeviceBookFormat.Fb2
+            name.endsWith(".mobi") -> DeviceBookFormat.Mobi
+            name.endsWith(".azw") -> DeviceBookFormat.Azw
+            name.endsWith(".azw3") -> DeviceBookFormat.Azw3
+            name.endsWith(".cbz") -> DeviceBookFormat.Cbz
             else -> DeviceBookFormat.Unsupported
         }
     }

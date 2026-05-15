@@ -1,8 +1,11 @@
 package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.local.GuestLibraryState
+import com.example.kaishelvesapp.data.local.AppContextProvider
 import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.model.OwnedDeviceBook
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.UserBookTagSummary
@@ -30,12 +33,14 @@ class UserListsRepository(
         const val SYSTEM_LIST_READ_ID = "system_read"
         const val SYSTEM_LIST_UNFINISHED_ID = "system_unfinished"
         const val SYSTEM_LIST_PENDING_ID = "system_pending"
+        const val SYSTEM_LIST_OWNED_ID = "system_owned"
 
         const val SYSTEM_LIST_WANT_TO_READ_KEY = "want_to_read"
         const val SYSTEM_LIST_READING_KEY = "reading"
         const val SYSTEM_LIST_READ_KEY = "read"
         const val SYSTEM_LIST_UNFINISHED_KEY = "unfinished"
         const val SYSTEM_LIST_PENDING_KEY = "pending"
+        const val SYSTEM_LIST_OWNED_KEY = "owned"
 
         private var cachedListsOwnerId: String? = null
         private var cachedUserLists: List<UserBookList>? = null
@@ -49,7 +54,8 @@ class UserListsRepository(
         SYSTEM_LIST_READING_ID,
         SYSTEM_LIST_READ_ID,
         SYSTEM_LIST_UNFINISHED_ID,
-        SYSTEM_LIST_PENDING_ID
+        SYSTEM_LIST_PENDING_ID,
+        SYSTEM_LIST_OWNED_ID
     )
 
     private val systemListPriority = listOf(
@@ -59,6 +65,8 @@ class UserListsRepository(
         SYSTEM_LIST_UNFINISHED_ID,
         SYSTEM_LIST_WANT_TO_READ_ID
     )
+
+    private val assignableListIds = systemListIds - SYSTEM_LIST_OWNED_ID
 
     private fun requireUid(): String {
         return auth.currentUser?.uid
@@ -107,9 +115,61 @@ class UserListsRepository(
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 
+    private fun deviceLibraryRepository(): DeviceLibraryRepository {
+        return DeviceLibraryRepository(AppContextProvider.requireContext())
+    }
+
+    private fun ownedDeviceBooks(): List<OwnedDeviceBook> {
+        val records = deviceLibraryRepository().getBookRecords()
+        return records
+            // Agrupa el mismo libro local cuando existe en varios formatos dentro de la biblioteca.
+            .groupBy { record ->
+                "${record.title.ifBlank { record.name.substringBeforeLast('.') }.trim().lowercase()}|" +
+                    record.author.trim().lowercase()
+            }
+            .values
+            .map { group ->
+                val first = group.minBy { it.importedAtMillis }
+                val title = first.title.ifBlank { first.name.substringBeforeLast('.') }
+                val formats = group.map { it.format }.distinct().sortedBy { it.name }
+                OwnedDeviceBook(
+                    book = Libro(
+                        id = first.id,
+                        titulo = title,
+                        autor = first.author,
+                        pdf = first.uri
+                    ),
+                    formats = formats,
+                    uri = first.uri,
+                    name = first.name,
+                    location = first.location,
+                    mimeType = first.mimeType,
+                    sizeBytes = first.sizeBytes,
+                    modifiedAtMillis = first.modifiedAtMillis
+                )
+            }
+            .sortedBy { it.book.titulo.lowercase() }
+    }
+
+    private fun ownedSystemList(): UserBookList {
+        val books = ownedDeviceBooks()
+        return UserBookList(
+            id = SYSTEM_LIST_OWNED_ID,
+            name = "Tengo",
+            description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
+            bookCount = books.size,
+            position = 5,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_OWNED_KEY
+        )
+    }
+
     private fun localGuestLists(state: GuestLibraryState): List<UserBookList> {
         return state.lists
             .map { list ->
+                if (list.id == SYSTEM_LIST_OWNED_ID) {
+                    return@map ownedSystemList()
+                }
                 val books = state.listBooks[list.id].orEmpty()
                 list.copy(
                     bookCount = books.size,
@@ -150,7 +210,7 @@ class UserListsRepository(
         state: GuestLibraryState,
         selectedListIds: Set<String>
     ): Set<String> {
-        val candidateIds = selectedListIds.toList()
+        val candidateIds = selectedListIds.filter { it in assignableListIds }
         if (candidateIds.isEmpty()) return emptySet()
 
         val selectedSystemId = systemListPriority.firstOrNull { candidateIds.contains(it) }
@@ -245,7 +305,7 @@ class UserListsRepository(
         uid: String,
         selectedListIds: Set<String>
     ): Set<String> {
-        val candidateIds = selectedListIds.toList()
+        val candidateIds = selectedListIds.filter { it in assignableListIds || !systemListIds.contains(it) }
         if (candidateIds.isEmpty()) return emptySet()
 
         val selectedSystemId = systemListPriority.firstOrNull { candidateIds.contains(it) }
@@ -278,7 +338,7 @@ class UserListsRepository(
 
         allListsSnapshot.documents.forEach { document ->
             val listId = document.id
-            if (keepListIds.contains(listId)) return@forEach
+            if (listId == SYSTEM_LIST_OWNED_ID || keepListIds.contains(listId)) return@forEach
 
             val bookRef = document.reference.collection("libros").document(safeBookId)
             if (bookRef.get().await().exists()) {
@@ -359,6 +419,14 @@ class UserListsRepository(
             position = 4,
             isSystem = true,
             systemKey = SYSTEM_LIST_UNFINISHED_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_OWNED_ID,
+            name = "Tengo",
+            description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
+            position = 5,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_OWNED_KEY
         )
     )
 
@@ -428,6 +496,9 @@ class UserListsRepository(
             val lists = snapshot.documents
                 .mapNotNull { document ->
                     val storedList = document.toObject(UserBookList::class.java) ?: return@mapNotNull null
+                    if (document.id == SYSTEM_LIST_OWNED_ID) {
+                        return@mapNotNull ownedSystemList()
+                    }
                     val previewSnapshot = document.reference
                         .collection("libros")
                         .limit(3)
@@ -458,6 +529,10 @@ class UserListsRepository(
 
     suspend fun getListById(listId: String): Result<UserBookList?> {
         return try {
+            if (listId == SYSTEM_LIST_OWNED_ID) {
+                return Result.success(ownedSystemList())
+            }
+
             if (isGuestSessionActive()) {
                 val state = GuestLocalStore.readState()
                 return Result.success(localGuestLists(state).firstOrNull { it.id == listId })
@@ -481,6 +556,10 @@ class UserListsRepository(
 
     suspend fun getBooksInList(listId: String): Result<List<Libro>> {
         return try {
+            if (listId == SYSTEM_LIST_OWNED_ID) {
+                return Result.success(ownedDeviceBooks().map { it.book })
+            }
+
             if (isGuestSessionActive()) {
                 val storedBooks = GuestLocalStore.readState()
                     .listBooks[listId]
@@ -567,6 +646,7 @@ class UserListsRepository(
                 .await()
 
             val selectedIds = snapshot.documents.mapNotNull { document ->
+                if (document.id == SYSTEM_LIST_OWNED_ID) return@mapNotNull null
                 val exists = document.reference
                     .collection("libros")
                     .document(safeBookId)
@@ -612,6 +692,15 @@ class UserListsRepository(
             cachedTagsOwnerId = uid
             cachedUserTags = tags
             Result.success(tags)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getOwnedDeviceBooks(): Result<List<OwnedDeviceBook>> {
+        return try {
+            // "Tengo" se calcula al vuelo para no duplicar archivos locales en Firestore ni en listas manuales.
+            Result.success(ownedDeviceBooks())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -915,6 +1004,7 @@ class UserListsRepository(
                 .await()
 
             val currentSelectedIds = allListsSnapshot.documents.mapNotNull { document ->
+                if (document.id == SYSTEM_LIST_OWNED_ID) return@mapNotNull null
                 val exists = document.reference
                     .collection("libros")
                     .document(safeBookId)
@@ -1479,6 +1569,48 @@ class UserListsRepository(
                     position = nextPosition
                 )
             ).await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteTag(tagId: String): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                GuestLocalStore.updateState { currentState ->
+                    currentState.copy(
+                        tags = currentState.tags.filterNot { it.id == tagId },
+                        bookTagIds = currentState.bookTagIds.mapValues { (_, tagIds) ->
+                            tagIds.filterNot { it == tagId }
+                        }.filterValues { it.isNotEmpty() }
+                    )
+                }
+                return Result.success(Unit)
+            }
+
+            val uid = requireUid()
+            val metadataSnapshot = userBookMetadataCollection(uid).get().await()
+            val batch = firestore.batch()
+
+            // Limpia referencias para que la etiqueta borrada no quede asociada a ningun libro.
+            metadataSnapshot.documents.forEach { document ->
+                val tagIds = (document.get("tagIds") as? List<*>)
+                    .orEmpty()
+                    .filterIsInstance<String>()
+                if (tagId in tagIds) {
+                    batch.set(
+                        document.reference,
+                        mapOf("tagIds" to tagIds.filterNot { it == tagId }),
+                        SetOptions.merge()
+                    )
+                }
+            }
+
+            batch.delete(userTagsCollection(uid).document(tagId))
+            batch.commit().await()
+            cachedUserTags = cachedUserTags?.filterNot { it.id == tagId }
 
             Result.success(Unit)
         } catch (e: Exception) {

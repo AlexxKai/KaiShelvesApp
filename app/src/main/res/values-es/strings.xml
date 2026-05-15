@@ -313,6 +313,7 @@
     <string name="sort_action">Cambiar orden</string>
     <string name="sort_option_title">Título</string>
     <string name="sort_option_author">Autor</string>
+    <string name="sort_option_format">Formato</string>
     <string name="sort_option_rating">Tu valoración</string>
     <string name="sort_option_read_date">Fecha de lectura</string>
     <string name="cover_view">Vista de portadas</string>
@@ -352,12 +353,14 @@
     <string name="create">Crear</string>
     <string name="tag">Etiqueta</string>
     <string name="shelf">Estantería</string>
-    <string name="single_shelf_note">Un libro no puede estar en dos estanterías distintas al mismo tiempo. Las estanterías predeterminadas son Quiero leer, Leyendo, Leído, Pendientes y No terminado.</string>
+    <string name="single_shelf_note">Un libro no puede estar en dos estanterías distintas al mismo tiempo. Las estanterías predeterminadas son Quiero leer, Leyendo, Leído, Pendientes, No terminado y Tengo; Tengo se rellena automáticamente desde la biblioteca del dispositivo.</string>
     <string name="tag_create_note">Añade todas las etiquetas que quieras. Prueba a crear una etiqueta, como, por ejemplo, realismo mágico, autores africanos o protagonistas femeninas.</string>
     <string name="shelf_name_hint">Nombre de la estantería</string>
     <string name="tag_name_hint">Nombre de la etiqueta</string>
     <string name="tag_created">Etiqueta creada</string>
     <string name="tag_create_error">No se pudo crear la etiqueta</string>
+    <string name="tag_deleted">Etiqueta eliminada</string>
+    <string name="tag_delete_error">No se pudo eliminar la etiqueta</string>
     <string name="write_a_review">Escribe una reseña</string>
     <string name="rate_it">Califícalo</string>
     <string name="write_review_optional">Escribe una reseña (opcional)</string>
@@ -381,6 +384,8 @@
     <string name="lists_intro_title">Mis libros</string>
     <string name="lists_intro_body">Siempre verás arriba Quiero leer, Leyendo y Leído, junto a las listas personalizadas que crees.</string>
     <string name="all_lists_title">Todas las listas</string>
+    <string name="system_lists_title">Listas pregeneradas</string>
+    <string name="custom_lists_title">Listas personalizadas</string>
     <string name="tags_title">Etiquetas</string>
     <string name="view_all">Ver todos</string>
     <string name="create_new_list">Crear nueva lista</string>
@@ -392,6 +397,14 @@
     <string name="list_description">Descripción</string>
     <string name="list_books_count">%1$d libros</string>
     <string name="delete_list_confirmation">¿Quieres eliminar \"%1$s\" de tus listas?</string>
+    <string name="delete_tag">Eliminar etiqueta</string>
+    <string name="delete_tag_confirmation">¿Quieres eliminar la etiqueta \"%1$s\"?</string>
+    <string name="owned_book_details">Detalle del libro</string>
+    <string name="read_owned_book">Leer</string>
+    <string name="owned_book_author_unknown">Autor desconocido</string>
+    <string name="reading_status_unread">Sin leer</string>
+    <string name="reading_status_reading">Leyendo</string>
+    <string name="reading_status_finished">Finalizado</string>
     <string name="empty_lists_title">Todavía no tienes listas</string>
     <string name="empty_lists_body">Crea tu primera lista para organizar tu biblioteca a tu manera.</string>
     <string name="list_created">Lista creada</string>

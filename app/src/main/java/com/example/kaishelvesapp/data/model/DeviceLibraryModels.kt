@@ -5,6 +5,10 @@ enum class DeviceBookFormat {
     Epub,
     Txt,
     Fb2,
+    Mobi,
+    Azw,
+    Azw3,
+    Cbz,
     Unsupported
 }
 
@@ -34,6 +38,17 @@ data class DeviceLibraryBookRecord(
     val modifiedAtMillis: Long? = null,
     val importedAtMillis: Long = 0L,
     val updatedAtMillis: Long = 0L
+)
+
+data class OwnedDeviceBook(
+    val book: Libro = Libro(),
+    val formats: List<DeviceBookFormat> = emptyList(),
+    val uri: String = "",
+    val name: String = "",
+    val location: String = "",
+    val mimeType: String = "",
+    val sizeBytes: Long? = null,
+    val modifiedAtMillis: Long? = null
 )
 
 data class DeviceReaderProgress(

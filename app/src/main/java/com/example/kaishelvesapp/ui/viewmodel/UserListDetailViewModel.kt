@@ -3,6 +3,7 @@ package com.example.kaishelvesapp.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.repository.BookRepository
 import com.example.kaishelvesapp.data.model.UserBookList
@@ -15,7 +16,14 @@ import kotlinx.coroutines.launch
 data class UserListDetailBookItem(
     val book: Libro,
     val rating: Int? = null,
-    val readDate: String? = null
+    val readDate: String? = null,
+    val ownedFormats: List<DeviceBookFormat> = emptyList(),
+    val ownedUri: String = "",
+    val ownedFileName: String = "",
+    val ownedLocation: String = "",
+    val ownedMimeType: String = "",
+    val ownedSizeBytes: Long? = null,
+    val ownedModifiedAtMillis: Long? = null
 )
 
 data class UserListDetailUiState(
@@ -75,44 +83,72 @@ class UserListDetailViewModel(
             }
 
             val listResult = repository.getListById(listId)
+            val ownedBooksResult = if (listId == UserListsRepository.SYSTEM_LIST_OWNED_ID) {
+                // La lista "Tengo" usa los registros locales de Biblioteca y conserva sus formatos.
+                repository.getOwnedDeviceBooks()
+            } else {
+                Result.success(emptyList())
+            }
             val readBooksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
                 bookRepository.obtenerListaLecturas()
             } else {
                 Result.success(emptyList())
             }
-            val booksResult = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
+            val booksResult = if (
+                listId == UserListsRepository.SYSTEM_LIST_READ_ID ||
+                listId == UserListsRepository.SYSTEM_LIST_OWNED_ID
+            ) {
                 Result.success(emptyList())
             } else {
                 repository.getBooksInList(listId)
             }
 
-            if (listResult.isSuccess && booksResult.isSuccess && readBooksResult.isSuccess) {
-                val items = if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
-                    readBooksResult.getOrDefault(emptyList()).map { readBook ->
-                        UserListDetailBookItem(
-                            book = Libro(
-                                id = readBook.id.ifBlank { readBook.isbn },
-                                isbn = readBook.isbn,
-                                titulo = readBook.titulo,
-                                autor = readBook.autor,
-                                editorial = readBook.editorial,
-                                genero = readBook.genero,
-                                fechaPublicacion = readBook.fechaPublicacion,
-                                paginas = readBook.paginas,
-                                imagen = readBook.imagen,
-                                pdf = readBook.pdf
-                            ),
-                            rating = readBook.puntuacion,
-                            readDate = readBook.fechaLeido
-                        )
+            if (listResult.isSuccess && booksResult.isSuccess && readBooksResult.isSuccess && ownedBooksResult.isSuccess) {
+                val items = when (listId) {
+                    UserListsRepository.SYSTEM_LIST_READ_ID -> {
+                        readBooksResult.getOrDefault(emptyList()).map { readBook ->
+                            UserListDetailBookItem(
+                                book = Libro(
+                                    id = readBook.id.ifBlank { readBook.isbn },
+                                    isbn = readBook.isbn,
+                                    titulo = readBook.titulo,
+                                    autor = readBook.autor,
+                                    editorial = readBook.editorial,
+                                    genero = readBook.genero,
+                                    fechaPublicacion = readBook.fechaPublicacion,
+                                    paginas = readBook.paginas,
+                                    imagen = readBook.imagen,
+                                    pdf = readBook.pdf
+                                ),
+                                rating = readBook.puntuacion,
+                                readDate = readBook.fechaLeido
+                            )
+                        }
                     }
-                } else {
-                    booksResult.getOrDefault(emptyList()).map { book ->
-                        UserListDetailBookItem(
-                            book = book,
-                            rating = null,
-                            readDate = null
-                        )
+
+                    UserListsRepository.SYSTEM_LIST_OWNED_ID -> {
+                        ownedBooksResult.getOrDefault(emptyList()).map { ownedBook ->
+                            UserListDetailBookItem(
+                                book = ownedBook.book,
+                                ownedFormats = ownedBook.formats,
+                                ownedUri = ownedBook.uri,
+                                ownedFileName = ownedBook.name,
+                                ownedLocation = ownedBook.location,
+                                ownedMimeType = ownedBook.mimeType,
+                                ownedSizeBytes = ownedBook.sizeBytes,
+                                ownedModifiedAtMillis = ownedBook.modifiedAtMillis
+                            )
+                        }
+                    }
+
+                    else -> {
+                        booksResult.getOrDefault(emptyList()).map { book ->
+                            UserListDetailBookItem(
+                                book = book,
+                                rating = null,
+                                readDate = null
+                            )
+                        }
                     }
                 }
                 _uiState.value = _uiState.value.copy(

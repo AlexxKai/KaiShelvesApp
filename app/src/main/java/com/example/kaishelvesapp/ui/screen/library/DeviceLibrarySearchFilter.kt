@@ -421,9 +421,11 @@ fun DeviceLibraryFilterOverlay(
     sortOption: DeviceLibrarySortOption,
     sortDescending: Boolean,
     selectedFileTypes: Set<DeviceLibraryFileTypeFilter>,
+    selectedReadingStatuses: Set<DeviceLibraryReadingStatus>,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
     onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
     onToggleSortDirection: () -> Unit,
+    onReadingStatusesChange: (Set<DeviceLibraryReadingStatus>) -> Unit,
     onFileTypesChange: (Set<DeviceLibraryFileTypeFilter>) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -439,9 +441,11 @@ fun DeviceLibraryFilterOverlay(
             sortOption = sortOption,
             sortDescending = sortDescending,
             selectedFileTypes = selectedFileTypes,
+            selectedReadingStatuses = selectedReadingStatuses,
             onLayoutModeChange = onLayoutModeChange,
             onSortOptionChange = onSortOptionChange,
             onToggleSortDirection = onToggleSortDirection,
+            onReadingStatusesChange = onReadingStatusesChange,
             onFileTypesChange = onFileTypesChange,
             modifier = Modifier
                 .fillMaxWidth()
@@ -458,9 +462,11 @@ fun DeviceLibraryFilterPanel(
     sortOption: DeviceLibrarySortOption,
     sortDescending: Boolean,
     selectedFileTypes: Set<DeviceLibraryFileTypeFilter>,
+    selectedReadingStatuses: Set<DeviceLibraryReadingStatus>,
     onLayoutModeChange: (DeviceLibraryLayoutMode) -> Unit,
     onSortOptionChange: (DeviceLibrarySortOption) -> Unit,
     onToggleSortDirection: () -> Unit,
+    onReadingStatusesChange: (Set<DeviceLibraryReadingStatus>) -> Unit,
     onFileTypesChange: (Set<DeviceLibraryFileTypeFilter>) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -553,9 +559,24 @@ fun DeviceLibraryFilterPanel(
                         )
                         Icon(Icons.Filled.Settings, contentDescription = null, tint = TarnishedGold, modifier = Modifier.size(18.dp))
                     }
-                    FilterOptionRow("Sin leer", selected = false, radio = false)
-                    FilterOptionRow("Leyendo", selected = true, radio = false)
-                    FilterOptionRow("Finalizado", selected = false, radio = false)
+                    ReadingStatusFilterOption(
+                        label = "Sin leer",
+                        status = DeviceLibraryReadingStatus.Unread,
+                        selectedReadingStatuses = selectedReadingStatuses,
+                        onReadingStatusesChange = onReadingStatusesChange
+                    )
+                    ReadingStatusFilterOption(
+                        label = "Leyendo",
+                        status = DeviceLibraryReadingStatus.Reading,
+                        selectedReadingStatuses = selectedReadingStatuses,
+                        onReadingStatusesChange = onReadingStatusesChange
+                    )
+                    ReadingStatusFilterOption(
+                        label = "Finalizado",
+                        status = DeviceLibraryReadingStatus.Finished,
+                        selectedReadingStatuses = selectedReadingStatuses,
+                        onReadingStatusesChange = onReadingStatusesChange
+                    )
                 }
             }
 
@@ -703,6 +724,28 @@ fun FileTypeOption(
             overflow = TextOverflow.Ellipsis
         )
     }
+}
+
+@Composable
+fun ReadingStatusFilterOption(
+    label: String,
+    status: DeviceLibraryReadingStatus,
+    selectedReadingStatuses: Set<DeviceLibraryReadingStatus>,
+    onReadingStatusesChange: (Set<DeviceLibraryReadingStatus>) -> Unit
+) {
+    FilterOptionRow(
+        label = label,
+        selected = status in selectedReadingStatuses,
+        radio = false,
+        onClick = {
+            val updatedStatuses = if (status in selectedReadingStatuses) {
+                selectedReadingStatuses - status
+            } else {
+                selectedReadingStatuses + status
+            }
+            onReadingStatusesChange(updatedStatuses)
+        }
+    )
 }
 
 @Composable

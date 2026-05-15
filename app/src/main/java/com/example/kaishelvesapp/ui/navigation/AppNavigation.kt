@@ -173,6 +173,7 @@ fun AppNavigation(
     var pendingOfflineRoute by remember { mutableStateOf<String?>(null) }
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
     var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
+    var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
 
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
@@ -616,6 +617,10 @@ fun AppNavigation(
                 onBookClick = { libro ->
                     catalogViewModel.selectBook(libro)
                     navController.navigate(Routes.DETAIL)
+                },
+                onReadOwnedBook = { item ->
+                    pendingDeviceLibraryBookUri = item.ownedUri
+                    navigateRoute(Routes.LIBRARY)
                 }
             )
         }
@@ -657,7 +662,9 @@ fun AppNavigation(
                 onLogout = ::logoutToLogin,
                 pendingRequestCount = friendRequestsState.pendingCount,
                 onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
-                onSectionSelected = { navigateSection(it) }
+                onSectionSelected = { navigateSection(it) },
+                openBookUri = pendingDeviceLibraryBookUri,
+                onOpenBookUriConsumed = { pendingDeviceLibraryBookUri = null }
             )
         }
 

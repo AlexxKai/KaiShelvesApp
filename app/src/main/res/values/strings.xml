@@ -313,6 +313,7 @@
     <string name="sort_action">Change sorting</string>
     <string name="sort_option_title">Title</string>
     <string name="sort_option_author">Author</string>
+    <string name="sort_option_format">Format</string>
     <string name="sort_option_rating">Your rating</string>
     <string name="sort_option_read_date">Read date</string>
     <string name="cover_view">Cover view</string>
@@ -352,12 +353,14 @@
     <string name="create">Create</string>
     <string name="tag">Tag</string>
     <string name="shelf">Shelf</string>
-    <string name="single_shelf_note">A book cannot belong to two different shelves at the same time. The predefined shelves are Want to read, Reading, Read, Pending and Unfinished.</string>
+    <string name="single_shelf_note">A book cannot belong to two different shelves at the same time. The predefined shelves are Want to read, Reading, Read, Pending, Unfinished and Owned; Owned is filled automatically from the device library.</string>
     <string name="tag_create_note">Add all the tags you want. Try creating a tag such as magical realism, African authors or female protagonists.</string>
     <string name="shelf_name_hint">Shelf name</string>
     <string name="tag_name_hint">Tag name</string>
     <string name="tag_created">Tag created</string>
     <string name="tag_create_error">Could not create the tag</string>
+    <string name="tag_deleted">Tag deleted</string>
+    <string name="tag_delete_error">Could not delete the tag</string>
     <string name="write_a_review">Write a review</string>
     <string name="rate_it">Rate it</string>
     <string name="write_review_optional">Write a review (optional)</string>
@@ -381,6 +384,8 @@
     <string name="lists_intro_title">My books</string>
     <string name="lists_intro_body">You will always have Want to read, Reading and Read at the top, plus any custom lists you create.</string>
     <string name="all_lists_title">All lists</string>
+    <string name="system_lists_title">Predefined lists</string>
+    <string name="custom_lists_title">Custom lists</string>
     <string name="tags_title">Tags</string>
     <string name="view_all">View all</string>
     <string name="create_new_list">Create new list</string>
@@ -392,6 +397,14 @@
     <string name="list_description">Description</string>
     <string name="list_books_count">%1$d books</string>
     <string name="delete_list_confirmation">Do you want to remove \"%1$s\" from your lists?</string>
+    <string name="delete_tag">Delete tag</string>
+    <string name="delete_tag_confirmation">Do you want to delete the tag \"%1$s\"?</string>
+    <string name="owned_book_details">Book details</string>
+    <string name="read_owned_book">Read</string>
+    <string name="owned_book_author_unknown">Unknown author</string>
+    <string name="reading_status_unread">Unread</string>
+    <string name="reading_status_reading">Reading</string>
+    <string name="reading_status_finished">Finished</string>
     <string name="empty_lists_title">No lists yet</string>
     <string name="empty_lists_body">Create your first list to start organizing your library your way.</string>
     <string name="list_created">List created</string>

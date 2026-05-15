@@ -45,10 +45,10 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -125,20 +125,42 @@ fun UserListsScreen(
     val listState = rememberLazyListState()
     var editingList by remember { mutableStateOf<UserBookList?>(null) }
     var deletingList by remember { mutableStateOf<UserBookList?>(null) }
+    var deletingTag by remember { mutableStateOf<UserBookTagSummary?>(null) }
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
     var showAllCollections by rememberSaveable { mutableStateOf(false) }
     val displayedCustomLists = remember { mutableStateListOf<UserBookList>() }
     var draggingItemId by remember { mutableStateOf<String?>(null) }
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
     var autoScrollDelta by remember { mutableFloatStateOf(0f) }
-    fun isProtectedSystemList(list: UserBookList) = list.isSystem || list.id in setOf(
+    val protectedSystemListIds = setOf(
         UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID,
         UserListsRepository.SYSTEM_LIST_READING_ID,
         UserListsRepository.SYSTEM_LIST_READ_ID,
         UserListsRepository.SYSTEM_LIST_PENDING_ID,
-        UserListsRepository.SYSTEM_LIST_UNFINISHED_ID
+        UserListsRepository.SYSTEM_LIST_UNFINISHED_ID,
+        UserListsRepository.SYSTEM_LIST_OWNED_ID
     )
-    val systemLists = uiState.lists.filter(::isProtectedSystemList)
+    val protectedSystemListKeys = setOf(
+        UserListsRepository.SYSTEM_LIST_WANT_TO_READ_KEY,
+        UserListsRepository.SYSTEM_LIST_READING_KEY,
+        UserListsRepository.SYSTEM_LIST_READ_KEY,
+        UserListsRepository.SYSTEM_LIST_PENDING_KEY,
+        UserListsRepository.SYSTEM_LIST_UNFINISHED_KEY,
+        UserListsRepository.SYSTEM_LIST_OWNED_KEY
+    )
+    fun isProtectedSystemList(list: UserBookList) =
+        list.id in protectedSystemListIds || list.systemKey in protectedSystemListKeys
+    val systemListOrder = listOf(
+        UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID,
+        UserListsRepository.SYSTEM_LIST_READING_ID,
+        UserListsRepository.SYSTEM_LIST_READ_ID,
+        UserListsRepository.SYSTEM_LIST_PENDING_ID,
+        UserListsRepository.SYSTEM_LIST_UNFINISHED_ID,
+        UserListsRepository.SYSTEM_LIST_OWNED_ID
+    )
+    val systemLists = uiState.lists
+        .filter(::isProtectedSystemList)
+        .sortedBy { list -> systemListOrder.indexOf(list.id).takeIf { it >= 0 } ?: Int.MAX_VALUE }
     fun currentCustomOrder(lists: List<UserBookList>) = lists.map { it.id }
 
     LaunchedEffect(Unit) {
@@ -246,6 +268,46 @@ fun UserListsScreen(
         )
     }
 
+    deletingTag?.let { tagSummary ->
+        AlertDialog(
+            onDismissRequest = { deletingTag = null },
+            title = {
+                Text(
+                    text = stringResource(R.string.delete_tag),
+                    color = TarnishedGold
+                )
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.delete_tag_confirmation, tagSummary.tag.name),
+                    color = OldIvory
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteTag(tagSummary.tag.id)
+                        deletingTag = null
+                    }
+                ) {
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = TarnishedGold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingTag = null }) {
+                    Text(
+                        text = stringResource(R.string.cancel),
+                        color = OldIvory
+                    )
+                }
+            },
+            containerColor = Obsidian
+        )
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -343,6 +405,10 @@ fun UserListsScreen(
                         )
                     }
 
+                    item {
+                        CollectionsSectionHeader(title = stringResource(R.string.system_lists_title))
+                    }
+
                     items(
                         items = systemLists,
                         key = { list -> list.id }
@@ -356,17 +422,90 @@ fun UserListsScreen(
                         )
                     }
 
-                    items(
+                    item {
+                        CollectionsSectionHeader(title = stringResource(R.string.custom_lists_title))
+                    }
+
+                    itemsIndexed(
                         items = displayedCustomLists,
-                        key = { list -> list.id }
-                    ) { list ->
-                        UserListCard(
+                        key = { _, list -> list.id }
+                    ) { index, list ->
+                        CustomUserListCard(
                             userList = list,
+                            isDragging = draggingItemId == list.id,
+                            draggingOffset = if (draggingItemId == list.id) draggingTranslationY else 0f,
                             onOpen = { onOpenList(list.id) },
                             onEdit = { editingList = list },
-                            isDragging = false,
-                            isEditable = true
+                            onDelete = { deletingList = list },
+                            dragHandleModifier = Modifier.pointerInput(list.id, displayedCustomLists.size) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggingItemId = list.id
+                                        draggingTranslationY = 0f
+                                        autoScrollDelta = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggingItemId = null
+                                        draggingTranslationY = 0f
+                                        autoScrollDelta = 0f
+                                        displayedCustomLists.clear()
+                                        displayedCustomLists.addAll(uiState.lists.filterNot(::isProtectedSystemList))
+                                    },
+                                    onDragEnd = {
+                                        draggingItemId = null
+                                        draggingTranslationY = 0f
+                                        autoScrollDelta = 0f
+                                        viewModel.updateListOrder(currentCustomOrder(displayedCustomLists))
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        draggingTranslationY += dragAmount.y
+                                        val currentIndex = displayedCustomLists.indexOfFirst { it.id == list.id }
+                                        if (currentIndex == -1) return@detectDragGesturesAfterLongPress
+
+                                        val lazyIndex = 1 + systemLists.size + currentIndex
+                                        val currentItem = listState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { it.index == lazyIndex }
+                                            ?: return@detectDragGesturesAfterLongPress
+                                        val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
+                                        val viewportStart = listState.layoutInfo.viewportStartOffset
+                                        val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                        val currentTop = currentItem.offset + draggingTranslationY
+                                        val currentBottom = currentItem.offset + currentItem.size + draggingTranslationY
+
+                                        autoScrollDelta = when {
+                                            currentBottom > viewportEnd - 96 -> 18f
+                                            currentTop < viewportStart + 96 -> -18f
+                                            else -> 0f
+                                        }
+
+                                        val firstCustomLazyIndex = 1 + systemLists.size
+                                        val targetItem = listState.layoutInfo.visibleItemsInfo
+                                            .firstOrNull { itemInfo ->
+                                                itemInfo.index >= firstCustomLazyIndex &&
+                                                    itemInfo.index < firstCustomLazyIndex + displayedCustomLists.size &&
+                                                    itemInfo.index != lazyIndex &&
+                                                    currentMidPoint >= itemInfo.offset &&
+                                                    currentMidPoint <= itemInfo.offset + itemInfo.size
+                                            }
+
+                                        if (targetItem != null) {
+                                            val targetIndex = (targetItem.index - firstCustomLazyIndex)
+                                                .coerceIn(0, displayedCustomLists.lastIndex)
+                                            val fromIndex = displayedCustomLists.indexOfFirst { it.id == list.id }
+                                            if (fromIndex != -1 && fromIndex != targetIndex) {
+                                                displayedCustomLists.move(fromIndex, targetIndex)
+                                                draggingTranslationY = 0f
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         )
+                    }
+
+                    item {
+                        CollectionsSectionHeader(title = stringResource(R.string.tags_title))
                     }
 
                     items(
@@ -375,7 +514,8 @@ fun UserListsScreen(
                     ) { tag ->
                         TagListCard(
                             tagSummary = tag,
-                            onOpen = { onOpenList(USER_TAG_DETAIL_PREFIX + tag.tag.id) }
+                            onOpen = { onOpenList(USER_TAG_DETAIL_PREFIX + tag.tag.id) },
+                            onDelete = { deletingTag = tag }
                         )
                     }
 
@@ -483,6 +623,19 @@ private fun ViewAllButton(
             fontWeight = FontWeight.SemiBold
         )
     }
+}
+
+@Composable
+private fun CollectionsSectionHeader(
+    title: String
+) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.titleSmall,
+        color = OldIvory.copy(alpha = 0.82f),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 4.dp)
+    )
 }
 
 @Composable
@@ -609,19 +762,107 @@ private fun CreateCollectionButton(
 @Composable
 private fun TagListCard(
     tagSummary: UserBookTagSummary,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    UserListCard(
-        userList = UserBookList(
-            id = USER_TAG_DETAIL_PREFIX + tagSummary.tag.id,
-            name = tagSummary.tag.name,
-            bookCount = tagSummary.bookCount,
-            previewImageUrls = tagSummary.previewImageUrls
-        ),
-        onOpen = onOpen,
-        onEdit = {},
-        isDragging = false,
-        isEditable = false
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+            }
+            false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BloodWine.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.delete_tag),
+                    tint = TarnishedGold
+                )
+            }
+        },
+        content = {
+            UserListCard(
+                userList = UserBookList(
+                    id = USER_TAG_DETAIL_PREFIX + tagSummary.tag.id,
+                    name = tagSummary.tag.name,
+                    bookCount = tagSummary.bookCount,
+                    previewImageUrls = tagSummary.previewImageUrls
+                ),
+                onOpen = onOpen,
+                onEdit = {},
+                isDragging = false,
+                isEditable = false
+            )
+        }
+    )
+}
+
+@Composable
+private fun CustomUserListCard(
+    userList: UserBookList,
+    isDragging: Boolean,
+    draggingOffset: Float,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    dragHandleModifier: Modifier
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                onDelete()
+                false
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(BloodWine.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.delete_list),
+                    tint = TarnishedGold
+                )
+            }
+        },
+        content = {
+            UserListCard(
+                userList = userList,
+                onOpen = onOpen,
+                onEdit = onEdit,
+                isDragging = isDragging,
+                isEditable = true,
+                dragHandleModifier = dragHandleModifier,
+                modifier = Modifier.graphicsLayer {
+                    translationY = draggingOffset
+                    scaleX = if (isDragging) 1.01f else 1f
+                    scaleY = if (isDragging) 1.01f else 1f
+                }
+            )
+        }
     )
 }
 

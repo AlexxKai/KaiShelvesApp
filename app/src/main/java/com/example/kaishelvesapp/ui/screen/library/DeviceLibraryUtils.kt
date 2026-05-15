@@ -166,6 +166,14 @@ fun readDeviceBookProgressPercent(
         .coerceIn(0, 100)
 }
 
+fun readingStatusForProgress(progress: Int): DeviceLibraryReadingStatus {
+    return when (progress.coerceIn(0, 100)) {
+        0 -> DeviceLibraryReadingStatus.Unread
+        100 -> DeviceLibraryReadingStatus.Finished
+        else -> DeviceLibraryReadingStatus.Reading
+    }
+}
+
 fun saveDeviceBookReadingProgress(
     context: Context,
     file: DeviceLibraryFile,
