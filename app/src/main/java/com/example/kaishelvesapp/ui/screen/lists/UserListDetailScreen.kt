@@ -498,13 +498,8 @@ fun UserListDetailScreen(
                             isPendingEditMode = isPendingEditMode,
                             isDragging = isDragging,
                             draggingOffset = if (isDragging) draggingTranslationY else 0f,
-                            onOpen = {
-                                if (isOwnedList) {
-                                    selectedOwnedItem = item
-                                } else {
-                                    onBookClick(item.book)
-                                }
-                            },
+                            onOpen = { onBookClick(item.book) },
+                            onReadOwnedBook = { onReadOwnedBook(item) },
                             onOrganizationChanged = { viewModel.loadListDetail(listId) },
                             dragHandleModifier = if (isPendingList && isPendingEditMode) {
                                 Modifier.pointerInput(bookId, visibleBooks.size) {
@@ -1027,6 +1022,28 @@ private fun ownedDeviceLibraryFile(item: UserListDetailBookItem): DeviceLibraryF
 }
 
 @Composable
+private fun OwnedReadingStatusText(
+    item: UserListDetailBookItem,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val file = remember(item.ownedUri) { ownedDeviceLibraryFile(item) }
+    val progress = remember(item.ownedUri) { readDeviceBookProgressPercent(context, file) }
+    val statusText = when (readingStatusForProgress(progress)) {
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Unread -> stringResource(R.string.reading_status_unread)
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Reading -> stringResource(R.string.reading_status_reading)
+        com.example.kaishelvesapp.ui.screen.library.DeviceLibraryReadingStatus.Finished -> stringResource(R.string.reading_status_finished)
+    }
+
+    Text(
+        text = statusText,
+        modifier = modifier,
+        style = MaterialTheme.typography.bodySmall,
+        color = OldIvory.copy(alpha = 0.88f)
+    )
+}
+
+@Composable
 private fun FormatBadge(
     text: String,
     modifier: Modifier = Modifier
@@ -1115,6 +1132,7 @@ private fun ListBookCard(
     isDragging: Boolean,
     draggingOffset: Float,
     onOpen: () -> Unit,
+    onReadOwnedBook: () -> Unit = {},
     onOrganizationChanged: () -> Unit,
     dragHandleModifier: Modifier = Modifier
 ) {
@@ -1127,7 +1145,7 @@ private fun ListBookCard(
                 scaleX = if (isDragging) 1.01f else 1f
                 scaleY = if (isDragging) 1.01f else 1f
             }
-            .clickable(enabled = !isPendingEditMode) { onOpen() },
+            .clickable(enabled = !isPendingEditMode && !isOwnedList) { onOpen() },
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Obsidian),
         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.8f))
@@ -1184,6 +1202,9 @@ private fun ListBookCard(
                         Spacer(modifier = Modifier.height(6.dp))
                         // En "Tengo" el formato sustituye a las acciones de estanteria.
                         FormatBadge(text = formatSummary(item.ownedFormats))
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OwnedReadingStatusText(item = item)
                     }
 
                     if (!isPendingEditMode && libro.genero.isNotBlank()) {
@@ -1235,6 +1256,28 @@ private fun ListBookCard(
                             imageVector = Icons.Filled.DragIndicator,
                             contentDescription = stringResource(R.string.drag_to_reorder),
                             tint = OldIvory.copy(alpha = 0.75f)
+                        )
+                    }
+                } else if (isOwnedList) {
+                    OutlinedButton(
+                        onClick = onReadOwnedBook,
+                        modifier = Modifier.padding(start = 10.dp),
+                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = null,
+                            tint = TarnishedGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Text(
+                            text = stringResource(R.string.read_owned_book),
+                            color = TarnishedGold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }

@@ -229,12 +229,13 @@ fun DeviceLibraryScreen(
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    // Recupera todos los ajustes del panel de filtros para mantener la vista elegida entre sesiones.
     var layoutMode by remember { mutableStateOf(readDeviceLibraryLayoutMode(context)) }
-    var sortOption by remember { mutableStateOf(DeviceLibrarySortOption.Title) }
-    var sortDescending by remember { mutableStateOf(false) }
+    var sortOption by remember { mutableStateOf(readDeviceLibrarySortOption(context)) }
+    var sortDescending by remember { mutableStateOf(readDeviceLibrarySortDescending(context)) }
     var selectedFileTypes by remember { mutableStateOf(readDeviceLibraryFileTypeFilters(context)) }
     var selectedReadingStatuses by remember {
-        mutableStateOf(DeviceLibraryReadingStatus.entries.toSet())
+        mutableStateOf(readDeviceLibraryReadingStatuses(context))
     }
     var showSearchPanel by remember { mutableStateOf(false) }
     var showFilterPanel by remember { mutableStateOf(false) }
@@ -416,9 +417,19 @@ fun DeviceLibraryScreen(
                         layoutMode = it
                         saveDeviceLibraryLayoutMode(context, it)
                     },
-                    onSortOptionChange = { sortOption = it },
-                    onToggleSortDirection = { sortDescending = !sortDescending },
-                    onReadingStatusesChange = { selectedReadingStatuses = it },
+                    onSortOptionChange = {
+                        sortOption = it
+                        saveDeviceLibrarySortOption(context, it)
+                    },
+                    onToggleSortDirection = {
+                        val updatedSortDescending = !sortDescending
+                        sortDescending = updatedSortDescending
+                        saveDeviceLibrarySortDescending(context, updatedSortDescending)
+                    },
+                    onReadingStatusesChange = {
+                        selectedReadingStatuses = it
+                        saveDeviceLibraryReadingStatuses(context, it)
+                    },
                     onFileTypesChange = {
                         selectedFileTypes = it
                         saveDeviceLibraryFileTypeFilters(context, it)

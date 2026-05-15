@@ -64,7 +64,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Etiquetas personalizadas para organizar libros.
 - Estadísticas de lectura.
 - Recomendaciones personalizadas en la sección “Para ti”.
-- Biblioteca local del dispositivo mediante Storage Access Framework, con disposición y filtros de tipo de archivo persistentes y sincronización visual con la estantería automática “Tengo”.
+- Biblioteca local del dispositivo mediante Storage Access Framework, con disposición, ordenación, dirección y filtros persistentes, además de sincronización visual con la estantería automática “Tengo”.
 - Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo, EPUB usa WebView con paginación horizontal por columnas CSS y TXT/FB2 usan paginación reflow.
 - Registro local persistente de libros importados, progreso de lectura y modelo común para marcadores, subrayados y notas.
 - Lector EPUB con portada/sinopsis/imágenes iniciales, capítulos detectados, paso de página por laterales, gesto o scroll horizontal, selección vía JS Bridge, marcadores, subrayados y notas editables desde el panel lateral de Marcadores.

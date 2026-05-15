@@ -1706,7 +1706,10 @@ const val PINNED_BOOKS_PREFS = "device_library_pinned_books"
 const val PINNED_BOOKS_KEY = "ordered_book_ids"
 const val LIBRARY_VIEW_PREFS = "device_library_view"
 const val LIBRARY_LAYOUT_MODE_KEY = "layout_mode"
+const val LIBRARY_SORT_OPTION_KEY = "sort_option"
+const val LIBRARY_SORT_DESCENDING_KEY = "sort_descending"
 const val LIBRARY_FILE_TYPE_FILTERS_KEY = "file_type_filters"
+const val LIBRARY_READING_STATUS_FILTERS_KEY = "reading_status_filters"
 val imageExtensions = setOf("jpg", "jpeg", "png", "webp")
 
 fun readDeviceBookUserMetadata(context: Context, file: DeviceLibraryFile): DeviceBookUserMetadata {
@@ -1785,6 +1788,32 @@ fun saveDeviceLibraryLayoutMode(context: Context, layoutMode: DeviceLibraryLayou
         .apply()
 }
 
+fun readDeviceLibrarySortOption(context: Context): DeviceLibrarySortOption {
+    val savedName = context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .getString(LIBRARY_SORT_OPTION_KEY, DeviceLibrarySortOption.Title.name)
+    return DeviceLibrarySortOption.entries.firstOrNull { it.name == savedName }
+        ?: DeviceLibrarySortOption.Title
+}
+
+fun saveDeviceLibrarySortOption(context: Context, sortOption: DeviceLibrarySortOption) {
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(LIBRARY_SORT_OPTION_KEY, sortOption.name)
+        .apply()
+}
+
+fun readDeviceLibrarySortDescending(context: Context): Boolean {
+    return context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(LIBRARY_SORT_DESCENDING_KEY, false)
+}
+
+fun saveDeviceLibrarySortDescending(context: Context, sortDescending: Boolean) {
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(LIBRARY_SORT_DESCENDING_KEY, sortDescending)
+        .apply()
+}
+
 fun readDeviceLibraryFileTypeFilters(context: Context): Set<DeviceLibraryFileTypeFilter> {
     val savedNames = context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
         .getStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, emptySet())
@@ -1801,6 +1830,27 @@ fun saveDeviceLibraryFileTypeFilters(
     context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
         .edit()
         .putStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, selectedFileTypes.map { it.name }.toSet())
+        .apply()
+}
+
+fun readDeviceLibraryReadingStatuses(context: Context): Set<DeviceLibraryReadingStatus> {
+    val savedNames = context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .getStringSet(LIBRARY_READING_STATUS_FILTERS_KEY, null)
+    if (savedNames == null) return DeviceLibraryReadingStatus.entries.toSet()
+
+    // Si el usuario desmarca todos los estados, se respeta el filtro vacio.
+    return savedNames.mapNotNull { savedName ->
+        DeviceLibraryReadingStatus.entries.firstOrNull { it.name == savedName }
+    }.toSet()
+}
+
+fun saveDeviceLibraryReadingStatuses(
+    context: Context,
+    selectedReadingStatuses: Set<DeviceLibraryReadingStatus>
+) {
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putStringSet(LIBRARY_READING_STATUS_FILTERS_KEY, selectedReadingStatuses.map { it.name }.toSet())
         .apply()
 }
 
