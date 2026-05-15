@@ -335,10 +335,7 @@ fun AppNavigation(
         when (section) {
             KaiSection.HOME -> navController.navigate(Routes.HOME)
             KaiSection.MY_BOOKS -> navController.navigate(Routes.LISTS)
-            KaiSection.DISCOVER -> {
-                catalogViewModel.refrescarNovedades()
-                navController.navigate(Routes.DISCOVER)
-            }
+            KaiSection.DISCOVER -> navController.navigate(Routes.DISCOVER)
             KaiSection.SEARCH -> navController.navigate(Routes.SEARCH)
             KaiSection.PROFILE -> navController.navigate(Routes.PROFILE)
             KaiSection.STATS -> navController.navigate(Routes.READING_STATS)
@@ -1240,8 +1237,8 @@ private fun buildHelpScreenContext(
         )
         Routes.FILE_CONVERTER -> HelpScreenContext(
             route = route,
-            screenName = "Conversor PDF",
-            description = "Sección preparada para convertir archivos antes de leerlos como PDF.",
+            screenName = "Conversor de documentos",
+            description = "Sección preparada para convertir archivos a otros formatos.",
             availableActions = listOf("Abrir menú lateral", "Volver a Biblioteca", "Buscar libros")
         )
         Routes.CHALLENGES -> HelpScreenContext(

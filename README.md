@@ -13,7 +13,7 @@
 
 **Kai Shelves** es una aplicación Android de gestión lectora desarrollada en **Kotlin** con **Jetpack Compose**. Permite descubrir libros, organizar lecturas, gestionar listas personales, consultar estadísticas, usar biblioteca local del dispositivo y conectar con otros lectores mediante funcionalidades sociales.
 
-El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)** y combina una arquitectura MVVM con Firebase, Google Books API, almacenamiento local para usuarios invitados y una interfaz Compose con identidad visual propia.
+El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)** y combina una arquitectura MVVM con Firebase, Google Books API, OpenLibrary como respaldo de catálogo, almacenamiento local para usuarios invitados y una interfaz Compose con identidad visual propia.
 
 ## Tabla de contenidos
 
@@ -21,6 +21,7 @@ El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Apli
 - [Características principales](#características-principales)
 - [Stack tecnológico](#stack-tecnológico)
 - [Arquitectura del proyecto](#arquitectura-del-proyecto)
+- [Memoria del TFG](#memoria-del-tfg)
 - [Estructura de carpetas](#estructura-de-carpetas)
 - [Requisitos previos](#requisitos-previos)
 - [Instalación](#instalación)
@@ -54,7 +55,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Recuperación de contraseña.
 - Modo invitado con datos locales en el dispositivo.
 - Migración y fusión de biblioteca local de invitado con cuenta registrada.
-- Catálogo de libros con Google Books API.
+- Catálogo de libros con Google Books API, respaldo de búsqueda en OpenLibrary, caché local persistida en “Descubre” y modos de descubrimiento para libros especiales, actuales, mejor valorados o de autores conocidos.
 - Búsqueda por título, autor, editorial o ISBN.
 - Escaneo de ISBN/códigos mediante ZXing.
 - Filtros por género y ordenación de resultados.
@@ -62,7 +63,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Marcado de libros como leídos.
 - Listas personales y estanterías predefinidas, incluida la lista automática “Tengo” con los libros detectados en la biblioteca del dispositivo.
 - Etiquetas personalizadas para organizar libros.
-- Estadísticas de lectura.
+- Estadísticas de lectura con caché local, actualización al arrastrar hacia abajo, recuento de libros leídos, valoración media, páginas leídas y género más repetido en la lista de leídos.
 - Recomendaciones personalizadas en la sección “Para ti”.
 - Biblioteca local del dispositivo mediante Storage Access Framework, con disposición, ordenación, dirección y filtros persistentes, además de sincronización visual con la estantería automática “Tengo”.
 - Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo, EPUB usa WebView con paginación horizontal por columnas CSS y TXT/FB2 usan paginación reflow.
@@ -70,7 +71,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
 - Lector EPUB con portada/sinopsis/imágenes iniciales, capítulos detectados, paso de página por laterales, gesto o scroll horizontal, selección vía JS Bridge, marcadores, subrayados y notas editables desde el panel lateral de Marcadores.
 - Lector reflow para TXT y FB2 con desplazamiento continuo, selección táctil por pulsación prolongada, rangos reales persistentes, marcadores, subrayados y notas editables desde el panel lateral.
 - Vista PDF visual con zoom, desplazamiento manual y lectura continua en modo vertical, manteniendo marcadores y notas sin remaquetado del contenido.
-- Conversor básico a PDF para TXT, EPUB y FB2.
+- Conversor de archivos con salida a PDF para TXT, EPUB y FB2, y salida a EPUB para TXT, FB2 y PDF; en PDF a EPUB se conserva la maquetación visual renderizando cada página como imagen dentro del libro.
 - Perfil de usuario con edición de datos, foto y métodos de inicio de sesión.
 - Ajustes de privacidad y visibilidad social.
 - Amigos, sugerencias, solicitudes, perfiles públicos/privados y listas compartidas.
@@ -90,7 +91,7 @@ Las capturas todavía no están versionadas en el repositorio. Se añadirán im�
     | Arquitectura | MVVM, Repository Pattern, StateFlow |
     | Asincronía | Kotlin Coroutines |
     | Backend / datos remotos | Firebase Authentication, Firebase Firestore |
-    | APIs externas | Google Books API, Groq API |
+    | APIs externas | Google Books API, OpenLibrary, Groq API |
     | Red | Retrofit 3, Gson Converter, OkHttp, Logging Interceptor |
     | Imágenes | Coil 3 |
     | Login Google | AndroidX Credentials, Google ID |
@@ -107,7 +108,7 @@ La app sigue una organización basada en **MVVM**:
 - **UI Compose**: pantallas y componentes reutilizables bajo `ui/screen` y `ui/components`.
 - **ViewModels**: gestionan estado de pantalla, eventos de usuario y llamadas a repositorios.
 - **Repositories**: encapsulan Firebase, APIs externas, almacenamiento local, biblioteca del dispositivo y lógica de transformación.
-- **Models / DTOs / Mappers**: definen los modelos de dominio y las estructuras remotas de Google Books y Groq.
+- **Models / DTOs / Mappers**: definen los modelos de dominio y las estructuras remotas de Google Books, OpenLibrary y Groq.
 - **Navigation Compose**: centraliza rutas, flujo de autenticación, restricciones de usuario invitado y navegación principal en `AppNavigation.kt`.
 
 No se detecta un framework de inyección de dependencias como Hilt. Los ViewModels se obtienen con `viewModel()` y los repositorios se instancian de forma directa o con dependencias por defecto.
@@ -121,13 +122,13 @@ ViewModels
    ↓ operaciones de dominio
 Repositories
    ↓
-Firebase / Google Books / Groq / almacenamiento local / archivos del dispositivo
+Firebase / Google Books / OpenLibrary / Groq / almacenamiento local / archivos del dispositivo
 ```
 
 ### Capas relevantes
 
 - `AuthRepository`: autenticación, perfiles, proveedores de login, usuarios invitados, migración de datos y privacidad.
-- `BookRepository`: catálogo, búsquedas, ISBN, Google Books, lecturas, reseñas y valoración.
+- `BookRepository`: catálogo, caché persistida de “Descubre”, modos de descubrimiento, búsquedas, ISBN, Google Books, OpenLibrary, lecturas, reseñas y valoración.
 - `UserListsRepository`: listas, estanterías, etiquetas y organización de libros.
 - `FriendsRepository`: amigos, solicitudes, privacidad social, actividad, likes, comentarios, bloqueos y reportes.
 - `ForYouRepository`: recomendaciones basadas en libros guardados.
@@ -260,7 +261,10 @@ El proyecto no versiona archivos de firma (`*.jks`, `*.keystore`) y `.gitignore`
 
 ## Testing
 
-El proyecto declara dependencias de testing para JUnit, AndroidX Test, Espresso y Compose UI Test. No se han detectado archivos de test versionados en `app/src/test` o `app/src/androidTest`.
+El proyecto incluye una primera base de pruebas automatizadas:
+
+- Pruebas unitarias JUnit en `app/src/test` para lógica pura de estadísticas lectoras.
+- Pruebas instrumentadas Compose UI en `app/src/androidTest` para flujos críticos de interfaz, como restricciones de usuario invitado y renderizado básico de portadas.
 
 Comandos útiles:
 
@@ -312,8 +316,6 @@ Mejoras futuras inferidas por pantallas, textos y rutas existentes:
 - Completar los desafíos de lectura.
 - Ampliar notificaciones y mensajes dentro del centro de notificaciones.
 - Añadir capturas reales en `docs/images`.
-- Incorporar pruebas unitarias y pruebas de UI para flujos críticos.
-- Revisar textos hardcodeados restantes y moverlos a recursos localizados.
 - Preparar firma release y documentación de publicación si se decide distribuir la app.
 
 ## Contribución
@@ -348,5 +350,5 @@ Este proyecto está distribuido bajo licencia **Apache License 2.0**. Consulta e
 
 Proyecto académico desarrollado como **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)**.
 
-Autor: **AlexxKai**.
+Autor: **Alex Urueña**
 

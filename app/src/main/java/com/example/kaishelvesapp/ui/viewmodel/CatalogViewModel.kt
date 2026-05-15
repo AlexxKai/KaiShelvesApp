@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
 import com.example.kaishelvesapp.data.repository.BookRepository
+import com.example.kaishelvesapp.data.repository.BookRepository.DiscoverCatalogMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ data class CatalogUiState(
     val generos: List<String> = listOf("Todos"),
     val selectedGenero: String = "Todos",
     val searchQuery: String = "",
+    val discoverMode: DiscoverCatalogMode = DiscoverCatalogMode.SPECIAL,
     val selectedBook: Libro? = null,
     val scannedBook: Libro? = null,
     val scannedIsbn: String? = null,
@@ -42,10 +44,28 @@ class CatalogViewModel(
 
     init {
         cargarLibros()
+        preloadDiscoverModes()
     }
 
     fun cargarLibros(refresh: Boolean = false) {
         val currentState = _uiState.value
+        val cachedBooks = if (!refresh) {
+            repository.getCachedDiscoverBooks(currentState.discoverMode)
+        } else {
+            emptyList()
+        }
+
+        if (cachedBooks.isNotEmpty()) {
+            // Descubre abre desde caché persistida; la red queda reservada al gesto de refrescar.
+            _uiState.value = currentState.copy(
+                isLoading = false,
+                isRefreshing = false,
+                libros = cachedBooks,
+                errorMessage = null
+            )
+            return
+        }
+
         _uiState.value = _uiState.value.copy(
             isLoading = !refresh || currentState.libros.isEmpty(),
             isRefreshing = refresh && currentState.libros.isNotEmpty(),
@@ -53,7 +73,10 @@ class CatalogViewModel(
         )
 
         viewModelScope.launch {
-            val result = repository.obtenerLibros()
+            val result = repository.obtenerLibros(
+                mode = currentState.discoverMode,
+                previousBooks = if (refresh) currentState.libros else emptyList()
+            )
 
             result
                 .onSuccess { libros ->
@@ -81,6 +104,31 @@ class CatalogViewModel(
 
     fun refrescarNovedades() {
         cargarLibros(refresh = true)
+    }
+
+    fun onDiscoverModeSelected(mode: DiscoverCatalogMode) {
+        if (_uiState.value.discoverMode == mode) return
+
+        _uiState.value = _uiState.value.copy(discoverMode = mode)
+        cargarLibros(refresh = false)
+    }
+
+    private fun preloadDiscoverModes() {
+        viewModelScope.launch {
+            repository.preloadDiscoverBooks()
+                .onSuccess {
+                    val selectedMode = _uiState.value.discoverMode
+                    val cachedBooks = repository.getCachedDiscoverBooks(selectedMode)
+
+                    if (cachedBooks.isNotEmpty() && !_uiState.value.isRefreshing) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            libros = cachedBooks,
+                            errorMessage = null
+                        )
+                    }
+                }
+        }
     }
 
     fun onSearchQueryChange(query: String) {
