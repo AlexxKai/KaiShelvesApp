@@ -669,17 +669,17 @@ fun AppNavigation(
 
         composable(Routes.LIBRARY) {
             DeviceLibraryScreen(
-                searchQuery = catalogState.searchQuery,
-                onSearchQueryChange = ::searchFromSharedTopBar,
-                onSearch = ::openCatalogAndSearch,
-                onScanResult = ::scanFromSharedTopBar,
+                //searchQuery = catalogState.searchQuery,
+                // onSearchQueryChange = ::searchFromSharedTopBar,
+                // onSearch = ::openCatalogAndSearch,
+                // onScanResult = ::scanFromSharedTopBar,
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
                 onGoToProfile = { navigateRoute(Routes.PROFILE) },
                 onGoToSettingsPrivacy = { navigateRoute(Routes.SETTINGS_PRIVACY) },
                 onLogout = ::logoutToLogin,
-                pendingRequestCount = friendRequestsState.pendingCount,
-                onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
+                // pendingRequestCount = friendRequestsState.pendingCount,
+                // onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 onSectionSelected = { navigateSection(it) },
                 openBookUri = pendingDeviceLibraryBookUri,
                 onOpenBookUriConsumed = { pendingDeviceLibraryBookUri = null }

@@ -106,6 +106,16 @@ enum class DeviceLibraryReadingStatus {
     Finished
 }
 
+data class DeviceLibraryAuthorGroup(
+    val name: String,
+    val count: Int
+)
+
+private data class DeviceLibraryResolvedMetadata(
+    val title: String,
+    val author: String
+)
+
 fun DeviceLibraryFile.matchesFileTypeFilters(selectedTypes: Set<DeviceLibraryFileTypeFilter>): Boolean {
     if (selectedTypes.isEmpty()) return true
     val extension = name.substringAfterLast('.', missingDelimiterValue = "").lowercase(Locale.ROOT)
@@ -116,15 +126,15 @@ fun DeviceLibraryFile.matchesFileTypeFilters(selectedTypes: Set<DeviceLibraryFil
 fun DeviceLibraryScreen(
     userName: String?,
     profileImageUrl: String?,
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    onScanResult: (String) -> Unit,
+    //searchQuery: String,
+    // onSearchQueryChange: (String) -> Unit,
+    // onSearch: () -> Unit,
+    // onScanResult: (String) -> Unit,
     onGoToProfile: () -> Unit,
     onGoToSettingsPrivacy: () -> Unit,
     onLogout: () -> Unit,
-    pendingRequestCount: Int = 0,
-    onOpenNotifications: () -> Unit = {},
+    // pendingRequestCount: Int = 0,
+    // onOpenNotifications: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit,
     openBookUri: String? = null,
     onOpenBookUriConsumed: () -> Unit = {},
@@ -151,28 +161,77 @@ fun DeviceLibraryScreen(
     var readerFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var progressRevision by remember { mutableStateOf(0) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
-    val fileMetadata by produceState<Map<String, DeviceBookDisplayMetadata>>(
+    var selectedAuthor by remember { mutableStateOf<String?>(null) }
+    val fileMetadata by produceState<Map<String, DeviceLibraryResolvedMetadata>>(
         initialValue = emptyMap(),
-        uiState.filteredFiles
+        uiState.files
     ) {
         value = withContext(Dispatchers.IO) {
-            uiState.filteredFiles
-                .filter { isEpub(it) }
+            uiState.files
                 .associate { file ->
-                    file.uri.toString() to (extractEpubDisplayMetadata(context, file.uri) ?: DeviceBookDisplayMetadata())
+                    val userMetadata = readDeviceBookUserMetadata(context, file)
+                    val epubMetadata = if (isEpub(file)) {
+                        extractEpubDisplayMetadata(context, file.uri)
+                    } else {
+                        null
+                    }
+                    val title = userMetadata.title
+                        .ifBlank { epubMetadata?.title.orEmpty() }
+                        .ifBlank { file.name.substringBeforeLast('.') }
+                    val author = userMetadata.author
+                        .ifBlank { epubMetadata?.author.orEmpty() }
+                        .ifBlank { "(${readableFileType(file)})" }
+                    file.uri.toString() to DeviceLibraryResolvedMetadata(title = title, author = author)
                 }
         }
     }
+    val authorGroups = remember(uiState.files, fileMetadata) {
+        uiState.files
+            .mapNotNull { file -> fileMetadata[file.uri.toString()]?.author?.trim()?.takeIf { it.isNotBlank() } }
+            .groupingBy { it }
+            .eachCount()
+            .map { (author, count) -> DeviceLibraryAuthorGroup(name = author, count = count) }
+            .sortedWith(
+                compareBy<DeviceLibraryAuthorGroup> { it.name.startsWith("(") }
+                    .thenBy { it.name.lowercase(Locale.ROOT) }
+            )
+    }
+    LaunchedEffect(authorGroups) {
+        val currentAuthor = selectedAuthor
+        if (currentAuthor != null && authorGroups.none { it.name == currentAuthor }) {
+            selectedAuthor = null
+        }
+    }
     val sortedFiles = remember(
-        uiState.filteredFiles,
+        uiState.files,
+        uiState.searchQuery,
         fileMetadata,
+        selectedAuthor,
         sortOption,
         sortDescending,
         selectedFileTypes,
         selectedReadingStatuses,
         progressRevision
     ) {
-        val formatFilteredFiles = uiState.filteredFiles
+        val cleanQuery = uiState.searchQuery.trim()
+        val searchFilteredFiles = if (cleanQuery.isBlank()) {
+            uiState.files
+        } else {
+            uiState.files.filter { file ->
+                val metadata = fileMetadata[file.uri.toString()]
+                file.name.contains(cleanQuery, ignoreCase = true) ||
+                    file.location.contains(cleanQuery, ignoreCase = true) ||
+                    file.mimeType.orEmpty().contains(cleanQuery, ignoreCase = true) ||
+                    metadata?.title.orEmpty().contains(cleanQuery, ignoreCase = true) ||
+                    metadata?.author.orEmpty().contains(cleanQuery, ignoreCase = true)
+            }
+        }
+        val authorFilteredFiles = selectedAuthor?.let { author ->
+            searchFilteredFiles.filter { file ->
+                fileMetadata[file.uri.toString()]?.author == author
+            }
+        } ?: searchFilteredFiles
+        val formatFilteredFiles = authorFilteredFiles
             .filter { it.matchesFileTypeFilters(selectedFileTypes) }
             .filter { file ->
                 readingStatusForProgress(readDeviceBookProgressPercent(context, file)) in selectedReadingStatuses
@@ -248,12 +307,21 @@ fun DeviceLibraryScreen(
                     DeviceLibraryTopBar(
                         onOpenMenu = { scope.launch { drawerState.open() } },
                         fileCount = sortedFiles.size,
+                        totalFileCount = uiState.files.size,
+                        selectedAuthor = selectedAuthor,
+                        authorGroups = authorGroups,
                         showSearchPanel = showSearchPanel,
                         onShowSearchPanel = { showSearchPanel = true },
                         onDismissSearchPanel = { showSearchPanel = false },
                         onToggleFilterPanel = { showFilterPanel = !showFilterPanel },
                         onDismissFilterPanel = { showFilterPanel = false },
-                        onQueryChange = viewModel::onSearchQueryChange,
+                        // onQueryChange = viewModel::onSearchQueryChange,
+                        onAllBooksSelected = {
+                            selectedAuthor = null
+                        },
+                        onAuthorSelected = { author ->
+                            selectedAuthor = author
+                        },
                         onChooseFolder = { folderLauncher.launch(null) },
                         onImportBooks = { showImportBooksDialog = true },
                         onDefaultCover = { showDefaultCoverScreen = true },
@@ -294,6 +362,8 @@ fun DeviceLibraryScreen(
                     files = sortedFiles,
                     isLoading = uiState.isLoading,
                     errorMessage = uiState.errorMessage,
+                    hasActiveSearch = uiState.searchQuery.trim().isNotBlank() && uiState.files.isNotEmpty(),
+                    searchQuery = uiState.searchQuery,
                     layoutMode = layoutMode,
                     progressRevision = progressRevision,
                     onOpenFile = { file -> readerFile = file }
@@ -381,12 +451,17 @@ fun DeviceLibraryScreen(
 private fun DeviceLibraryTopBar(
     onOpenMenu: () -> Unit,
     fileCount: Int,
+    totalFileCount: Int,
+    selectedAuthor: String?,
+    authorGroups: List<DeviceLibraryAuthorGroup>,
     showSearchPanel: Boolean,
     onShowSearchPanel: () -> Unit,
     onDismissSearchPanel: () -> Unit,
     onToggleFilterPanel: () -> Unit,
     onDismissFilterPanel: () -> Unit,
-    onQueryChange: (String) -> Unit,
+    // onQueryChange: (String) -> Unit,
+    onAllBooksSelected: () -> Unit,
+    onAuthorSelected: (String) -> Unit,
     onChooseFolder: () -> Unit,
     onImportBooks: () -> Unit,
     onDefaultCover: () -> Unit,
@@ -456,7 +531,7 @@ private fun DeviceLibraryTopBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Todos los libros",
+                    text = selectedAuthor ?: "Todos los libros",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall,
                     color = OldIvory,
@@ -536,7 +611,19 @@ private fun DeviceLibraryTopBar(
         }
 
         when {
-            showLibraryMenu -> LibrarySelectorMenu(fileCount = fileCount)
+            showLibraryMenu -> LibrarySelectorMenu(
+                fileCount = totalFileCount,
+                authorGroups = authorGroups,
+                selectedAuthor = selectedAuthor,
+                onAllBooksSelected = {
+                    onAllBooksSelected()
+                    showLibraryMenu = false
+                },
+                onAuthorSelected = { author ->
+                    onAuthorSelected(author)
+                    showLibraryMenu = false
+                }
+            )
         }
     }
 }

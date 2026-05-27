@@ -376,7 +376,7 @@ fun UserListDetailScreen(
                                         }
                                     }
                                 },
-                                canOpenBooks = true,
+                                // canOpenBooks = true,
                                 onBookClick = { book ->
                                     if (isOwnedList) {
                                         rowItems.firstOrNull { it.book.id == book.id }?.let { selectedOwnedItem = it }
@@ -811,7 +811,7 @@ private fun CoverRow(
     draggingOffsetX: Float,
     draggingOffsetY: Float,
     visualOffsetFor: (Int) -> Pair<Float, Float>,
-    canOpenBooks: Boolean,
+    // canOpenBooks: Boolean,
     onBookClick: (Libro) -> Unit,
     dragModifierFor: (String) -> Modifier
 ) {
@@ -844,7 +844,7 @@ private fun CoverRow(
                         offsetY = visualOffset.second,
                         dragModifier = dragModifierFor(itemBookId.orEmpty()),
                         onBookClick = onBookClick,
-                        enabled = draggingBookId == null && canOpenBooks
+                        enabled = draggingBookId == null // && canOpenBooks
                     )
                 } else {
                     Spacer(

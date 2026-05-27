@@ -914,42 +914,43 @@ private class EpubSelectionActionModeCallback(
     }
 }
 
-private fun WebView.captureEpubSelectionPreview(onPreview: (String, Rect) -> Unit) {
-    postDelayed({
-        evaluateJavascript(
-            """
-            (function() {
-                const sel = window.getSelection();
-                if (!sel || sel.isCollapsed || sel.rangeCount === 0) return '';
-                const range = sel.getRangeAt(0);
-                const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
-                const rect = rects[0] || range.getBoundingClientRect();
-                if (!rect || rect.width === 0 || rect.height === 0) return '';
-                return JSON.stringify({
-                    text: sel.toString(),
-                    left: rect.left,
-                    top: rect.top,
-                    width: rect.width,
-                    height: rect.height
-                });
-            })();
-            """.trimIndent()
-        ) { rawJson ->
-            val json = rawJson.decodeJavascriptString()
-            if (json.isBlank()) return@evaluateJavascript
-            runCatching {
-                val obj = JSONObject(json)
-                val text = obj.optString("text").take(READER_ANNOTATION_TEXT_LIMIT)
-                if (text.isBlank()) return@runCatching
-                val left = obj.optDouble("left").toInt()
-                val top = obj.optDouble("top").toInt()
-                val width = obj.optDouble("width").toInt()
-                val height = obj.optDouble("height").toInt()
-                onPreview(text, Rect(left, top, left + width, top + height))
-            }
-        }
-    }, 80L)
-}
+// private fun WebView.captureEpubSelectionPreview(onPreview: (String, Rect) -> Unit) {
+//     postDelayed({
+//         evaluateJavascript(
+//             """
+//             (function() {
+//                 const sel = window.getSelection();
+//                 if (!sel || sel.isCollapsed || sel.rangeCount === 0) return '';
+//                 const range = sel.getRangeAt(0);
+//                 const rects = Array.from(range.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+//                 const rect = rects[0] || range.getBoundingClientRect();
+//                 if (!rect || rect.width === 0 || rect.height === 0) return '';
+//                 return JSON.stringify({
+//                     text: sel.toString(),
+//                     left: rect.left,
+//                     top: rect.top,
+//                     width: rect.width,
+//                     height: rect.height
+//                 });
+//             })();
+//             """.trimIndent()
+//         ) { rawJson ->
+//             val json = rawJson.decodeJavascriptString()
+//             if (json.isBlank()) return@evaluateJavascript
+//             runCatching {
+//                 val obj = JSONObject(json)
+//                 val text = obj.optString("text").take(READER_ANNOTATION_TEXT_LIMIT)
+//                 if (text.isBlank()) return@runCatching
+//                 val left = obj.optDouble("left").toInt()
+//                 val top = obj.optDouble("top").toInt()
+//                 val width = obj.optDouble("width").toInt()
+//                 val height = obj.optDouble("height").toInt()
+//                 onPreview(text, Rect(left, top, left + width, top + height))
+//             }
+//         }
+//     }, 80L)
+// }
+
 
 private fun WebView.readCurrentWebSelection(
     onSelection: (String, Rect) -> Unit,
@@ -2045,38 +2046,6 @@ private fun String.escapeJsString(): String {
     }
 }
 
-private fun WebView.applyEpubSelectionStyle(color: String) {
-    val safeColor = color.substringAfter(":").takeIf { it.startsWith("#") } ?: "#EBC7E8"
-    val command = when {
-        color.startsWith("underline") || color.startsWith("diagonal") -> "document.execCommand('underline', false, null);"
-        color.startsWith("strike") -> "document.execCommand('strikeThrough', false, null);"
-        else -> "document.execCommand('hiliteColor', false, '$safeColor');"
-    }
-    evaluateJavascript(
-        """
-        (function(){
-            try {
-                document.designMode = 'on';
-                $command
-                document.designMode = 'off';
-            } catch(e) {
-                document.designMode = 'off';
-            }
-        })();
-        """.trimIndent(),
-        null
-    )
-}
-
-private fun WebView.captureEpubSelection(onSelected: (String) -> Unit) {
-    evaluateJavascript("(function(){return window.getSelection().toString();})()") { encoded ->
-        val selected = encoded.decodeJavascriptString().trim()
-        if (selected.isNotBlank()) {
-            onSelected(selected)
-        }
-    }
-}
-
 private fun String.withoutExecutableScripts(): String {
     return replace(Regex("(?is)<script\\b.*?</script>"), "")
 }
@@ -2145,6 +2114,8 @@ private fun ReflowBookReader(
             var showDisplaySettings by remember(file.uri) { mutableStateOf(false) }
             var showTextSizeSettings by remember(file.uri) { mutableStateOf(false) }
             var showThemeSettings by remember(file.uri) { mutableStateOf(false) }
+            var showBookInfo by remember(file.uri) { mutableStateOf(false) }
+            var showBookInfoMore by remember(file.uri) { mutableStateOf(false) }
             var showNoteDialog by remember(file.uri) { mutableStateOf(false) }
             var editingAnnotation by remember(file.uri) { mutableStateOf<DeviceReaderAnnotation?>(null) }
             var brightnessPercent by remember { mutableStateOf(readReaderBrightnessPercent(context)) }
@@ -2401,7 +2372,7 @@ private fun ReflowBookReader(
                         PdfReaderTopControls(
                             title = loadedDocument.title,
                             onDismiss = onDismiss,
-                            onTitleClick = {},
+                            onTitleClick = { showBookInfo = true },
                             onOpenThemeSettings = {
                                 showThemeSettings = true
                                 showDisplaySettings = false
@@ -2564,6 +2535,24 @@ private fun ReflowBookReader(
                             onMinutesChange = { resumeAutoBrightnessMinutes = it.filter(Char::isDigit).take(4) },
                             onDismiss = { showAutoBrightnessMinutesDialog = false }
                         )
+                    }
+
+                    if (showBookInfo) {
+                        PdfBookInfoDialog(
+                            file = file,
+                            currentPage = currentPage,
+                            pageCount = logicalPageCount,
+                            progress = progress,
+                            onMore = {
+                                showBookInfo = false
+                                showBookInfoMore = true
+                            },
+                            onDismiss = { showBookInfo = false }
+                        )
+                    }
+
+                    if (showBookInfoMore) {
+                        PdfBookInfoMoreDialog(onDismiss = { showBookInfoMore = false })
                     }
 
                     if (showNoteDialog) {

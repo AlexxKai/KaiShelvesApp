@@ -16,10 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
@@ -61,7 +64,14 @@ import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 
 @Composable
-fun LibrarySelectorMenu(fileCount: Int) {
+fun LibrarySelectorMenu(
+    fileCount: Int,
+    authorGroups: List<DeviceLibraryAuthorGroup>,
+    selectedAuthor: String?,
+    onAllBooksSelected: () -> Unit,
+    onAuthorSelected: (String) -> Unit
+) {
+    var activeSection by remember { mutableStateOf("Autor") }
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -82,27 +92,54 @@ fun LibrarySelectorMenu(fileCount: Int) {
                     .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                listOf(
-                    "Todos los libros",
-                    "Mis Favoritos",
-                    "Serie",
-                    "Autor",
-                    "Etiqueta",
-                    "Carpetas",
-                    "Mi clasificación  ›"
-                ).forEach { label ->
-                    Text(
-                        text = label,
+                listOf("Todos los libros", "Mis Favoritos", "Serie", "Autor", "Etiqueta", "Carpetas").forEach { label ->
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { }
+                            .clickable {
+                                if (label == "Todos los libros") {
+                                    onAllBooksSelected()
+                                } else {
+                                    activeSection = label
+                                }
+                            }
                             .padding(horizontal = 16.dp, vertical = 7.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OldIvory,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (label == activeSection || label == "Todos los libros" && selectedAuthor == null) {
+                                OldIvory
+                            } else {
+                                OldIvory.copy(alpha = 0.82f)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (label == "Autor") {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = OldIvory.copy(alpha = 0.76f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
+
+                Text(
+                    text = "Mi clasificación",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { activeSection = "Mi clasificación" }
+                        .padding(horizontal = 16.dp, vertical = 7.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OldIvory.copy(alpha = 0.82f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Box(
@@ -112,32 +149,78 @@ fun LibrarySelectorMenu(fileCount: Int) {
                     .background(OldIvory.copy(alpha = 0.16f))
             )
 
-            Column(
-                modifier = Modifier
-                    .weight(0.58f)
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                (5 downTo 1).forEach { stars ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+            when (activeSection) {
+                "Autor" -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(0.58f)
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = buildString {
-                                repeat(stars) { append("★") }
-                                repeat(5 - stars) { append("☆") }
-                            },
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = OldIvory
-                        )
-                        Text(
-                            text = if (stars == 5) fileCount.toString() else "0",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OldIvory.copy(alpha = 0.72f)
-                        )
+                        items(authorGroups, key = { it.name }) { author ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (selectedAuthor == author.name) {
+                                            OldIvory.copy(alpha = 0.10f)
+                                        } else {
+                                            Color.Transparent
+                                        }
+                                    )
+                                    .clickable { onAuthorSelected(author.name) }
+                                    .padding(horizontal = 2.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = author.name,
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = OldIvory,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = author.count.toString(),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = OldIvory.copy(alpha = 0.72f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .weight(0.58f)
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        (5 downTo 1).forEach { stars ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = buildString {
+                                        repeat(stars) { append("★") }
+                                        repeat(5 - stars) { append("☆") }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = OldIvory
+                                )
+                                Text(
+                                    text = if (stars == 5) fileCount.toString() else "0",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = OldIvory.copy(alpha = 0.72f)
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -165,6 +165,8 @@
     <string name="device_library_filter_hint">Filter local books</string>
     <string name="device_library_empty_title">No files to show</string>
     <string name="device_library_empty_body">Choose a folder with PDF, EPUB or text books to populate this view.</string>
+    <string name="device_library_search_empty_title">No matches found</string>
+    <string name="device_library_search_empty_body">We could not find any file matching "%1$s". Try another term or clear active filters.</string>
     <string name="device_library_error_title">Could not load files</string>
     <string name="device_library_file_type">File type</string>
     <string name="device_library_file_type_all">All</string>
@@ -225,8 +227,8 @@
     <string name="reader_menu_other_settings">Other settings</string>
     <string name="reader_menu_themes">Themes</string>
     <string name="reader_menu_name_replacement">Name replacement</string>
-    <string name="reader_menu_more_operations">More operations...</string>
-    <string name="reader_menu_share">Share...</string>
+    <string name="reader_menu_more_operations">More operations&#8212;</string>
+    <string name="reader_menu_share">Share&#8212;</string>
     <string name="reader_menu_book_info">Book information</string>
     <string name="reader_theme_title">Load theme</string>
     <string name="reader_theme_day">Day theme</string>
@@ -308,7 +310,7 @@
     <string name="scan_camera_permission_message">Camera permission is required to scan the ISBN.</string>
     <string name="grant_permission">Grant permission</string>
     <string name="scan_history_placeholder">Your scanned ISBN history will appear here.</string>
-    <string name="scan_book_searching">Looking up book...</string>
+    <string name="scan_book_searching">Looking up book&#8212;</string>
     <string name="scan_book_not_found">No book found for this ISBN</string>
     <string name="isbn_value">ISBN %1$s</string>
     <string name="retry_lookup">Retry lookup</string>
@@ -602,8 +604,8 @@
     <string name="reader_book_info_current_page">Current page: %1$d</string>
     <string name="reader_book_info_progress">Progress: %1$d%%</string>
     <string name="reader_book_info_last_modified">Last modified: %1$s</string>
-    <string name="reader_book_info_reading_hours_pending">Reading hours: --</string>
-    <string name="reader_book_info_reading_speed_pending">Reading speed (p/m): --</string>
+    <string name="reader_book_info_reading_hours_pending">Reading hours: &#8212;</string>
+    <string name="reader_book_info_reading_speed_pending">Reading speed (p/m): &#8212;</string>
     <string name="reader_book_info_reading_history_days">Reading history in days:</string>
     <string name="reader_book_info_current_chapter_pending">Current chapter: pending detection</string>
     <string name="reader_book_info_bookmarks_pending">Bookmarks: pending implementation</string>

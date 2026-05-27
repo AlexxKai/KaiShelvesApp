@@ -113,6 +113,8 @@ fun DeviceLibraryContent(
     files: List<DeviceLibraryFile>,
     isLoading: Boolean,
     errorMessage: String?,
+    hasActiveSearch: Boolean,
+    searchQuery: String,
     layoutMode: DeviceLibraryLayoutMode,
     progressRevision: Int,
     onOpenFile: (DeviceLibraryFile) -> Unit
@@ -155,9 +157,20 @@ fun DeviceLibraryContent(
 
             if (files.isEmpty()) {
                 item {
+                    val cleanSearchQuery = searchQuery.trim()
+                    val title = if (hasActiveSearch && cleanSearchQuery.isNotBlank()) {
+                        stringResource(R.string.device_library_search_empty_title)
+                    } else {
+                        stringResource(R.string.device_library_empty_title)
+                    }
+                    val body = if (hasActiveSearch && cleanSearchQuery.isNotBlank()) {
+                        stringResource(R.string.device_library_search_empty_body, cleanSearchQuery)
+                    } else {
+                        stringResource(R.string.device_library_empty_body)
+                    }
                     DeviceLibraryMessage(
-                        title = stringResource(R.string.device_library_empty_title),
-                        body = stringResource(R.string.device_library_empty_body)
+                        title = title,
+                        body = body
                     )
                 }
             }
