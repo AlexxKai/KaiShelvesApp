@@ -3,19 +3,19 @@
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
-import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
-import java.util.Locale
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
+import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import android.graphics.Color as AndroidColor
 
 fun isPdf(file: DeviceLibraryFile): Boolean {
     return file.mimeType == "application/pdf" || file.name.endsWith(".pdf", ignoreCase = true)

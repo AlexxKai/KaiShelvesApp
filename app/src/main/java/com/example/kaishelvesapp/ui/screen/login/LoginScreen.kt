@@ -30,12 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
-import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.GoogleSignInButton
+import com.example.kaishelvesapp.ui.components.GuestMergeDecisionDialog
 import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian

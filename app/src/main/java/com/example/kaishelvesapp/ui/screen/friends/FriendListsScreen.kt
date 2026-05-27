@@ -46,9 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.repository.FRIEND_TAG_DETAIL_PREFIX
 import com.example.kaishelvesapp.data.repository.FriendBookListSummary
 import com.example.kaishelvesapp.data.repository.FriendBookTagSummary
-import com.example.kaishelvesapp.data.repository.FRIEND_TAG_DETAIL_PREFIX
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar

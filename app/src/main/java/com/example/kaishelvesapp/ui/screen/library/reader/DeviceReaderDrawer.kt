@@ -28,7 +28,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Image as ImageIcon
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -57,6 +56,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import androidx.compose.material.icons.filled.Image as ImageIcon
 
 enum class PdfReaderDrawerTab {
     Chapters,

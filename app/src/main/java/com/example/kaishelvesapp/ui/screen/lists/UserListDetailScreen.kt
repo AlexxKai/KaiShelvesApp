@@ -1,10 +1,11 @@
 package com.example.kaishelvesapp.ui.screen.lists
 
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -75,12 +75,12 @@ import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.data.repository.UserListsRepository
-import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.BookShelfActions
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.screen.library.FilePagePreview
-import com.example.kaishelvesapp.ui.screen.library.readDeviceBookUserMetadata
 import com.example.kaishelvesapp.ui.screen.library.readDeviceBookProgressPercent
+import com.example.kaishelvesapp.ui.screen.library.readDeviceBookUserMetadata
 import com.example.kaishelvesapp.ui.screen.library.readingStatusForProgress
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
@@ -90,7 +90,6 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
-import android.net.Uri
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

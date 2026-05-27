@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -77,7 +76,6 @@ import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.BookShelfActions
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiSection
-import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.ColdAsh
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -90,7 +88,6 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
-import kotlin.math.roundToInt
 
 @Composable
 fun IsbnScannerScreen(
