@@ -1,5 +1,6 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
 import android.os.Handler
@@ -54,6 +55,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.zIndex
+import androidx.core.graphics.toColorInt
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotation
 import com.example.kaishelvesapp.data.model.DeviceReaderAnnotationType
@@ -173,12 +175,12 @@ private suspend fun loadReaderEngineDocument(
         }
         ReaderEngineKind.Txt -> {
             val text = readPlainTextFile(context, file.uri).orEmpty()
-            buildTextEngineDocument(file, readableFileType(file), null, text)
+            buildTextEngineDocument(file, readableFileType(file), text)
         }
         ReaderEngineKind.Fb2 -> {
             // FB2 se trata como adaptador textual ligero; si falla, queda listo para conversor EPUB futuro.
             val text = readPlainTextFile(context, file.uri)?.let(::stripXmlToText).orEmpty()
-            buildTextEngineDocument(file, "FB2", null, text)
+            buildTextEngineDocument(file, "FB2", text)
         }
         else -> null
     }
@@ -292,7 +294,8 @@ private fun buildEpubIntroPages(
 private fun buildTextEngineDocument(
     file: DeviceLibraryFile,
     subtitle: String,
-    metadata: DeviceBookDisplayMetadata?,
+    // Sin uso actual: antes llegaba siempre null y generaba aviso.
+    // metadata: DeviceBookDisplayMetadata?,
     text: String
 ): ReaderEngineDocument? {
     val cleanText = text
@@ -302,8 +305,8 @@ private fun buildTextEngineDocument(
         .trim()
     if (cleanText.isBlank()) return null
     return ReaderEngineDocument(
-        title = metadata?.title?.takeIf { it.isNotBlank() } ?: file.name.substringBeforeLast('.'),
-        subtitle = metadata?.author?.takeIf { it.isNotBlank() } ?: subtitle,
+        title = file.name.substringBeforeLast('.'),
+        subtitle = subtitle,
         pages = listOf(cleanText),
         pageKinds = listOf(ReaderSourcePageKind.Body)
     )
@@ -321,6 +324,8 @@ private fun String.withoutLeadingTitle(title: String): String {
 }
 
 @Composable
+@Suppress("UNUSED_VALUE")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 private fun EpubWebReaderPage(
     file: DeviceLibraryFile,
     pages: List<ReaderEpubPage>,
@@ -371,15 +376,15 @@ private fun EpubWebReaderPage(
                 activeHighlight = latestAnnotations.firstOrNull { it.id == annotationId }
                     ?: latestAnnotations.firstOrNull { annotation ->
                         annotation.type == DeviceReaderAnnotationType.Highlight &&
-                            annotation.selectedText.normalizeReaderSelectionText() == normalizedText
+                                annotation.selectedText.normalizeReaderSelectionText() == normalizedText
                     }
-                    ?: latestAnnotations.firstOrNull { annotation ->
+                            ?: latestAnnotations.firstOrNull { annotation ->
                         annotation.type == DeviceReaderAnnotationType.Highlight &&
-                            normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                                normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
                     }
-                    ?: latestAnnotations.firstOrNull { annotation ->
+                            ?: latestAnnotations.firstOrNull { annotation ->
                         annotation.type == DeviceReaderAnnotationType.Highlight &&
-                            annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
+                                annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
                     }
 
                 webSelectedText = safeText
@@ -404,6 +409,10 @@ private fun EpubWebReaderPage(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
                 object : WebView(viewContext) {
+                    override fun performClick(): Boolean {
+                        super.performClick()
+                        return true
+                    }
                     private fun shouldAllowSelectionActionMode(): Boolean {
                         return allowNativeSelection && selectionLongPressConfirmed
                     }
@@ -560,7 +569,7 @@ private fun EpubWebReaderPage(
                                 val dragX = event.x - downX
                                 val dragY = event.y - downY
 
-                                if (abs(dragX) > 18f || abs(dragY) > 18f) {
+                                if (!selectionLongPressConfirmed && (abs(dragX) > 42f || abs(dragY) > 42f)) {
                                     movedTooMuchForSelection = true
                                 }
                             }
@@ -613,15 +622,33 @@ private fun EpubWebReaderPage(
 
                                     selectionGestureActive = false
 
-                                    return@setOnTouchListener false
+                                    return@setOnTouchListener true
                                 }
 
                                 val tapGesture = duration < 320L && abs(dragX) < 18f && abs(dragY) < 18f
 
                                 if (tapGesture) {
+                                    performClick()
                                     allowNativeSelection = false
                                     selectionLongPressConfirmed = false
                                     selectionGestureActive = false
+
+                                    var tapResolved = false
+                                    fun handleReaderTapFallback() {
+                                        if (tapResolved) return
+
+                                        tapResolved = true
+                                        webSelectedText = ""
+                                        selectedRect = null
+                                        activeHighlight = null
+
+                                        val width = this.width.toFloat().coerceAtLeast(1f)
+                                        when {
+                                            event.x < width * 0.26f -> onPreviousPage()
+                                            event.x > width * 0.74f -> onNextPage()
+                                            else -> onCenterTap()
+                                        }
+                                    }
 
                                     evaluateJavascript(
                                         """
@@ -633,6 +660,12 @@ private fun EpubWebReaderPage(
                                         })();
                                         """.trimIndent()
                                     ) { handledTap ->
+                                        if (tapResolved) {
+                                            return@evaluateJavascript
+                                        }
+
+                                        tapResolved = true
+
                                         if (handledTap == "true") {
                                             return@evaluateJavascript
                                         }
@@ -648,6 +681,7 @@ private fun EpubWebReaderPage(
                                             else -> onCenterTap()
                                         }
                                     }
+                                    postDelayed({ handleReaderTapFallback() }, 180L)
                                     return@setOnTouchListener true
                                 }
 
@@ -659,7 +693,7 @@ private fun EpubWebReaderPage(
                                     evaluateJavascript("window.kaiCancelSelection && window.kaiCancelSelection();", null)
                                 }
 
-                                val quickPageDrag = duration < 650L && maxOf(abs(dragX), abs(dragY)) > 84f
+                                val quickPageDrag = duration < 650L && maxOf(abs(dragX), abs(dragY)) > 104f
                                 if (!handledByGestureDetector && webSelectedText.isBlank() && quickPageDrag) {
                                     if (abs(dragY) >= abs(dragX)) {
                                         if (dragY < 0f) onNextPage() else onPreviousPage()
@@ -690,7 +724,7 @@ private fun EpubWebReaderPage(
             },
             update = { webView ->
                 val fontScale = readerPdfZoomPercentToScale(textSizePercent)
-                val renderTag = "${pages.size}|${colorTheme.background}|${colorTheme.text}|$textSizePercent"
+                val renderTag = "${file.uri}|${pages.size}|${colorTheme.background}|${colorTheme.text}|$textSizePercent"
                 if (webView.tag != renderTag) {
                     webView.tag = renderTag
                     webSelectedText = ""
@@ -711,7 +745,7 @@ private fun EpubWebReaderPage(
                         null
                     )
                     webView.postDelayed({ webView.goToEpubPage(pageIndex) }, 360L)
-                } else {
+                } else if (webSelectedText.isBlank() && !allowNativeSelection && !selectionLongPressConfirmed) {
                     webView.goToEpubPage(pageIndex)
                 }
             }
@@ -727,15 +761,15 @@ private fun EpubWebReaderPage(
             val possibleHighlightToDelete = activeHighlight
                 ?: latestAnnotations.firstOrNull { annotation ->
                     annotation.type == DeviceReaderAnnotationType.Highlight &&
-                        annotation.selectedText.normalizeReaderSelectionText() == normalizedSelectedText
+                            annotation.selectedText.normalizeReaderSelectionText() == normalizedSelectedText
                 }
                 ?: latestAnnotations.firstOrNull { annotation ->
                     annotation.type == DeviceReaderAnnotationType.Highlight &&
-                        normalizedSelectedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                            normalizedSelectedText.contains(annotation.selectedText.normalizeReaderSelectionText())
                 }
                 ?: latestAnnotations.firstOrNull { annotation ->
                     annotation.type == DeviceReaderAnnotationType.Highlight &&
-                        annotation.selectedText.normalizeReaderSelectionText().contains(normalizedSelectedText)
+                            annotation.selectedText.normalizeReaderSelectionText().contains(normalizedSelectedText)
                 }
 
             val canDeleteHighlight = possibleHighlightToDelete != null
@@ -821,15 +855,15 @@ private fun EpubWebReaderPage(
                         val highlightToDelete = activeHighlight
                             ?: latestAnnotations.firstOrNull { annotation ->
                                 annotation.type == DeviceReaderAnnotationType.Highlight &&
-                                    annotation.selectedText.normalizeReaderSelectionText() == normalizedText
+                                        annotation.selectedText.normalizeReaderSelectionText() == normalizedText
                             }
                             ?: latestAnnotations.firstOrNull { annotation ->
                                 annotation.type == DeviceReaderAnnotationType.Highlight &&
-                                    normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
+                                        normalizedText.contains(annotation.selectedText.normalizeReaderSelectionText())
                             }
                             ?: latestAnnotations.firstOrNull { annotation ->
                                 annotation.type == DeviceReaderAnnotationType.Highlight &&
-                                    annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
+                                        annotation.selectedText.normalizeReaderSelectionText().contains(normalizedText)
                             }
 
                         if (highlightToDelete != null) {
@@ -849,6 +883,7 @@ private fun EpubWebReaderPage(
 }
 
 // El puente JS mantiene la selección dentro de WebView y deja que Compose pinte el menú flotante.
+@Suppress("unused")
 private class EpubJsBridge(
     private val onTextSelected: (String, String, Rect) -> Unit,
     private val onHighlightSelected: (String, String, Rect) -> Unit,
@@ -1372,15 +1407,120 @@ private fun buildEpubReaderHtml(
                     function applyHighlight(annotation) {
                         if (!annotation.text) return;
                         removeHighlightById(annotation.id);
-                        for (const node of textNodesUnder(content || document.body)) {
-                            const index = node.nodeValue.indexOf(annotation.text);
-                            if (index < 0) continue;
-                            const range = document.createRange();
-                            range.setStart(node, index);
-                            range.setEnd(node, index + annotation.text.length);
-                            wrapRangeWithHighlights(range, annotation.id, annotation.color || '#EBC7E8');
+
+                        const exactSegments = findTextSegments(annotation.text);
+                        if (exactSegments.length > 0) {
+                            exactSegments.forEach((segment) => {
+                                wrapTextSegment(segment.node, segment.start, segment.end, annotation.id, annotation.color || '#EBC7E8');
+                            });
                             return;
                         }
+
+                        const normalizedSegments = findNormalizedTextSegments(annotation.text);
+                        normalizedSegments.forEach((segment) => {
+                            wrapTextSegment(segment.node, segment.start, segment.end, annotation.id, annotation.color || '#EBC7E8');
+                        });
+                    }
+
+                    function findTextSegments(text) {
+                        const needle = String(text || '');
+                        if (!needle) return [];
+
+                        const nodes = textNodesUnder(content || document.body);
+                        let fullText = '';
+                        const entries = nodes.map((node) => {
+                            const start = fullText.length;
+                            fullText += node.nodeValue || '';
+                            return {
+                                node,
+                                start,
+                                end: fullText.length
+                            };
+                        });
+
+                        const index = fullText.indexOf(needle);
+                        if (index < 0) return [];
+
+                        return segmentsFromAbsoluteRange(entries, index, index + needle.length);
+                    }
+
+                    function findNormalizedTextSegments(text) {
+                        const needle = normalizeReaderText(text);
+                        if (!needle) return [];
+
+                        const nodes = textNodesUnder(content || document.body);
+                        const entries = [];
+                        let normalizedText = '';
+
+                        nodes.forEach((node) => {
+                            const raw = node.nodeValue || '';
+                            for (let offset = 0; offset < raw.length; offset += 1) {
+                                const normalizedChar = /\s/.test(raw[offset]) ? ' ' : raw[offset];
+                                const previous = normalizedText[normalizedText.length - 1];
+
+                                if (normalizedChar === ' ' && previous === ' ') continue;
+
+                                entries.push({
+                                    node,
+                                    offset,
+                                    normalizedIndex: normalizedText.length
+                                });
+                                normalizedText += normalizedChar;
+                            }
+                        });
+
+                        const index = normalizedText.indexOf(needle);
+                        if (index < 0) return [];
+
+                        const endIndex = index + needle.length - 1;
+                        const startEntry = entries.find((entry) => entry.normalizedIndex === index);
+                        const endEntry = entries.find((entry) => entry.normalizedIndex === endIndex);
+
+                        if (!startEntry || !endEntry) return [];
+
+                        return textSegmentsBetween(nodes, startEntry.node, startEntry.offset, endEntry.node, endEntry.offset + 1);
+                    }
+
+                    function normalizeReaderText(text) {
+                        return String(text || '').replace(/\s+/g, ' ').trim();
+                    }
+
+                    function segmentsFromAbsoluteRange(entries, start, end) {
+                        return entries
+                            .map((entry) => {
+                                const segmentStart = Math.max(start, entry.start);
+                                const segmentEnd = Math.min(end, entry.end);
+
+                                if (segmentEnd <= segmentStart) return null;
+
+                                return {
+                                    node: entry.node,
+                                    start: segmentStart - entry.start,
+                                    end: segmentEnd - entry.start
+                                };
+                            })
+                            .filter(Boolean);
+                    }
+
+                    function textSegmentsBetween(nodes, startNode, startOffset, endNode, endOffset) {
+                        let inside = false;
+                        const segments = [];
+
+                        nodes.forEach((node) => {
+                            if (node === startNode) inside = true;
+                            if (!inside) return;
+
+                            const start = node === startNode ? startOffset : 0;
+                            const end = node === endNode ? endOffset : (node.nodeValue || '').length;
+
+                            if (end > start) {
+                                segments.push({ node, start, end });
+                            }
+
+                            if (node === endNode) inside = false;
+                        });
+
+                        return segments;
                     }
 
                     function bindHighlight(span) {
@@ -1403,7 +1543,7 @@ private fun buildEpubReaderHtml(
                     function removeHighlightById(id) {
                         if (!id) return;
 
-                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
+                        highlightSpansById(id).forEach((span) => {
                             const textNode = document.createTextNode(span.textContent || '');
                             span.replaceWith(textNode);
 
@@ -1411,6 +1551,15 @@ private fun buildEpubReaderHtml(
                                 textNode.parentNode.normalize();
                             }
                         });
+                    }
+
+                    function highlightSpansById(id) {
+                        if (!id) return [];
+                        return Array.from(document.querySelectorAll('.kai-highlight')).filter((span) => span.dataset.id === id);
+                    }
+
+                    function highlightTextById(id) {
+                        return highlightSpansById(id).map((span) => span.innerText || span.textContent || '').join('');
                     }
 
                     function bestVisibleRect(rects) {
@@ -1468,8 +1617,10 @@ private fun buildEpubReaderHtml(
 
                     function wrapCurrentSelection(color) {
                         const liveSelected = selectionRect();
-                        const range = liveSelected?.selection?.rangeCount ? liveSelected.selection.getRangeAt(0).cloneRange() : savedSelectionRange;
-                        const text = liveSelected?.text || savedSelectionText || '';
+                        const range = liveSelected && liveSelected.selection && liveSelected.selection.rangeCount
+                            ? liveSelected.selection.getRangeAt(0).cloneRange()
+                            : savedSelectionRange;
+                        const text = liveSelected && liveSelected.text ? liveSelected.text : (savedSelectionText || '');
                         if (!range || !text.trim()) return null;
                         const id = 'tmp-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
                         const spans = wrapRangeWithHighlights(range, id, color || '#EBC7E8');
@@ -1528,7 +1679,12 @@ private fun buildEpubReaderHtml(
                         savedSelectionText = selected.text;
                     }
 
-                    highlights.forEach(applyHighlight);
+                    highlights.forEach((annotation) => {
+                        try {
+                            applyHighlight(annotation);
+                        } catch (error) {
+                        }
+                    });
                     document.querySelectorAll('.kai-highlight').forEach(bindHighlight);
                     window.kaiGoToPage = goToPage;
                     window.kaiWheelPageTimer = 0;
@@ -1624,7 +1780,7 @@ private fun buildEpubReaderHtml(
                         window.getSelection().removeAllRanges();
                     };
                     window.kaiUpdateHighlight = function(id, color) {
-                        document.querySelectorAll('.kai-highlight[data-id="' + id + '"]').forEach((span) => {
+                        highlightSpansById(id).forEach((span) => {
                             applyHighlightVisualStyle(span, color || '#EBC7E8');
                         });
                     };
@@ -1642,19 +1798,22 @@ private fun buildEpubReaderHtml(
                         });
 
                         incoming.forEach((annotation) => {
-                            if (!annotation || !annotation.id) return;
+                            try {
+                                if (!annotation || !annotation.id) return;
 
-                            const existing = document.querySelector('.kai-highlight[data-id="' + annotation.id + '"]');
-                            if (existing) {
-                                const currentText = existing.innerText || existing.textContent || '';
-                                if (currentText === annotation.text) {
-                                    applyHighlightVisualStyle(existing, annotation.color || '#EBC7E8');
+                                const existing = highlightSpansById(annotation.id);
+                                if (existing.length > 0) {
+                                    const currentText = highlightTextById(annotation.id);
+                                    if (currentText === annotation.text || normalizeReaderText(currentText) === normalizeReaderText(annotation.text)) {
+                                        existing.forEach((span) => applyHighlightVisualStyle(span, annotation.color || '#EBC7E8'));
+                                    } else {
+                                        removeHighlightById(annotation.id);
+                                        applyHighlight(annotation);
+                                    }
                                 } else {
-                                    removeHighlightById(annotation.id);
                                     applyHighlight(annotation);
                                 }
-                            } else {
-                                applyHighlight(annotation);
+                            } catch (error) {
                             }
                         });
                     };
@@ -1683,7 +1842,7 @@ private fun buildEpubReaderHtml(
                     };
                     window.kaiReplaceHighlightId = function(oldId, newId) {
                         if (!oldId || !newId) return;
-                        document.querySelectorAll('.kai-highlight[data-id="' + oldId + '"]').forEach((span) => {
+                        highlightSpansById(oldId).forEach((span) => {
                             span.dataset.id = newId;
                         });
                     };
@@ -1737,7 +1896,10 @@ private fun buildEpubReaderHtml(
                     }
                     window.addEventListener('resize', () => window.setTimeout(notifyPages, 120));
                     window.addEventListener('load', () => window.setTimeout(notifyPages, 180));
-                    window.setTimeout(notifyPages, 320);
+                    window.setTimeout(notifyPages, 120);
+                    window.setTimeout(notifyPages, 360);
+                    window.setTimeout(notifyPages, 900);
+                    window.setTimeout(notifyPages, 1600);
                 })();
             </script>
         </body>
@@ -1866,12 +2028,10 @@ private fun String.rewriteEpubCssUrls(cssPath: String): String {
         val rawValue = match.groupValues[2].trim()
         val valueWithoutFragment = rawValue.substringBefore('#')
         val fragment = rawValue.substringAfter('#', missingDelimiterValue = "")
-        val resolvedPath = if (rawValue.startsWith("/")) {
-            rawValue.trimStart('/')
-        } else if (directory.isBlank()) {
-            valueWithoutFragment
-        } else {
-            "$directory/$valueWithoutFragment"
+        val resolvedPath = when {
+            rawValue.startsWith("/") -> rawValue.trimStart('/')
+            directory.isBlank() -> valueWithoutFragment
+            else -> "$directory/$valueWithoutFragment"
         }.normalizeEpubPath()
         val resolved = buildString {
             append("https://")
@@ -1895,12 +2055,10 @@ private fun String.rewriteEpubRelativeResources(pageHref: String): String {
         val rawValue = match.groupValues[3]
         val valueWithoutFragment = rawValue.substringBefore('#')
         val fragment = rawValue.substringAfter('#', missingDelimiterValue = "")
-        val resolvedPath = if (rawValue.startsWith("/")) {
-            rawValue.trimStart('/')
-        } else if (directory.isBlank()) {
-            valueWithoutFragment
-        } else {
-            "$directory/$valueWithoutFragment"
+        val resolvedPath = when {
+            rawValue.startsWith("/") -> rawValue.trimStart('/')
+            directory.isBlank() -> valueWithoutFragment
+            else -> "$directory/$valueWithoutFragment"
         }.normalizeEpubPath()
         val resolved = buildString {
             append("https://")
@@ -1983,29 +2141,31 @@ private const val EPUB_JS_BRIDGE_NAME = "KaiEpubBridge"
 private const val EPUB_SYNTHETIC_COVER_HREF = "__kai_cover__.xhtml"
 private const val EPUB_SYNTHETIC_SYNOPSIS_HREF = "__kai_synopsis__.xhtml"
 
-private fun ReaderEpubPage.epubBaseUrl(): String {
-    val directory = href.substringBeforeLast('/', missingDelimiterValue = "")
-    return if (directory.isBlank()) {
-        "https://$EPUB_WEB_HOST/"
-    } else {
-        "https://$EPUB_WEB_HOST/$directory/"
-    }
-}
+// Sin uso actual. Para cargar las páginas EPUB por URL base individual
+//private fun ReaderEpubPage.epubBaseUrl(): String {
+//    val directory = href.substringBeforeLast('/', missingDelimiterValue = "")
+//    return if (directory.isBlank()) {
+//        "https://$EPUB_WEB_HOST/"
+//    } else {
+//        "https://$EPUB_WEB_HOST/$directory/"
+//    }
+//}
 
-private fun String.withReaderColors(theme: ReaderColorTheme): String {
-    val colorCss = """
-        <style type="text/css">
-        html, body { background:${theme.background}; color:${theme.text}; }
-        body, p, li, blockquote, div, span, h1, h2, h3, h4, h5, h6 { color:${theme.text}; }
-        a { color:${theme.text}; }
-        </style>
-    """.trimIndent()
-    return if (contains("</head>", ignoreCase = true)) {
-        replace(Regex("(?i)</head>"), "$colorCss\n</head>")
-    } else {
-        "$colorCss\n$this"
-    }
-}
+// Sin uso actual. Los colores se inyectan desde buildEpubReaderHtml.
+//private fun String.withReaderColors(theme: ReaderColorTheme): String {
+//    val colorCss = """
+//        <style type="text/css">
+//        html, body { background:${theme.background}; color:${theme.text}; }
+//        body, p, li, blockquote, div, span, h1, h2, h3, h4, h5, h6 { color:${theme.text}; }
+//        a { color:${theme.text}; }
+//        </style>
+//    """.trimIndent()
+//    return if (contains("</head>", ignoreCase = true)) {
+//        replace(Regex("(?i)</head>"), "$colorCss\n</head>")
+//    } else {
+//        "$colorCss\n$this"
+//    }
+//}
 
 private fun String.withReadableFallback(fallbackText: String): String {
     if (fallbackText.isBlank()) return this
@@ -2057,7 +2217,7 @@ private fun String.decodeJavascriptString(): String {
 }
 
 private fun String.toReaderColor(): Color {
-    return runCatching { Color(android.graphics.Color.parseColor(this)) }
+    return runCatching { Color(toColorInt()) }
         .getOrDefault(Color(0xFF202006))
 }
 
@@ -2075,6 +2235,7 @@ private fun String.epubMimeType(): String {
 }
 
 @Composable
+@Suppress("UNUSED_VALUE")
 private fun ReflowBookReader(
     file: DeviceLibraryFile,
     engineKind: ReaderEngineKind,
@@ -2598,6 +2759,7 @@ private fun ReflowBookReader(
 }
 @Composable
 fun PdfBookReader(
+    @Suppress("UNUSED_VALUE")
     file: DeviceLibraryFile,
     onProgressChanged: () -> Unit,
     onDismiss: () -> Unit
@@ -2779,7 +2941,7 @@ fun PdfBookReader(
                         .transformable(
                             state = pdfTransformState,
                             enabled = !controlsVisible &&
-                                !(pdfScrollOrientation == PdfReaderScrollOrientation.Vertical && pdfMovementLocked)
+                                    !(pdfScrollOrientation == PdfReaderScrollOrientation.Vertical && pdfMovementLocked)
                         )
                 ) {
                     if (pdfScrollOrientation == PdfReaderScrollOrientation.Vertical && pdfMovementLocked) {
@@ -2856,8 +3018,8 @@ fun PdfBookReader(
                                             val threshold = 72f
                                             when {
                                                 pdfScrollOrientation == PdfReaderScrollOrientation.Horizontal &&
-                                                    horizontalGesture &&
-                                                    abs(draggedX) > threshold -> {
+                                                        horizontalGesture &&
+                                                        abs(draggedX) > threshold -> {
                                                     currentPage = if (draggedX < 0) {
                                                         (currentPage + 1).coerceAtMost(activePageCount - 1)
                                                     } else {
@@ -2865,8 +3027,8 @@ fun PdfBookReader(
                                                     }
                                                 }
                                                 pdfScrollOrientation == PdfReaderScrollOrientation.Vertical &&
-                                                    verticalGesture &&
-                                                    abs(draggedY) > threshold -> {
+                                                        verticalGesture &&
+                                                        abs(draggedY) > threshold -> {
                                                     currentPage = if (draggedY < 0) {
                                                         (currentPage + 1).coerceAtMost(activePageCount - 1)
                                                     } else {
@@ -2898,7 +3060,7 @@ fun PdfBookReader(
                                     .fillMaxHeight()
                                     .clickable {
                                         currentPage = (currentPage + 1).coerceAtMost(activePageCount - 1)
-                                }
+                                    }
                             )
                         }
                     }

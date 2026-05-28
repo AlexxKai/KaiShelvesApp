@@ -3,6 +3,7 @@
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Environment
 import android.text.format.Formatter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,7 +17,6 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -68,6 +68,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -84,6 +85,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -318,10 +320,19 @@ fun DeviceLibraryLazyListScrollbar(
     state: LazyListState,
     modifier: Modifier = Modifier
 ) {
+    val metrics by remember(state) {
+        derivedStateOf {
+            DeviceLibraryScrollbarMetrics(
+                totalItems = state.layoutInfo.totalItemsCount,
+                visibleItems = state.layoutInfo.visibleItemsInfo.size,
+                firstVisibleItemIndex = state.firstVisibleItemIndex
+            )
+        }
+    }
     DeviceLibraryFastScrollbar(
-        totalItems = state.layoutInfo.totalItemsCount,
-        visibleItems = state.layoutInfo.visibleItemsInfo.size,
-        firstVisibleItemIndex = state.firstVisibleItemIndex,
+        totalItems = metrics.totalItems,
+        visibleItems = metrics.visibleItems,
+        firstVisibleItemIndex = metrics.firstVisibleItemIndex,
         modifier = modifier,
         onScrollToItem = { index -> state.scrollToItem(index) }
     )
@@ -332,14 +343,29 @@ fun DeviceLibraryLazyGridScrollbar(
     state: LazyGridState,
     modifier: Modifier = Modifier
 ) {
+    val metrics by remember(state) {
+        derivedStateOf {
+            DeviceLibraryScrollbarMetrics(
+                totalItems = state.layoutInfo.totalItemsCount,
+                visibleItems = state.layoutInfo.visibleItemsInfo.size,
+                firstVisibleItemIndex = state.firstVisibleItemIndex
+            )
+        }
+    }
     DeviceLibraryFastScrollbar(
-        totalItems = state.layoutInfo.totalItemsCount,
-        visibleItems = state.layoutInfo.visibleItemsInfo.size,
-        firstVisibleItemIndex = state.firstVisibleItemIndex,
+        totalItems = metrics.totalItems,
+        visibleItems = metrics.visibleItems,
+        firstVisibleItemIndex = metrics.firstVisibleItemIndex,
         modifier = modifier,
         onScrollToItem = { index -> state.scrollToItem(index) }
     )
 }
+
+private data class DeviceLibraryScrollbarMetrics(
+    val totalItems: Int,
+    val visibleItems: Int,
+    val firstVisibleItemIndex: Int
+)
 
 @Composable
 fun DeviceLibraryFastScrollbar(
@@ -556,8 +582,9 @@ fun ShelfListRow(
     var showBookInfoDialog by remember(file.uri) { mutableStateOf(false) }
     var showCoverDownload by remember(file.uri) { mutableStateOf(false) }
     val backgroundTreeUri = remember { readDefaultCoverStorageTreeUri(context)?.let(Uri::parse) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -571,16 +598,16 @@ fun ShelfListRow(
                 )
             )
     ) {
-        val compact = maxWidth < 380.dp
+        val compact = screenWidth < 380.dp
         val rowHeight = when {
             compact -> 158.dp
-            maxWidth < 600.dp -> 170.dp
+            screenWidth < 600.dp -> 170.dp
             else -> 186.dp
         }
         val verticalPadding = if (compact) 10.dp else 12.dp
         val coverWidth = when {
             compact -> 86.dp
-            maxWidth < 600.dp -> 96.dp
+            screenWidth < 600.dp -> 96.dp
             else -> 108.dp
         }
         val contentGap = if (compact) 12.dp else 16.dp
@@ -1165,7 +1192,8 @@ fun DeviceBookInfoDropDownIcon() {
 
 fun readableDeviceBookPath(file: DeviceLibraryFile, sizeText: String?): String {
     val location = file.location.trim('/').takeIf { it.isNotBlank() }
-    val path = listOfNotNull("/sdcard", location, file.name).joinToString("/")
+    val storageRoot = Environment.getExternalStorageDirectory().path
+    val path = listOfNotNull(storageRoot, location, file.name).joinToString("/")
     return if (sizeText.isNullOrBlank()) path else "$path ($sizeText)"
 }
 
@@ -1427,74 +1455,80 @@ fun Int.floorMod(other: Int): Int {
     return ((this % other) + other) % other
 }
 
-@Composable
-fun DeviceFileRow(
-    file: DeviceLibraryFile,
-    onClick: () -> Unit
-) {
-    val context = LocalContext.current
-    val dateFormatter = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
-    val sizeText = file.sizeBytes?.let { Formatter.formatShortFileSize(context, it) }
-    val modifiedText = file.modifiedAtMillis?.takeIf { it > 0 }?.let { dateFormatter.format(Date(it)) }
-    val metadata = listOfNotNull(sizeText, modifiedText, readableFileType(file)).joinToString(" - ")
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = DeepWalnut.copy(alpha = 0.92f)),
-        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.35f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FilePagePreview(file = file)
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = file.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OldIvory,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = file.location,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = OldIvory.copy(alpha = 0.72f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (metadata.isNotBlank()) {
-                    Text(
-                        text = metadata,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TarnishedGold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
+// Sin uso actual: se mantiene comentado por si vuelve una vista de archivos plana.
+// @Composable
+// fun DeviceFileRow(
+//     file: DeviceLibraryFile,
+//     onClick: () -> Unit
+// ) {
+//     val context = LocalContext.current
+//     val dateFormatter = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
+//     val sizeText = file.sizeBytes?.let { Formatter.formatShortFileSize(context, it) }
+//     val modifiedText = file.modifiedAtMillis?.takeIf { it > 0 }?.let { dateFormatter.format(Date(it)) }
+//     val metadata = listOfNotNull(sizeText, modifiedText, readableFileType(file)).joinToString(" - ")
+//
+//     Card(
+//         modifier = Modifier
+//             .fillMaxWidth()
+//             .clickable(onClick = onClick),
+//         shape = RoundedCornerShape(18.dp),
+//         colors = CardDefaults.cardColors(containerColor = DeepWalnut.copy(alpha = 0.92f)),
+//         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.35f))
+//     ) {
+//         Row(
+//             modifier = Modifier
+//                 .fillMaxWidth()
+//                 .padding(12.dp),
+//             verticalAlignment = Alignment.CenterVertically
+//         ) {
+//             FilePagePreview(file = file)
+//
+//             Spacer(modifier = Modifier.width(12.dp))
+//
+//             Column(modifier = Modifier.weight(1f)) {
+//                 Text(
+//                     text = file.name,
+//                     style = MaterialTheme.typography.titleMedium,
+//                     color = OldIvory,
+//                     maxLines = 1,
+//                     overflow = TextOverflow.Ellipsis
+//                 )
+//                 Text(
+//                     text = file.location,
+//                     style = MaterialTheme.typography.bodySmall,
+//                     color = OldIvory.copy(alpha = 0.72f),
+//                     maxLines = 1,
+//                     overflow = TextOverflow.Ellipsis
+//                 )
+//                 if (metadata.isNotBlank()) {
+//                     Text(
+//                         text = metadata,
+//                         style = MaterialTheme.typography.bodySmall,
+//                         color = TarnishedGold,
+//                         maxLines = 1,
+//                         overflow = TextOverflow.Ellipsis
+//                     )
+//                 }
+//             }
+//         }
+//     }
+// }
 
 @Composable
 fun FilePagePreview(
     file: DeviceLibraryFile,
+    modifier: Modifier = Modifier,
     coverText: String = "",
-    overrideCoverId: String? = null,
-    modifier: Modifier = Modifier
-        .width(48.dp)
-        .aspectRatio(0.68f)
+    overrideCoverId: String? = null
 ) {
     val context = LocalContext.current
+    val previewModifier = if (modifier == Modifier) {
+        Modifier
+            .width(48.dp)
+            .aspectRatio(0.68f)
+    } else {
+        modifier
+    }
     val overrideCover = remember(overrideCoverId) {
         overrideCoverId?.let { findDefaultCoverOption(context, it) }
     }
@@ -1510,7 +1544,7 @@ fun FilePagePreview(
     }
 
     Box(
-        modifier = modifier
+        modifier = previewModifier
             .clip(RoundedCornerShape(6.dp))
             .background(OldIvory.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center

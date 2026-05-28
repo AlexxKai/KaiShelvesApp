@@ -1,6 +1,7 @@
 package com.example.kaishelvesapp.ui.screen.lists
 
-import android.net.Uri
+// Sin uso actual: se usa String.toUri() de core-ktx.
+// import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -70,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.net.toUri
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
@@ -93,6 +96,19 @@ import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private data class ListDetailVisibleItemInfo(
+    val index: Int,
+    val offset: Int,
+    val size: Int
+)
+
+private data class ListDetailLayoutSnapshot(
+    val visibleItems: List<ListDetailVisibleItemInfo>,
+    val viewportWidth: Int,
+    val viewportStartOffset: Int,
+    val viewportEndOffset: Int
+)
+
 private enum class ListDetailSortOption {
     TITLE,
     AUTHOR,
@@ -101,6 +117,7 @@ private enum class ListDetailSortOption {
     READ_DATE
 }
 
+@Suppress("UNUSED_VALUE")
 @Composable
 fun UserListDetailScreen(
     listId: String,
@@ -112,7 +129,8 @@ fun UserListDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    // Sin uso actual: los mensajes del snackbar se resuelven con stringResource para evitar leer recursos desde LocalContext.
+    // val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
@@ -129,6 +147,28 @@ fun UserListDetailScreen(
     var draggingTranslationY by remember { mutableFloatStateOf(0f) }
     var autoScrollDelta by remember { mutableFloatStateOf(0f) }
     var selectedOwnedItem by remember { mutableStateOf<UserListDetailBookItem?>(null) }
+    val showScrollToTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240
+        }
+    }
+    val listLayoutSnapshot by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            ListDetailLayoutSnapshot(
+                visibleItems = layoutInfo.visibleItemsInfo.map { itemInfo ->
+                    ListDetailVisibleItemInfo(
+                        index = itemInfo.index,
+                        offset = itemInfo.offset,
+                        size = itemInfo.size
+                    )
+                },
+                viewportWidth = layoutInfo.viewportSize.width,
+                viewportStartOffset = layoutInfo.viewportStartOffset,
+                viewportEndOffset = layoutInfo.viewportEndOffset
+            )
+        }
+    }
     val sortedBooks = remember(uiState.books, sortOption, isReadList, isPendingList, isOwnedList) {
         if (isPendingList) {
             uiState.books
@@ -187,14 +227,17 @@ fun UserListDetailScreen(
         }
     }
 
-    LaunchedEffect(uiState.errorMessageRes, uiState.successMessageRes) {
-        uiState.errorMessageRes?.let {
-            snackbarHostState.showSnackbar(context.getString(it))
+    val errorMessageText = uiState.errorMessageRes?.let { stringResource(it) }
+    val successMessageText = uiState.successMessageRes?.let { stringResource(it) }
+
+    LaunchedEffect(errorMessageText, successMessageText) {
+        errorMessageText?.let { message ->
+            snackbarHostState.showSnackbar(message)
             viewModel.clearMessages()
         }
 
-        uiState.successMessageRes?.let {
-            snackbarHostState.showSnackbar(context.getString(it))
+        successMessageText?.let { message ->
+            snackbarHostState.showSnackbar(message)
             viewModel.clearMessages()
         }
     }
@@ -214,7 +257,7 @@ fun UserListDetailScreen(
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 240) {
+            if (showScrollToTop) {
                 FloatingActionButton(
                     onClick = { scope.launch { listState.animateScrollToItem(0) } },
                     containerColor = BloodWine,
@@ -327,9 +370,9 @@ fun UserListDetailScreen(
                             visibleBooks.chunked(3),
                             key = { index, _ -> "cover_row_$index" }
                         ) { rowIndex, rowItems ->
-                            val visibleRows = listState.layoutInfo.visibleItemsInfo
+                            val visibleRows = listLayoutSnapshot.visibleItems
                                 .filter { it.index > 0 }
-                            val cellWidth = listState.layoutInfo.viewportSize.width / 3f
+                            val cellWidth = listLayoutSnapshot.viewportWidth / 3f
                             CoverRow(
                                 items = rowItems,
                                 rowStartIndex = rowIndex * 3,
@@ -440,13 +483,13 @@ fun UserListDetailScreen(
                                                     val sourceIndex = draggingSourceIndex
                                                         ?: return@detectDragGesturesAfterLongPress
 
-                                                    val visibleRows = listState.layoutInfo.visibleItemsInfo
+                                                    val visibleRows = listLayoutSnapshot.visibleItems
                                                         .filter { it.index > 0 }
                                                     val sourceLayoutIndex = sourceIndex / 3 + 1
                                                     val sourceRowItem = visibleRows.firstOrNull { it.index == sourceLayoutIndex }
                                                     if (sourceRowItem != null) {
                                                         val sourceColumn = sourceIndex % 3
-                                                        val cellWidth = listState.layoutInfo.viewportSize.width / 3f
+                                                        val cellWidth = listLayoutSnapshot.viewportWidth / 3f
                                                         val draggedCenterX = (cellWidth * (sourceColumn + 0.5f)) + draggingTranslationX
                                                         val draggedCenterY = sourceRowItem.offset +
                                                             (sourceRowItem.size / 2f) +
@@ -454,9 +497,9 @@ fun UserListDetailScreen(
 
                                                         autoScrollDelta = when {
                                                             sourceRowItem.offset + sourceRowItem.size + draggingTranslationY >
-                                                                listState.layoutInfo.viewportEndOffset - 96 -> 18f
+                                                                listLayoutSnapshot.viewportEndOffset - 96 -> 18f
                                                             sourceRowItem.offset + draggingTranslationY <
-                                                                listState.layoutInfo.viewportStartOffset + 96 -> -18f
+                                                                listLayoutSnapshot.viewportStartOffset + 96 -> -18f
                                                             else -> 0f
                                                         }
 
@@ -540,13 +583,13 @@ fun UserListDetailScreen(
                                             }
                                             if (currentIndex == -1) return@detectDragGesturesAfterLongPress
 
-                                            val visibleItems = listState.layoutInfo.visibleItemsInfo
+                                            val visibleItems = listLayoutSnapshot.visibleItems
                                             val currentLayoutIndex = currentIndex + 1
                                             val currentItem = visibleItems.firstOrNull { it.index == currentLayoutIndex }
                                                 ?: return@detectDragGesturesAfterLongPress
                                             val currentMidPoint = currentItem.offset + currentItem.size / 2 + draggingTranslationY
-                                            val viewportStart = listState.layoutInfo.viewportStartOffset
-                                            val viewportEnd = listState.layoutInfo.viewportEndOffset
+                                            val viewportStart = listLayoutSnapshot.viewportStartOffset
+                                            val viewportEnd = listLayoutSnapshot.viewportEndOffset
                                             val currentTop = currentItem.offset + draggingTranslationY
                                             val currentBottom = currentItem.offset + currentItem.size + draggingTranslationY
 
@@ -738,7 +781,6 @@ private fun ListDetailHeaderCard(
                 if (isPendingList && !showCoverView) {
                     OutlinedButton(
                         onClick = onTogglePendingEditMode,
-                        enabled = !showCoverView,
                         modifier = Modifier.weight(1f),
                         border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
                     ) {
@@ -842,7 +884,7 @@ private fun CoverRow(
                         isDragging = isDragging,
                         offsetX = visualOffset.first,
                         offsetY = visualOffset.second,
-                        dragModifier = dragModifierFor(itemBookId.orEmpty()),
+                        modifier = dragModifierFor(itemBookId.orEmpty()),
                         onBookClick = onBookClick,
                         enabled = draggingBookId == null // && canOpenBooks
                     )
@@ -864,7 +906,7 @@ private fun CoverCell(
     isDragging: Boolean,
     offsetX: Float,
     offsetY: Float,
-    dragModifier: Modifier,
+    modifier: Modifier,
     onBookClick: (Libro) -> Unit,
     enabled: Boolean
 ) {
@@ -877,7 +919,7 @@ private fun CoverCell(
                 scaleY = if (isDragging) 1.04f else 1f
             }
             .zIndex(if (isDragging) 1f else 0f)
-            .then(dragModifier)
+            .then(modifier)
             .clickable(enabled = enabled) { onBookClick(item.book) },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -1016,7 +1058,7 @@ private fun ownedDeviceLibraryFile(item: UserListDetailBookItem): DeviceLibraryF
         mimeType = item.ownedMimeType,
         sizeBytes = item.ownedSizeBytes,
         modifiedAtMillis = item.ownedModifiedAtMillis,
-        uri = Uri.parse(item.ownedUri)
+        uri = item.ownedUri.toUri()
     )
 }
 
@@ -1121,6 +1163,7 @@ private fun sortOptionLabel(
     }
 }
 
+@Suppress("ModifierParameter", "ModifierParameterPosition")
 @Composable
 private fun ListBookCard(
     item: UserListDetailBookItem,
