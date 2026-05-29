@@ -77,6 +77,7 @@ class FriendRequestsViewModel(
     }
 
     fun loadReceivedRequests() {
+        hydrateCachedReceivedRequests()
         val currentState = _uiState.value
         if (currentState.isLoading) return
 
@@ -108,6 +109,7 @@ class FriendRequestsViewModel(
     }
 
     fun loadActivityNotifications() {
+        hydrateCachedActivityNotifications()
         val currentState = _uiState.value
         if (currentState.isLoadingNotifications) return
 
@@ -138,6 +140,32 @@ class FriendRequestsViewModel(
         }
     }
 
+    private fun hydrateCachedReceivedRequests() {
+        if (_uiState.value.receivedRequests.isNotEmpty() || _uiState.value.hasLoadedReceivedRequests) return
+        val cachedRequests = repository.cachedReceivedRequests()
+        if (cachedRequests.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            hasLoadedReceivedRequests = true,
+            receivedRequests = cachedRequests,
+            isLoading = false,
+            errorMessage = null
+        )
+    }
+
+    private fun hydrateCachedActivityNotifications() {
+        if (_uiState.value.notifications.isNotEmpty() || _uiState.value.hasLoadedActivityNotifications) return
+        val cachedNotifications = repository.cachedActivityNotifications()
+        if (cachedNotifications.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            hasLoadedActivityNotifications = true,
+            notifications = cachedNotifications,
+            isLoadingNotifications = false,
+            errorMessage = null
+        )
+    }
+
     fun observeActivityNotificationChanges() {
         activityNotificationsListener?.remove()
         activityNotificationsListener = repository.observeActivityNotificationChanges {
@@ -149,8 +177,10 @@ class FriendRequestsViewModel(
         viewModelScope.launch {
             repository.acceptFriendRequest(user)
                 .onSuccess {
+                    val updatedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid }
+                    repository.cacheReceivedRequests(updatedRequests)
                     _uiState.value = _uiState.value.copy(
-                        receivedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid },
+                        receivedRequests = updatedRequests,
                         successMessage = "Solicitud aceptada",
                         errorMessage = null
                     )
@@ -169,8 +199,10 @@ class FriendRequestsViewModel(
         viewModelScope.launch {
             repository.rejectFriendRequest(user)
                 .onSuccess {
+                    val updatedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid }
+                    repository.cacheReceivedRequests(updatedRequests)
                     _uiState.value = _uiState.value.copy(
-                        receivedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid },
+                        receivedRequests = updatedRequests,
                         successMessage = "Solicitud rechazada",
                         errorMessage = null
                     )
@@ -334,6 +366,7 @@ class FriendRequestsViewModel(
                 if (it.id == notificationId) it.copy(isRead = true) else it
             }
         )
+        repository.cacheActivityNotifications(_uiState.value.notifications)
 
         viewModelScope.launch {
             repository.markActivityNotificationRead(notificationId)
@@ -350,6 +383,7 @@ class FriendRequestsViewModel(
                         },
                         errorMessage = error.message ?: "No se pudo marcar la notificación como leída"
                     )
+                    repository.cacheActivityNotifications(_uiState.value.notifications)
                 }
         }
     }
@@ -366,6 +400,7 @@ class FriendRequestsViewModel(
                 }
             }
         )
+        repository.cacheActivityNotifications(_uiState.value.notifications)
     }
 
     private fun notifyNewActivityNotifications(notifications: List<ActivityNotificationItem>) {
@@ -420,4 +455,3 @@ class FriendRequestsViewModel(
         }
     }
 }
-

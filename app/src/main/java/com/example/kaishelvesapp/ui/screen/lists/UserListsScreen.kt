@@ -72,16 +72,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.UserBookList
 import com.example.kaishelvesapp.data.model.UserBookTagSummary
+import com.example.kaishelvesapp.data.model.UserListPreviewDeviceBook
+import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.screen.library.FilePagePreview
+import com.example.kaishelvesapp.ui.screen.library.readDeviceBookUserMetadata
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -989,7 +994,11 @@ private fun ListPreviewStack(
         modifier = modifier,
         contentAlignment = Alignment.BottomStart
     ) {
-        if (userList.previewImageUrls.isEmpty()) {
+        val previewDeviceBooks = userList.previewDeviceBooks.take(3)
+        val previewImageUrls = userList.previewImageUrls.take(3)
+        val previewCount = previewDeviceBooks.size.takeIf { it > 0 } ?: previewImageUrls.size
+
+        if (previewCount == 0) {
             Box(
                 modifier = Modifier
                     .offset(x = 34.dp)
@@ -1030,9 +1039,13 @@ private fun ListPreviewStack(
                 )
             }
         } else {
-            userList.previewImageUrls
-                .take(3)
-                .forEachIndexed { index, imageUrl ->
+            val previewSlots = previewDeviceBooks.ifEmpty {
+                previewImageUrls.map { imageUrl ->
+                    UserListPreviewDeviceBook(uri = imageUrl)
+                }
+            }
+
+            previewSlots.forEachIndexed { index, preview ->
                     val coverWidth = when (index) {
                         0 -> 70.dp
                         1 -> 52.dp
@@ -1049,19 +1062,28 @@ private fun ListPreviewStack(
                         else -> 62.dp
                     }
 
-                    BookCover(
-                        imageUrl = imageUrl,
-                        title = userList.name,
-                        showFrame = false,
-                        modifier = Modifier
-                            .offset(x = xOffset)
-                            .zIndex((3 - index).toFloat())
-                            .width(coverWidth)
-                            .height(coverHeight)
-                    )
+                    val coverModifier = Modifier
+                        .offset(x = xOffset)
+                        .zIndex((3 - index).toFloat())
+                        .width(coverWidth)
+                        .height(coverHeight)
+
+                    if (previewDeviceBooks.isNotEmpty()) {
+                        OwnedListPreviewCover(
+                            preview = preview,
+                            modifier = coverModifier
+                        )
+                    } else {
+                        BookCover(
+                            imageUrl = preview.uri,
+                            title = userList.name,
+                            showFrame = false,
+                            modifier = coverModifier
+                        )
+                    }
                 }
 
-            if (userList.bookCount > userList.previewImageUrls.size) {
+            if (userList.bookCount > previewCount) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -1074,7 +1096,7 @@ private fun ListPreviewStack(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "+${userList.bookCount - userList.previewImageUrls.size}",
+                        text = "+${userList.bookCount - previewCount}",
                         style = MaterialTheme.typography.labelSmall,
                         color = TarnishedGold
                     )
@@ -1082,6 +1104,34 @@ private fun ListPreviewStack(
             }
         }
     }
+}
+
+@Composable
+private fun OwnedListPreviewCover(
+    preview: UserListPreviewDeviceBook,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val file = remember(preview.uri) { previewDeviceLibraryFile(preview) }
+    val metadata = remember(preview.uri) { readDeviceBookUserMetadata(context, file) }
+
+    FilePagePreview(
+        file = file,
+        coverText = metadata.coverText,
+        overrideCoverId = metadata.coverId.takeIf { it.isNotBlank() },
+        modifier = modifier
+    )
+}
+
+private fun previewDeviceLibraryFile(preview: UserListPreviewDeviceBook): DeviceLibraryFile {
+    return DeviceLibraryFile(
+        name = preview.name,
+        location = preview.location,
+        mimeType = preview.mimeType,
+        sizeBytes = preview.sizeBytes,
+        modifiedAtMillis = preview.modifiedAtMillis,
+        uri = preview.uri.toUri()
+    )
 }
 
 private fun <T> MutableList<T>.move(fromIndex: Int, toIndex: Int) {

@@ -1,6 +1,7 @@
 ﻿package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.local.FriendsLocalStore
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
@@ -210,6 +211,36 @@ class FriendsRepository(
 ) {
 
     private fun currentUid(): String? = auth.currentUser?.uid
+
+    fun cachedHomeFeed(): List<FriendActivityItem> {
+        val uid = currentUid() ?: return emptyList()
+        return FriendsLocalStore.readHomeFeed(uid)
+    }
+
+    fun cacheHomeFeed(activities: List<FriendActivityItem>) {
+        val uid = currentUid() ?: return
+        FriendsLocalStore.writeHomeFeed(uid, activities)
+    }
+
+    fun cachedActivityNotifications(): List<ActivityNotificationItem> {
+        val uid = currentUid() ?: return emptyList()
+        return FriendsLocalStore.readActivityNotifications(uid)
+    }
+
+    fun cacheActivityNotifications(notifications: List<ActivityNotificationItem>) {
+        val uid = currentUid() ?: return
+        FriendsLocalStore.writeActivityNotifications(uid, notifications)
+    }
+
+    fun cachedReceivedRequests(): List<Usuario> {
+        val uid = currentUid() ?: return emptyList()
+        return FriendsLocalStore.readReceivedRequests(uid)
+    }
+
+    fun cacheReceivedRequests(requests: List<Usuario>) {
+        val uid = currentUid() ?: return
+        FriendsLocalStore.writeReceivedRequests(uid, requests)
+    }
 
     private fun isGuestSessionActive(): Boolean {
         return auth.currentUser == null && GuestLocalStore.isSessionActive()
@@ -1092,7 +1123,9 @@ class FriendsRepository(
                     )
                 }
 
-            Result.success(enrichWithSocial(sortActivitiesByRecency(visibleActivities), uid))
+            val feed = enrichWithSocial(sortActivitiesByRecency(visibleActivities), uid)
+            cacheHomeFeed(feed)
+            Result.success(feed)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1934,6 +1967,7 @@ class FriendsRepository(
                         .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
                 }
 
+            cacheActivityNotifications(notifications)
             Result.success(notifications)
         } catch (e: Exception) {
             Result.failure(e)
@@ -2441,6 +2475,7 @@ class FriendsRepository(
                     )?.visibleTo(uid)
                 }
 
+            cacheReceivedRequests(receivedRequests)
             Result.success(
                 FriendRequestsData(
                     receivedRequests = receivedRequests

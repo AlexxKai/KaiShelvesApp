@@ -7,6 +7,7 @@ import com.example.kaishelvesapp.data.model.DeviceBookFormat
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.OwnedDeviceBook
 import com.example.kaishelvesapp.data.model.UserBookList
+import com.example.kaishelvesapp.data.model.UserListPreviewDeviceBook
 import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.model.UserBookTagSummary
 import com.google.firebase.auth.FirebaseAuth
@@ -170,6 +171,16 @@ class UserListsRepository(
             description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
             bookCount = books.size,
             position = 5,
+            previewDeviceBooks = books.take(3).map { book ->
+                UserListPreviewDeviceBook(
+                    uri = book.uri,
+                    name = book.name,
+                    location = book.location,
+                    mimeType = book.mimeType,
+                    sizeBytes = book.sizeBytes,
+                    modifiedAtMillis = book.modifiedAtMillis
+                )
+            },
             isSystem = true,
             systemKey = SYSTEM_LIST_OWNED_KEY
         )

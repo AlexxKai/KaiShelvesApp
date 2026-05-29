@@ -145,10 +145,13 @@ class BookRepository(
     }
 
     fun getCachedDiscoverBooks(mode: DiscoverCatalogMode): List<Libro> {
+        val targetLanguage = LanguageManager.getCurrentLanguage()
         return DiscoverCatalogLocalStore.read(
-            languageTag = LanguageManager.getCurrentLanguage(),
+            languageTag = targetLanguage,
             modeKey = mode.cacheKey
-        )
+        ).map { book ->
+            book.preferKnownEdition(targetLanguage).withCoverFallback()
+        }
     }
 
     suspend fun preloadDiscoverBooks(): Result<Unit> {
@@ -345,6 +348,7 @@ class BookRepository(
                 .take(40)
                 .ifEmpty { candidates.drop((refreshIndex * 7) % candidates.size.coerceAtLeast(1)).take(40) }
                 .localizeForCurrentLanguage()
+                .map { book -> book.withCoverFallback() }
 
             persistDiscoverBooks(mode, refreshedBooks)
             Result.success(refreshedBooks)
@@ -359,32 +363,33 @@ class BookRepository(
         recentYear: Int,
         refreshIndex: Int
     ): List<DiscoverQuery> {
+        val spanish = LanguageManager.getCurrentLanguage() == "es"
         val currentQueries = listOf(
-            DiscoverQuery("$currentYear books", "newest"),
-            DiscoverQuery("$currentYear novel", "newest"),
+            DiscoverQuery(if (spanish) "$currentYear libros" else "$currentYear books", "newest"),
+            DiscoverQuery(if (spanish) "$currentYear novela" else "$currentYear novel", "newest"),
             DiscoverQuery("$currentYear literatura", "newest"),
-            DiscoverQuery("$recentYear books", "newest"),
-            DiscoverQuery("$recentYear novel", "newest"),
-            DiscoverQuery("published $currentYear", "newest"),
-            DiscoverQuery("subject:fiction $currentYear", "newest"),
-            DiscoverQuery("subject:fantasy $currentYear", "newest"),
-            DiscoverQuery("subject:mystery $currentYear", "newest"),
-            DiscoverQuery("subject:romance $currentYear", "newest"),
-            DiscoverQuery("subject:thriller $recentYear", "newest"),
-            DiscoverQuery("subject:young adult $recentYear", "newest")
+            DiscoverQuery(if (spanish) "$recentYear libros" else "$recentYear books", "newest"),
+            DiscoverQuery(if (spanish) "$recentYear novela" else "$recentYear novel", "newest"),
+            DiscoverQuery(if (spanish) "publicado $currentYear" else "published $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "ficcion" else "subject:fiction"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "fantasia" else "subject:fantasy"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "misterio" else "subject:mystery"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "romance" else "subject:romance"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "thriller" else "subject:thriller"} $recentYear", "newest"),
+            DiscoverQuery("${if (spanish) "juvenil" else "subject:young adult"} $recentYear", "newest")
         )
 
         val topRatedQueries = listOf(
-            DiscoverQuery("subject:fiction award winning"),
-            DiscoverQuery("subject:fantasy bestseller"),
-            DiscoverQuery("subject:mystery bestseller"),
-            DiscoverQuery("subject:science fiction award"),
-            DiscoverQuery("subject:historical fiction bestseller"),
-            DiscoverQuery("modern classics fiction"),
-            DiscoverQuery("goodreads choice awards fiction"),
-            DiscoverQuery("hugely popular fantasy novel"),
-            DiscoverQuery("critically acclaimed literary fiction"),
-            DiscoverQuery("best books of the decade")
+            DiscoverQuery(if (spanish) "ficcion premiada" else "subject:fiction award winning"),
+            DiscoverQuery(if (spanish) "fantasia bestseller" else "subject:fantasy bestseller"),
+            DiscoverQuery(if (spanish) "misterio bestseller" else "subject:mystery bestseller"),
+            DiscoverQuery(if (spanish) "ciencia ficcion premio" else "subject:science fiction award"),
+            DiscoverQuery(if (spanish) "novela historica bestseller" else "subject:historical fiction bestseller"),
+            DiscoverQuery(if (spanish) "clasicos modernos novela" else "modern classics fiction"),
+            DiscoverQuery(if (spanish) "mejores novelas premiadas" else "goodreads choice awards fiction"),
+            DiscoverQuery(if (spanish) "novela fantasia popular" else "hugely popular fantasy novel"),
+            DiscoverQuery(if (spanish) "novela literaria aclamada" else "critically acclaimed literary fiction"),
+            DiscoverQuery(if (spanish) "mejores libros de la decada" else "best books of the decade")
         )
 
         val knownAuthorQueries = listOf(
@@ -906,11 +911,64 @@ class BookRepository(
         val targetLanguage = LanguageManager.getCurrentLanguage()
 
         return map { book ->
-            BookMetadataLocalizer.localize(
-                book = book,
-                targetLanguageTag = targetLanguage
-            )
+            val preferredBook = book.preferKnownEdition(targetLanguage)
+            if (preferredBook.titulo.isKnownDiscoverEditionTitle()) {
+                preferredBook
+            } else {
+                BookMetadataLocalizer.localize(
+                    book = preferredBook,
+                    targetLanguageTag = targetLanguage
+                )
+            }
         }
+    }
+
+    private fun Libro.preferKnownEdition(targetLanguage: String): Libro {
+        val normalizedTitle = titulo.normalizedEditionKey()
+        val edition = knownDiscoverEditions[normalizedTitle] ?: return this
+        val preferred = if (targetLanguage == "es") edition.spanish else edition.english
+
+        return copy(
+            titulo = preferred.title,
+            genero = preferred.genre.ifBlank { genero },
+            imagen = preferred.coverUrl.ifBlank { imagen }
+        )
+    }
+
+    private fun Libro.withCoverFallback(): Libro {
+        if (imagen.isNotBlank()) return this
+
+        val fallback = when {
+            isbn.isNotBlank() -> "https://covers.openlibrary.org/b/isbn/${isbn.trim()}-L.jpg?default=false"
+            titulo.isNotBlank() -> "https://covers.openlibrary.org/b/title/${titulo.urlEncoded()}-L.jpg?default=false"
+            else -> ""
+        }
+
+        return if (fallback.isBlank()) this else copy(imagen = fallback)
+    }
+
+    private fun String.normalizedEditionKey(): String {
+        return trim()
+            .lowercase(Locale.ROOT)
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+            .replace("ü", "u")
+            .replace("ñ", "n")
+    }
+
+    private fun String.urlEncoded(): String {
+        return trim()
+            .replace(" ", "%20")
+            .replace(",", "%2C")
+            .replace("&", "%26")
+            .replace("'", "%27")
+    }
+
+    private fun String.isKnownDiscoverEditionTitle(): Boolean {
+        return knownDiscoverEditions.containsKey(normalizedEditionKey())
     }
 }
 
@@ -918,3 +976,78 @@ private data class DiscoverQuery(
     val text: String,
     val orderBy: String? = null
 )
+
+private data class KnownBookEdition(
+    val title: String,
+    val genre: String,
+    val coverUrl: String
+)
+
+private data class KnownBookEditionPair(
+    val spanish: KnownBookEdition,
+    val english: KnownBookEdition
+)
+
+private fun googleCover(volumeId: String): String {
+    return "https://books.google.com/books/content?id=$volumeId&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+}
+
+private fun openLibraryTitleCover(title: String): String {
+    return "https://covers.openlibrary.org/b/title/${title.replace(" ", "%20").replace(",", "%2C")}-L.jpg?default=false"
+}
+
+private val knownDiscoverEditions = listOf(
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El nombre del viento", "Fantasia", googleCover("QeYF9kTMypgC")),
+        english = KnownBookEdition("The Name of the Wind", "Fantasy", googleCover("TG5DXNXv2tAC"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Proyecto Hail Mary", "Ciencia ficcion", googleCover("t1slEAAAQBAJ")),
+        english = KnownBookEdition("Project Hail Mary", "Science fiction", googleCover("GrYsEAAAQBAJ"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El camino de los reyes", "Fantasia", googleCover("LcqipwAACAAJ")),
+        english = KnownBookEdition("The Way of Kings", "Fantasy", openLibraryTitleCover("The Way of Kings"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El hobbit", "Fantasia", openLibraryTitleCover("The Hobbit")),
+        english = KnownBookEdition("The Hobbit", "Fantasy", openLibraryTitleCover("The Hobbit"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("La ladrona de libros", "Historica", openLibraryTitleCover("The Book Thief")),
+        english = KnownBookEdition("The Book Thief", "Historical fiction", openLibraryTitleCover("The Book Thief"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El resplandor", "Terror", openLibraryTitleCover("The Shining")),
+        english = KnownBookEdition("The Shining", "Horror", openLibraryTitleCover("The Shining"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Asesinato en el Orient Express", "Misterio", openLibraryTitleCover("Murder on the Orient Express")),
+        english = KnownBookEdition("Murder on the Orient Express", "Mystery", openLibraryTitleCover("Murder on the Orient Express"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Kafka en la orilla", "Ficcion", openLibraryTitleCover("Kafka on the Shore")),
+        english = KnownBookEdition("Kafka on the Shore", "Fiction", openLibraryTitleCover("Kafka on the Shore"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("La mano izquierda de la oscuridad", "Ciencia ficcion", openLibraryTitleCover("The Left Hand of Darkness")),
+        english = KnownBookEdition("The Left Hand of Darkness", "Science fiction", openLibraryTitleCover("The Left Hand of Darkness"))
+    )
+).flatMap { pair ->
+    listOf(
+        pair.spanish.title.normalizedKnownEditionKey() to pair,
+        pair.english.title.normalizedKnownEditionKey() to pair
+    )
+}.toMap()
+
+private fun String.normalizedKnownEditionKey(): String {
+    return trim()
+        .lowercase(Locale.ROOT)
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ü", "u")
+        .replace("ñ", "n")
+}

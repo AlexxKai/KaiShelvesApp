@@ -41,6 +41,7 @@ class HomeViewModel(
     }
 
     private fun fetchFeed(isRefresh: Boolean) {
+        hydrateCachedFeed()
         val currentState = _uiState.value
         if (currentState.isLoading || currentState.isRefreshing) return
 
@@ -54,7 +55,7 @@ class HomeViewModel(
         viewModelScope.launch {
             repository.loadHomeFeed()
                 .onSuccess { activities ->
-                    _uiState.value = currentState.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
                         activities = activities,
@@ -64,7 +65,7 @@ class HomeViewModel(
                 }
                 .onFailure { error ->
                     val isOffline = error.isOfflineFailure()
-                    _uiState.value = currentState.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
                         errorMessageRes = if (isOffline) {
@@ -76,6 +77,19 @@ class HomeViewModel(
                     )
                 }
         }
+    }
+
+    private fun hydrateCachedFeed() {
+        if (_uiState.value.activities.isNotEmpty()) return
+        val cachedActivities = repository.cachedHomeFeed()
+        if (cachedActivities.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            activities = cachedActivities,
+            isLoading = false,
+            errorMessageRes = null,
+            isOfflineError = false
+        )
     }
 
     fun toggleLike(activityId: String) {
