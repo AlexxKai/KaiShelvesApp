@@ -332,10 +332,13 @@
     <string name="rating">Valoración</string>
     <string name="sort_by_label">Ordenar por</string>
     <string name="sort_action">Cambiar orden</string>
+    <string name="sort_direction_action">Invertir dirección del orden</string>
+    <string name="sort_option_custom">Personalizado</string>
     <string name="sort_option_title">Título</string>
     <string name="sort_option_author">Autor</string>
+    <string name="sort_option_added_date">Fecha de añadido</string>
     <string name="sort_option_format">Formato</string>
-    <string name="sort_option_rating">Tu valoración</string>
+    <string name="sort_option_rating">Valoración</string>
     <string name="sort_option_read_date">Fecha de lectura</string>
     <string name="cover_view">Vista de portadas</string>
     <string name="list_view">Vista de lista</string>

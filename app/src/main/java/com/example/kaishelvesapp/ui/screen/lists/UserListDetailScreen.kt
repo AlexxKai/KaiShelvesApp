@@ -27,8 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DragIndicator
@@ -38,6 +39,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -93,6 +96,7 @@ import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
+import com.example.kaishelvesapp.ui.viewmodel.USER_TAG_DETAIL_PREFIX
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -110,8 +114,10 @@ private data class ListDetailLayoutSnapshot(
 )
 
 private enum class ListDetailSortOption {
+    CUSTOM,
     TITLE,
     AUTHOR,
+    DATE_ADDED,
     FORMAT,
     RATING,
     READ_DATE
@@ -134,9 +140,12 @@ fun UserListDetailScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var sortOption by remember(listId) { mutableStateOf(ListDetailSortOption.TITLE) }
+    var isSortReversed by rememberSaveable(listId) { mutableStateOf(false) }
     val isReadList = listId == UserListsRepository.SYSTEM_LIST_READ_ID
     val isPendingList = listId == UserListsRepository.SYSTEM_LIST_PENDING_ID
     val isOwnedList = listId == UserListsRepository.SYSTEM_LIST_OWNED_ID
+    val isUserTag = listId.startsWith(USER_TAG_DETAIL_PREFIX)
+    val isPendingCustomSort = isPendingList && sortOption == ListDetailSortOption.CUSTOM
     val displayedPendingBooks = remember { mutableStateListOf<UserListDetailBookItem>() }
     var isPendingEditMode by rememberSaveable(listId) { mutableStateOf(false) }
     var showCoverView by rememberSaveable(listId) { mutableStateOf(false) }
@@ -169,48 +178,58 @@ fun UserListDetailScreen(
             )
         }
     }
-    val sortedBooks = remember(uiState.books, sortOption, isReadList, isPendingList, isOwnedList) {
-        if (isPendingList) {
-            uiState.books
-        } else {
-            when (sortOption) {
-                ListDetailSortOption.TITLE -> uiState.books.sortedBy { it.book.titulo.lowercase() }
-                ListDetailSortOption.AUTHOR -> uiState.books.sortedBy { it.book.autor.lowercase() }
-                ListDetailSortOption.FORMAT -> uiState.books.sortedWith(
-                    compareBy<UserListDetailBookItem> { formatSortKey(it.ownedFormats) }
-                        .thenBy { it.book.titulo.lowercase() }
-                )
-                ListDetailSortOption.RATING -> uiState.books.sortedWith(
-                    compareByDescending<UserListDetailBookItem> { it.rating ?: -1 }
-                        .thenBy { it.book.titulo.lowercase() }
-                )
-                ListDetailSortOption.READ_DATE -> uiState.books.sortedWith(
-                    compareByDescending<UserListDetailBookItem> { it.readDate.orEmpty() }
-                        .thenBy { it.book.titulo.lowercase() }
-                )
-            }
+    val sortOptions = remember(listId, isReadList, isPendingList, isOwnedList, isUserTag) {
+        sortOptionsForList(listId, isReadList, isPendingList, isOwnedList, isUserTag)
+    }
+    val sortedBooks = remember(uiState.books, sortOption, isSortReversed) {
+        when (sortOption) {
+            ListDetailSortOption.CUSTOM -> uiState.books.sortedWith(
+                compareBy<UserListDetailBookItem> { it.addedOrder }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+            ListDetailSortOption.DATE_ADDED -> uiState.books.sortedWith(
+                compareByDescending<UserListDetailBookItem> { it.addedOrder }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+            ListDetailSortOption.TITLE -> uiState.books.sortedBy { it.book.titulo.lowercase() }
+            ListDetailSortOption.AUTHOR -> uiState.books.sortedBy { it.book.autor.lowercase() }
+            ListDetailSortOption.FORMAT -> uiState.books.sortedWith(
+                compareBy<UserListDetailBookItem> { formatSortKey(it.ownedFormats) }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+            ListDetailSortOption.RATING -> uiState.books.sortedWith(
+                compareByDescending<UserListDetailBookItem> { it.rating ?: -1 }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+            ListDetailSortOption.READ_DATE -> uiState.books.sortedWith(
+                compareByDescending<UserListDetailBookItem> { it.readDate.orEmpty() }
+                    .thenBy { it.book.titulo.lowercase() }
+            )
+        }.let { books ->
+            if (isSortReversed && sortOption != ListDetailSortOption.CUSTOM) books.asReversed() else books
         }
     }
-    val visibleBooks = if (isPendingList) displayedPendingBooks else sortedBooks
+    val visibleBooks = if (isPendingCustomSort) displayedPendingBooks else sortedBooks
 
     LaunchedEffect(listId) {
         viewModel.loadListDetail(listId)
         sortOption = when {
             isOwnedList -> ListDetailSortOption.FORMAT
             isReadList -> ListDetailSortOption.READ_DATE
+            isPendingList -> ListDetailSortOption.CUSTOM
             else -> ListDetailSortOption.TITLE
         }
     }
 
-    LaunchedEffect(uiState.books, isPendingList) {
-        if (isPendingList && draggingBookId == null) {
+    LaunchedEffect(uiState.books, isPendingCustomSort) {
+        if (isPendingCustomSort && draggingBookId == null) {
             displayedPendingBooks.clear()
-            displayedPendingBooks.addAll(uiState.books)
+            displayedPendingBooks.addAll(sortedBooks)
         }
     }
 
-    LaunchedEffect(isPendingList, isPendingEditMode) {
-        if (!isPendingList || !isPendingEditMode) {
+    LaunchedEffect(isPendingCustomSort, isPendingEditMode) {
+        if (!isPendingCustomSort || !isPendingEditMode) {
             draggingBookId = null
             draggingSourceIndex = null
             draggingTargetIndex = null
@@ -289,6 +308,8 @@ fun UserListDetailScreen(
                     isReadList = isReadList,
                     isPendingList = isPendingList,
                     isOwnedList = isOwnedList,
+                    sortOptions = sortOptions,
+                    isSortReversed = isSortReversed,
                     isPendingEditMode = isPendingEditMode,
                     showCoverView = showCoverView,
                     onBack = onBack,
@@ -306,16 +327,17 @@ fun UserListDetailScreen(
                         }
                         isPendingEditMode = !isPendingEditMode
                     },
-                    onSortChange = {
-                        sortOption = when {
-                            isOwnedList && sortOption == ListDetailSortOption.FORMAT -> ListDetailSortOption.TITLE
-                            isOwnedList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
-                            isOwnedList -> ListDetailSortOption.FORMAT
-                            !isReadList && sortOption == ListDetailSortOption.TITLE -> ListDetailSortOption.AUTHOR
-                            !isReadList -> ListDetailSortOption.TITLE
-                            sortOption == ListDetailSortOption.READ_DATE -> ListDetailSortOption.RATING
-                            sortOption == ListDetailSortOption.RATING -> ListDetailSortOption.TITLE
-                            else -> ListDetailSortOption.READ_DATE
+                    onSortSelected = { selectedSortOption ->
+                        if (sortOption != selectedSortOption) {
+                            isPendingEditMode = false
+                            isSortReversed = false
+                            sortOption = selectedSortOption
+                        }
+                    },
+                    onToggleSortDirection = {
+                        if (!isPendingCustomSort) {
+                            isPendingEditMode = false
+                            isSortReversed = !isSortReversed
                         }
                     }
                 )
@@ -428,7 +450,7 @@ fun UserListDetailScreen(
                                     }
                                 },
                                 dragModifierFor = { bookId ->
-                                    if (isPendingList) {
+                                    if (isPendingCustomSort) {
                                         Modifier.pointerInput(bookId, visibleBooks.size) {
                                             detectDragGesturesAfterLongPress(
                                                 onDragStart = {
@@ -543,7 +565,7 @@ fun UserListDetailScreen(
                             onOpen = { onBookClick(item.book) },
                             onReadOwnedBook = { onReadOwnedBook(item) },
                             onOrganizationChanged = { viewModel.loadListDetail(listId) },
-                            dragHandleModifier = if (isPendingList && isPendingEditMode) {
+                            dragHandleModifier = if (isPendingCustomSort && isPendingEditMode) {
                                 Modifier.pointerInput(bookId, visibleBooks.size) {
                                     detectDragGesturesAfterLongPress(
                                         onDragStart = {
@@ -647,13 +669,19 @@ private fun ListDetailHeaderCard(
     isReadList: Boolean,
     isPendingList: Boolean,
     isOwnedList: Boolean,
+    sortOptions: List<ListDetailSortOption>,
+    isSortReversed: Boolean,
     isPendingEditMode: Boolean,
     showCoverView: Boolean,
     onBack: () -> Unit,
     onToggleViewMode: () -> Unit,
     onTogglePendingEditMode: () -> Unit,
-    onSortChange: () -> Unit
+    onSortSelected: (ListDetailSortOption) -> Unit,
+    onToggleSortDirection: () -> Unit
 ) {
+    var isSortMenuExpanded by remember { mutableStateOf(false) }
+    val isPendingCustomSort = isPendingList && sortOption == ListDetailSortOption.CUSTOM
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
@@ -752,33 +780,7 @@ private fun ListDetailHeaderCard(
                     )
                 }
 
-                if (isOwnedList) {
-                    OutlinedButton(
-                        onClick = onSortChange,
-                        modifier = Modifier.weight(1f),
-                        border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.45f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = stringResource(R.string.sort_action),
-                            tint = TarnishedGold,
-                            modifier = Modifier.size(18.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Text(
-                            text = sortOptionLabel(sortOption, isReadList = false),
-                            color = TarnishedGold,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                if (isPendingList && !showCoverView) {
+                if (isPendingCustomSort && !showCoverView) {
                     OutlinedButton(
                         onClick = onTogglePendingEditMode,
                         modifier = Modifier.weight(1f),
@@ -803,40 +805,99 @@ private fun ListDetailHeaderCard(
                 }
             }
 
-            if (!isPendingList && !isOwnedList) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .background(
-                            color = BloodWine.copy(alpha = 0.14f),
-                            shape = RoundedCornerShape(16.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = BloodWine.copy(alpha = 0.14f),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .clickable { isSortMenuExpanded = true }
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sort_by_label),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory
                         )
-                        .clickable { onSortChange() }
-                        .padding(horizontal = 14.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Text(
+                            text = sortOptionLabel(sortOption),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TarnishedGold,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = stringResource(R.string.sort_action),
+                            tint = TarnishedGold,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = isSortMenuExpanded,
+                        onDismissRequest = { isSortMenuExpanded = false },
+                        containerColor = Obsidian
+                    ) {
+                        sortOptions.forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = sortOptionLabel(option),
+                                        color = if (option == sortOption) TarnishedGold else OldIvory,
+                                        fontWeight = if (option == sortOption) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    if (option == sortOption) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Done,
+                                            contentDescription = null,
+                                            tint = TarnishedGold,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    isSortMenuExpanded = false
+                                    onSortSelected(option)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = onToggleSortDirection,
+                    enabled = !isPendingCustomSort,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(
+                            color = BloodWine.copy(alpha = if (isPendingCustomSort) 0.07f else 0.14f),
+                            shape = RoundedCornerShape(14.dp)
+                        )
                 ) {
-                    Text(
-                        text = stringResource(R.string.sort_by_label),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OldIvory
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Text(
-                        text = sortOptionLabel(sortOption, isReadList),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TarnishedGold,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                        contentDescription = stringResource(R.string.sort_action),
-                        tint = TarnishedGold,
-                        modifier = Modifier.size(20.dp)
+                        imageVector = if (isSortReversed) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                        contentDescription = stringResource(R.string.sort_direction_action),
+                        tint = TarnishedGold.copy(alpha = if (isPendingCustomSort) 0.42f else 1f),
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -1150,16 +1211,58 @@ private fun formatSortOrder(format: DeviceBookFormat): Int {
 
 @Composable
 private fun sortOptionLabel(
-    sortOption: ListDetailSortOption,
-    isReadList: Boolean
+    sortOption: ListDetailSortOption
 ): String {
+    return when (sortOption) {
+        ListDetailSortOption.CUSTOM -> stringResource(R.string.sort_option_custom)
+        ListDetailSortOption.TITLE -> stringResource(R.string.sort_option_title)
+        ListDetailSortOption.AUTHOR -> stringResource(R.string.sort_option_author)
+        ListDetailSortOption.DATE_ADDED -> stringResource(R.string.sort_option_added_date)
+        ListDetailSortOption.FORMAT -> stringResource(R.string.sort_option_format)
+        ListDetailSortOption.RATING -> stringResource(R.string.sort_option_rating)
+        ListDetailSortOption.READ_DATE -> stringResource(R.string.sort_option_read_date)
+    }
+}
+
+private fun sortOptionsForList(
+    listId: String,
+    isReadList: Boolean,
+    isPendingList: Boolean,
+    isOwnedList: Boolean,
+    isUserTag: Boolean
+): List<ListDetailSortOption> {
     return when {
-        sortOption == ListDetailSortOption.FORMAT -> stringResource(R.string.sort_option_format)
-        !isReadList && sortOption == ListDetailSortOption.AUTHOR -> stringResource(R.string.sort_option_author)
-        !isReadList -> stringResource(R.string.sort_option_title)
-        sortOption == ListDetailSortOption.READ_DATE -> stringResource(R.string.sort_option_read_date)
-        sortOption == ListDetailSortOption.RATING -> stringResource(R.string.sort_option_rating)
-        else -> stringResource(R.string.sort_option_title)
+        isPendingList -> listOf(
+            ListDetailSortOption.CUSTOM,
+            ListDetailSortOption.TITLE,
+            ListDetailSortOption.AUTHOR,
+            ListDetailSortOption.DATE_ADDED
+        )
+        isOwnedList -> listOf(
+            ListDetailSortOption.TITLE,
+            ListDetailSortOption.AUTHOR,
+            ListDetailSortOption.FORMAT
+        )
+        isReadList -> listOf(
+            ListDetailSortOption.TITLE,
+            ListDetailSortOption.AUTHOR,
+            ListDetailSortOption.DATE_ADDED,
+            ListDetailSortOption.READ_DATE,
+            ListDetailSortOption.RATING
+        )
+        isUserTag ||
+            listId == UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID ||
+            listId == UserListsRepository.SYSTEM_LIST_READING_ID ||
+            listId == UserListsRepository.SYSTEM_LIST_UNFINISHED_ID -> listOf(
+                ListDetailSortOption.TITLE,
+                ListDetailSortOption.AUTHOR,
+                ListDetailSortOption.DATE_ADDED
+            )
+        else -> listOf(
+            ListDetailSortOption.TITLE,
+            ListDetailSortOption.AUTHOR,
+            ListDetailSortOption.DATE_ADDED
+        )
     }
 }
 

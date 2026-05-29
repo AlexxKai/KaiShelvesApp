@@ -609,12 +609,7 @@ class UserListsRepository(
                 val storedBooks = GuestLocalStore.readState()
                     .listBooks[listId]
                     .orEmpty()
-                val books = if (listId == SYSTEM_LIST_PENDING_ID) {
-                    storedBooks
-                } else {
-                    storedBooks.sortedBy { it.titulo.lowercase() }
-                }
-                return Result.success(books)
+                return Result.success(storedBooks)
             }
 
             val uid = requireUid()
@@ -626,15 +621,11 @@ class UserListsRepository(
                 .get()
                 .await()
 
-            val sortedDocuments = if (listId == SYSTEM_LIST_PENDING_ID) {
-                snapshot.documents.sortedWith(
-                    compareBy<com.google.firebase.firestore.DocumentSnapshot> {
-                        it.getLong("listPosition") ?: Long.MAX_VALUE
-                    }.thenBy { it.getString("titulo").orEmpty().lowercase() }
-                )
-            } else {
-                snapshot.documents.sortedBy { it.getString("titulo").orEmpty().lowercase() }
-            }
+            val sortedDocuments = snapshot.documents.sortedWith(
+                compareBy<com.google.firebase.firestore.DocumentSnapshot> {
+                    it.getLong("listPosition") ?: Long.MAX_VALUE
+                }.thenBy { it.getString("titulo").orEmpty().lowercase() }
+            )
 
             val books = sortedDocuments.mapNotNull { document ->
                 document.toObject(Libro::class.java)?.copy(

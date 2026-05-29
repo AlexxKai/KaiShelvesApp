@@ -332,10 +332,13 @@
     <string name="rating">Rating</string>
     <string name="sort_by_label">Sort by</string>
     <string name="sort_action">Change sorting</string>
+    <string name="sort_direction_action">Invert sorting direction</string>
+    <string name="sort_option_custom">Custom</string>
     <string name="sort_option_title">Title</string>
     <string name="sort_option_author">Author</string>
+    <string name="sort_option_added_date">Date added</string>
     <string name="sort_option_format">Format</string>
-    <string name="sort_option_rating">Your rating</string>
+    <string name="sort_option_rating">Rating</string>
     <string name="sort_option_read_date">Read date</string>
     <string name="cover_view">Cover view</string>
     <string name="list_view">List view</string>
