@@ -187,7 +187,7 @@
     <string name="device_reader_text_error">This book does not contain readable text for the internal reader.</string>
     <string name="device_reader_unsupported_title">Internal reader not available</string>
     <string name="device_reader_unsupported_body">Kai Shelves can show this %1$s file in the library, but this format is not readable internally yet.</string>
-    <string name="device_reader_pdf_only_body">To reduce rendering failures, the internal reader now opens PDF and EPUB. Convert this %1$s file to PDF or EPUB from the converter before reading it.</string>
+    <string name="device_reader_pdf_only_body">The reader opens PDF and EPUB. Convert this %1$s file to PDF or EPUB from the converter before reading it.</string>
     <string name="reader_tab_chapters">Chapters</string>
     <string name="reader_tab_bookmarks">Bookmarks</string>
     <string name="reader_tab_images">Images</string>

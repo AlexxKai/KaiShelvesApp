@@ -119,6 +119,7 @@ fun DeviceLibraryContent(
     searchQuery: String,
     layoutMode: DeviceLibraryLayoutMode,
     progressRevision: Int,
+    metadataRevision: Int = 0,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -188,6 +189,7 @@ fun DeviceLibraryContent(
             pinnedBookIds = pinnedBookIds,
             onPinnedBookIdsChange = { pinnedBookIds = it },
             progressByFile = progressByFile,
+            metadataRevision = metadataRevision,
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Grid -> DeviceLibraryGridView(
@@ -196,6 +198,7 @@ fun DeviceLibraryContent(
             pinnedBookIds = pinnedBookIds,
             onPinnedBookIdsChange = { pinnedBookIds = it },
             progressByFile = progressByFile,
+            metadataRevision = metadataRevision,
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Carousel -> DeviceLibraryCarouselView(
@@ -214,6 +217,7 @@ fun DeviceLibraryListView(
     pinnedBookIds: List<String>,
     onPinnedBookIdsChange: (List<String>) -> Unit,
     progressByFile: Map<String, Int>,
+    metadataRevision: Int = 0,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -255,6 +259,7 @@ fun DeviceLibraryListView(
                             }
                         }
                     },
+                    metadataRevision = metadataRevision,
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -274,6 +279,7 @@ fun DeviceLibraryGridView(
     pinnedBookIds: List<String>,
     onPinnedBookIdsChange: (List<String>) -> Unit,
     progressByFile: Map<String, Int>,
+    metadataRevision: Int = 0,
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -303,6 +309,7 @@ fun DeviceLibraryGridView(
                         onPinnedBookIdsChange(updatedPinnedBookIds)
                         savePinnedDeviceBookIds(context, updatedPinnedBookIds)
                     },
+                    metadataRevision = metadataRevision,
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -564,6 +571,7 @@ fun ShelfListRow(
     progress: Int,
     isPinned: Boolean,
     onTogglePin: () -> Unit,
+    metadataRevision: Int = 0,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -572,7 +580,7 @@ fun ShelfListRow(
             if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
         }
     }
-    var userMetadata by remember(file.uri) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
+    var userMetadata by remember(file.uri, metadataRevision) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
     val title = userMetadata.title.takeIf { it.isNotBlank() }
         ?: bookMetadata?.title?.takeIf { it.isNotBlank() }
         ?: file.name.substringBeforeLast('.')
@@ -1271,6 +1279,7 @@ fun ShelfGridBook(
     progress: Int,
     isPinned: Boolean,
     onTogglePin: () -> Unit,
+    metadataRevision: Int = 0,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1279,7 +1288,7 @@ fun ShelfGridBook(
             if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
         }
     }
-    var userMetadata by remember(file.uri) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
+    var userMetadata by remember(file.uri, metadataRevision) { mutableStateOf(readDeviceBookUserMetadata(context, file)) }
     val title = userMetadata.title.takeIf { it.isNotBlank() }
         ?: bookMetadata?.title?.takeIf { it.isNotBlank() }
         ?: file.name.substringBeforeLast('.')

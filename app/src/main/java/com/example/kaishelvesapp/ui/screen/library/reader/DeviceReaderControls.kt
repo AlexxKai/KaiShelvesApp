@@ -18,11 +18,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+// import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
+// import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.FormatSize
@@ -34,7 +34,7 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.TableRows
+// import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -221,7 +221,7 @@ fun PdfReaderBottomControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderToolButton(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.reader_read_aloud))
+            // ReaderToolButton(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.reader_read_aloud))
             Box {
                 ReaderToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, stringResource(R.string.reader_chapters_and_bookmarks), onOpenNavigation)
                 if (annotationsCount > 0) {
@@ -250,10 +250,10 @@ fun PdfReaderBottomControls(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, stringResource(R.string.reader_alignment))
+            // ReaderToolButton(Icons.AutoMirrored.Filled.FormatAlignLeft, stringResource(R.string.reader_alignment))
             ReaderToolButton(Icons.Filled.Star, stringResource(R.string.reader_highlight_selection), onAddHighlight)
             ReaderToolButton(Icons.Filled.MoreHoriz, stringResource(R.string.reader_add_note), onAddNote)
-            ReaderToolButton(Icons.Filled.TableRows, stringResource(R.string.reader_page_view))
+            // ReaderToolButton(Icons.Filled.TableRows, stringResource(R.string.reader_page_view))
         }
     }
 }

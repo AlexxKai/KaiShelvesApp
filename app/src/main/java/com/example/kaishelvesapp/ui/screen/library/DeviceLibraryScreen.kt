@@ -1,5 +1,7 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
+import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +71,10 @@ import com.example.kaishelvesapp.ui.viewmodel.DeviceLibraryViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 
 enum class DeviceLibraryLayoutMode {
@@ -160,6 +166,8 @@ fun DeviceLibraryScreen(
     var showDefaultCoverScreen by remember { mutableStateOf(false) }
     var readerFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var progressRevision by remember { mutableStateOf(0) }
+    var metadataRevision by remember { mutableStateOf(0) }
+    var rebuildingCovers by remember { mutableStateOf(false) }
     var topBarHeight by remember { mutableStateOf(0.dp) }
     var selectedAuthor by remember { mutableStateOf<String?>(null) }
     val fileMetadata by produceState<Map<String, DeviceLibraryResolvedMetadata>>(
@@ -325,6 +333,55 @@ fun DeviceLibraryScreen(
                         onChooseFolder = { folderLauncher.launch(null) },
                         onImportBooks = { showImportBooksDialog = true },
                         onDefaultCover = { showDefaultCoverScreen = true },
+                        onRebuildBookCovers = {
+                            if (!rebuildingCovers) {
+                                rebuildingCovers = true
+                                Toast.makeText(
+                                    context,
+                                    "Reconstruyendo portadas...",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                scope.launch {
+                                    val backgroundTreeUri = readDefaultCoverStorageTreeUri(context)?.let(Uri::parse)
+                                    val rebuiltCount = withContext(Dispatchers.IO) {
+                                        rebuildMissingDeviceBookCovers(
+                                            context = context,
+                                            files = uiState.files,
+                                            fileMetadata = fileMetadata,
+                                            backgroundTreeUri = backgroundTreeUri
+                                        )
+                                    }
+                                    rebuildingCovers = false
+                                    if (rebuiltCount > 0) {
+                                        metadataRevision++
+                                    }
+                                    Toast.makeText(
+                                        context,
+                                        if (rebuiltCount > 0) {
+                                            "Portadas reconstruidas: $rebuiltCount"
+                                        } else {
+                                            "No se encontraron portadas nuevas"
+                                        },
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        onOpenRandomBook = {
+                            val availableBooks = uiState.files.filter { file ->
+                                readDeviceBookProgressPercent(context, file) < 100
+                            }
+                            val randomBook = availableBooks.randomOrNull()
+                            if (randomBook != null) {
+                                readerFile = randomBook
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    "No hay libros pendientes para abrir al azar",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
                         onHeightChanged = { heightPx ->
                             topBarHeight = with(density) { heightPx.toDp() }
                         }
@@ -366,6 +423,7 @@ fun DeviceLibraryScreen(
                     searchQuery = uiState.searchQuery,
                     layoutMode = layoutMode,
                     progressRevision = progressRevision,
+                    metadataRevision = metadataRevision,
                     onOpenFile = { file -> readerFile = file }
                 )
             }
@@ -465,6 +523,8 @@ private fun DeviceLibraryTopBar(
     onChooseFolder: () -> Unit,
     onImportBooks: () -> Unit,
     onDefaultCover: () -> Unit,
+    onRebuildBookCovers: () -> Unit,
+    onOpenRandomBook: () -> Unit,
     onHeightChanged: (Int) -> Unit
 ) {
     var showLibraryMenu by remember { mutableStateOf(false) }
@@ -605,6 +665,14 @@ private fun DeviceLibraryTopBar(
                     onDefaultCover = {
                         showTopBarOptions = false
                         onDefaultCover()
+                    },
+                    onRebuildBookCovers = {
+                        showTopBarOptions = false
+                        onRebuildBookCovers()
+                    },
+                    onOpenRandomBook = {
+                        showTopBarOptions = false
+                        onOpenRandomBook()
                     }
                 )
             }
@@ -664,7 +732,9 @@ private fun DeviceLibraryTopBarOptionsMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onImportBooks: () -> Unit,
-    onDefaultCover: () -> Unit
+    onDefaultCover: () -> Unit,
+    onRebuildBookCovers: () -> Unit,
+    onOpenRandomBook: () -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -685,18 +755,145 @@ private fun DeviceLibraryTopBarOptionsMenu(
         )
         DeviceLibraryBookOptionItem(
             text = "Reconstruir portadas de libros",
-            onClick = onDismiss
+            onClick = onRebuildBookCovers
         )
         DeviceLibraryBookOptionItem(
             text = "Abre un libro al azar",
-            onClick = onDismiss
+            onClick = onOpenRandomBook
         )
-        DeviceLibraryBookOptionItem(
-            text = "Seleccionar todo",
-            onClick = onDismiss
-        )
+        // DeviceLibraryBookOptionItem(
+        //     text = "Seleccionar todo",
+        //     onClick = onDismiss
+        // )
     }
 }
 
+private suspend fun rebuildMissingDeviceBookCovers(
+    context: Context,
+    files: List<DeviceLibraryFile>,
+    fileMetadata: Map<String, DeviceLibraryResolvedMetadata>,
+    backgroundTreeUri: Uri?
+): Int {
+    var rebuiltCount = 0
+    files.forEach { file ->
+        val currentMetadata = readDeviceBookUserMetadata(context, file)
+        if (currentMetadata.coverId.isNotBlank() && canOpenSavedBookCover(context, currentMetadata.coverId)) {
+            return@forEach
+        }
+
+        val resolvedMetadata = fileMetadata[file.uri.toString()]
+        val title = currentMetadata.title
+            .ifBlank { resolvedMetadata?.title.orEmpty() }
+            .ifBlank { file.name.substringBeforeLast('.') }
+            .trim()
+        val author = currentMetadata.author
+            .ifBlank { resolvedMetadata?.author.orEmpty() }
+            .trim()
+        if (title.isBlank()) return@forEach
+
+        val imageBytes = findBookCoverImageBytes(title, author) ?: return@forEach
+        val savedCover = saveDownloadedBookCover(context, imageBytes, backgroundTreeUri) ?: return@forEach
+        saveDeviceBookUserMetadata(
+            context = context,
+            file = file,
+            metadata = currentMetadata.copy(coverId = savedCover.id)
+        )
+        rebuiltCount++
+    }
+    return rebuiltCount
+}
+
+private fun canOpenSavedBookCover(
+    context: Context,
+    coverId: String
+): Boolean {
+    val cover = findDefaultCoverOption(context, coverId) ?: return false
+    return when {
+        cover.resourceId != null -> true
+        cover.file != null -> BitmapFactory.decodeFile(cover.file.absolutePath) != null
+        cover.uri != null -> runCatching {
+            context.contentResolver.openInputStream(cover.uri)?.use(BitmapFactory::decodeStream) != null
+        }.getOrDefault(false)
+        else -> false
+    }
+}
+
+private fun findBookCoverImageBytes(
+    title: String,
+    author: String
+): ByteArray? {
+    val query = listOf(title, author, "book cover")
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+    return findDuckDuckGoImageUrls(query)
+        .asSequence()
+        .mapNotNull(::downloadValidImageBytes)
+        .firstOrNull()
+}
+
+private fun findDuckDuckGoImageUrls(query: String): List<String> {
+    return runCatching {
+        val searchPage = readUrlText("https://duckduckgo.com/?q=${query.urlEncoded()}&iax=images&ia=images")
+        val vqd = Regex("""vqd=['"]([^'"]+)['"]""")
+            .find(searchPage)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?: return@runCatching emptyList()
+        val json = readUrlText("https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${query.urlEncoded()}&vqd=$vqd")
+        val results = JSONObject(json).optJSONArray("results") ?: return@runCatching emptyList()
+        buildList {
+            for (index in 0 until results.length()) {
+                val imageUrl = results.optJSONObject(index)?.optString("image").orEmpty()
+                if (imageUrl.startsWith("http")) add(imageUrl)
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun downloadValidImageBytes(imageUrl: String): ByteArray? {
+    return runCatching {
+        val bytes = readUrlBytes(imageUrl)
+        if (bytes.size > 1_500 && BitmapFactory.decodeByteArray(bytes, 0, bytes.size) != null) {
+            bytes
+        } else {
+            null
+        }
+    }.getOrNull()
+}
+
+private fun saveDownloadedBookCover(
+    context: Context,
+    bytes: ByteArray,
+    backgroundTreeUri: Uri?
+): DefaultCoverOption? {
+    val fileName = "download_${System.currentTimeMillis()}.jpg"
+    backgroundTreeUri?.let { treeUri ->
+        return createImageBytesInTree(context, treeUri, fileName, bytes)
+    }
+    val target = File(defaultCoversDir(context), fileName)
+    return runCatching {
+        target.outputStream().use { output -> output.write(bytes) }
+        DefaultCoverOption(id = target.absolutePath, file = target, displayName = target.name)
+    }.getOrNull()
+}
+
+private fun readUrlText(url: String): String {
+    return readUrlBytes(url).toString(Charsets.UTF_8)
+}
+
+private fun readUrlBytes(url: String): ByteArray {
+    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 10_000
+        readTimeout = 12_000
+        instanceFollowRedirects = true
+        setRequestProperty("User-Agent", "Mozilla/5.0")
+        setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+    }
+    return connection.inputStream.use { it.readBytes() }
+}
+
+private fun String.urlEncoded(): String {
+    return java.net.URLEncoder.encode(this, "UTF-8")
+}
 
 

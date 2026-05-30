@@ -187,7 +187,7 @@
     <string name="device_reader_text_error">Este libro no contiene texto legible para el lector interno.</string>
     <string name="device_reader_unsupported_title">Lector interno no disponible</string>
     <string name="device_reader_unsupported_body">Kai Shelves puede mostrar este archivo %1$s en la biblioteca, pero este formato aún no se puede leer internamente.</string>
-    <string name="device_reader_pdf_only_body">Para reducir fallos de renderizado, el lector interno ahora solo abre PDF y EPUF. Convierte este archivo %1$s a PDF o EPUB desde el conversor antes de leerlo.</string>
+    <string name="device_reader_pdf_only_body">El lector abre PDF y EPUF. Convierte este archivo %1$s a PDF o EPUB desde el conversor antes de leerlo.</string>
     <string name="reader_tab_chapters">Capítulos</string>
     <string name="reader_tab_bookmarks">Marcadores</string>
     <string name="reader_tab_images">Imágenes</string>
