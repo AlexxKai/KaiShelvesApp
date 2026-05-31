@@ -164,8 +164,8 @@
     <string name="device_library_count">%1$d files</string>
     <string name="device_library_choose_folder">Choose folder</string>
     <string name="device_library_filter_hint">Filter local books</string>
-    <string name="device_library_empty_title">No files to show</string>
-    <string name="device_library_empty_body">Choose a folder with PDF, EPUB or text books to populate this view.</string>
+    <string name="device_library_empty_title">Choose your books folder</string>
+    <string name="device_library_empty_body">To show your device library, select a folder with PDF, EPUB or text books. Kai Shelves will remember that location and show them here.</string>
     <string name="device_library_search_empty_title">No matches found</string>
     <string name="device_library_search_empty_body">We could not find any file matching "%1$s". Try another term or clear active filters.</string>
     <string name="device_library_error_title">Could not load files</string>

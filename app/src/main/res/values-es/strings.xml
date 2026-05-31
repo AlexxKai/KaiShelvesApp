@@ -164,8 +164,8 @@
     <string name="device_library_count">%1$d archivos</string>
     <string name="device_library_choose_folder">Elegir carpeta</string>
     <string name="device_library_filter_hint">Filtrar libros locales</string>
-    <string name="device_library_empty_title">No hay archivos para mostrar</string>
-    <string name="device_library_empty_body">Elige una carpeta con libros PDF, EPUB o texto para llenar esta vista.</string>
+    <string name="device_library_empty_title">Elige tu carpeta de libros</string>
+    <string name="device_library_empty_body">Para mostrar tu biblioteca del dispositivo, selecciona una carpeta con libros PDF, EPUB o texto. Kai Shelves recordará esa ubicación para enseñarlos aquí.</string>
     <string name="device_library_search_empty_title">No hay coincidencias</string>
     <string name="device_library_search_empty_body">No encontramos ningún archivo que coincida con "%1$s". Prueba con otro término o borra filtros activos.</string>
     <string name="device_library_error_title">No se pudieron cargar los archivos</string>

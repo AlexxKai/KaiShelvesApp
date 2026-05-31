@@ -76,6 +76,13 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.PI
+import kotlin.math.sin
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 
 enum class DeviceLibraryLayoutMode {
     List,
@@ -281,6 +288,12 @@ fun DeviceLibraryScreen(
     ) { uri ->
         if (uri != null) viewModel.useFolder(uri)
     }
+    val showFolderSelectionHint =
+        !uiState.isLoading &&
+            uiState.files.isEmpty() &&
+            uiState.searchQuery.isBlank() &&
+            selectedAuthor == null
+
     fun openReader(file: DeviceLibraryFile) {
         saveLastOpenedDeviceBookUri(context, file.uri.toString())
         readerFile = file
@@ -441,6 +454,10 @@ fun DeviceLibraryScreen(
                 )
             }
 
+            if (showFolderSelectionHint) {
+                DeviceLibraryFolderHintArrow(modifier = Modifier.fillMaxSize())
+            }
+
             if (showSearchPanel && !showFilterPanel) {
                 DeviceLibrarySearchOverlay(
                     topPadding = topBarHeight,
@@ -518,6 +535,82 @@ fun DeviceLibraryScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceLibraryFolderHintArrow(
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    Canvas(modifier = modifier) {
+        val strokeWidth = with(density) { 4.dp.toPx() }
+        val shadowStrokeWidth = with(density) { 7.dp.toPx() }
+        val arrowHeadLength = with(density) { 17.dp.toPx() }
+        val start = Offset(
+            x = size.width - with(density) { 170.dp.toPx() },
+            y = with(density) { 132.dp.toPx() }
+        )
+        val end = Offset(
+            x = size.width - with(density) { 54.dp.toPx() },
+            y = with(density) { 67.dp.toPx() }
+        )
+        val angle = atan2(end.y - start.y, end.x - start.x)
+        val headAngle = 0.58f
+        val leftHead = Offset(
+            x = end.x + arrowHeadLength * cos(angle + PI.toFloat() - headAngle),
+            y = end.y + arrowHeadLength * sin(angle + PI.toFloat() - headAngle)
+        )
+        val rightHead = Offset(
+            x = end.x + arrowHeadLength * cos(angle + PI.toFloat() + headAngle),
+            y = end.y + arrowHeadLength * sin(angle + PI.toFloat() + headAngle)
+        )
+        val shadowOffset = Offset(1.5.dp.toPx(), 2.dp.toPx())
+        val shadowColor = Obsidian.copy(alpha = 0.78f)
+        val arrowColor = TarnishedGold.copy(alpha = 0.95f)
+
+        drawLine(
+            color = shadowColor,
+            start = start + shadowOffset,
+            end = end + shadowOffset,
+            strokeWidth = shadowStrokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = shadowColor,
+            start = end + shadowOffset,
+            end = leftHead + shadowOffset,
+            strokeWidth = shadowStrokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = shadowColor,
+            start = end + shadowOffset,
+            end = rightHead + shadowOffset,
+            strokeWidth = shadowStrokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = arrowColor,
+            start = start,
+            end = end,
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = arrowColor,
+            start = end,
+            end = leftHead,
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = arrowColor,
+            start = end,
+            end = rightHead,
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
     }
 }
 

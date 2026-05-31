@@ -156,11 +156,11 @@ fun DeviceLibraryContent(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            errorMessage?.let { error ->
+            if (errorMessage != null && files.isNotEmpty()) {
                 item {
                     DeviceLibraryMessage(
                         title = stringResource(R.string.device_library_error_title),
-                        body = error
+                        body = errorMessage
                     )
                 }
             }
