@@ -144,6 +144,7 @@ fun DeviceLibraryScreen(
     onSectionSelected: (KaiSection) -> Unit,
     openBookUri: String? = null,
     onOpenBookUriConsumed: () -> Unit = {},
+    onReaderClosed: () -> Unit = {},
     viewModel: DeviceLibraryViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -263,13 +264,13 @@ fun DeviceLibraryScreen(
         if (sortDescending) sorted.asReversed() else sorted
     }
 
-    LaunchedEffect(openBookUri, uiState.files, uiState.isLoading) {
+    LaunchedEffect(openBookUri, uiState.files, uiState.isLoading, uiState.hasLoadedFiles) {
         val requestedUri = openBookUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         val targetFile = uiState.files.firstOrNull { it.uri.toString() == requestedUri }
         if (targetFile != null) {
             readerFile = targetFile
             onOpenBookUriConsumed()
-        } else if (!uiState.isLoading && uiState.selectedFolderUri != null) {
+        } else if (uiState.hasLoadedFiles && !uiState.isLoading) {
             onOpenBookUriConsumed()
         }
     }
@@ -424,6 +425,7 @@ fun DeviceLibraryScreen(
                     layoutMode = layoutMode,
                     progressRevision = progressRevision,
                     metadataRevision = metadataRevision,
+                    onRemoveFile = viewModel::removeFromLibrary,
                     onOpenFile = { file -> readerFile = file }
                 )
             }
@@ -498,7 +500,10 @@ fun DeviceLibraryScreen(
                 DeviceBookReaderDialog(
                     file = file,
                     onProgressChanged = { progressRevision++ },
-                    onDismiss = { readerFile = null }
+                    onDismiss = {
+                        readerFile = null
+                        onReaderClosed()
+                    }
                 )
             }
         }

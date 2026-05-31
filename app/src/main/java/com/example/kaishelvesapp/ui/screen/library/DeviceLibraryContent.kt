@@ -2,6 +2,8 @@
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.text.format.Formatter
@@ -97,6 +99,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import com.example.kaishelvesapp.MainActivity
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
@@ -120,6 +126,7 @@ fun DeviceLibraryContent(
     layoutMode: DeviceLibraryLayoutMode,
     progressRevision: Int,
     metadataRevision: Int = 0,
+    onRemoveFile: (DeviceLibraryFile) -> Unit = {},
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -190,6 +197,7 @@ fun DeviceLibraryContent(
             onPinnedBookIdsChange = { pinnedBookIds = it },
             progressByFile = progressByFile,
             metadataRevision = metadataRevision,
+            onRemoveFile = onRemoveFile,
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Grid -> DeviceLibraryGridView(
@@ -199,6 +207,7 @@ fun DeviceLibraryContent(
             onPinnedBookIdsChange = { pinnedBookIds = it },
             progressByFile = progressByFile,
             metadataRevision = metadataRevision,
+            onRemoveFile = onRemoveFile,
             onOpenFile = onOpenFile
         )
         DeviceLibraryLayoutMode.Carousel -> DeviceLibraryCarouselView(
@@ -218,6 +227,7 @@ fun DeviceLibraryListView(
     onPinnedBookIdsChange: (List<String>) -> Unit,
     progressByFile: Map<String, Int>,
     metadataRevision: Int = 0,
+    onRemoveFile: (DeviceLibraryFile) -> Unit = {},
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -260,6 +270,7 @@ fun DeviceLibraryListView(
                         }
                     },
                     metadataRevision = metadataRevision,
+                    onRemoveFile = onRemoveFile,
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -280,6 +291,7 @@ fun DeviceLibraryGridView(
     onPinnedBookIdsChange: (List<String>) -> Unit,
     progressByFile: Map<String, Int>,
     metadataRevision: Int = 0,
+    onRemoveFile: (DeviceLibraryFile) -> Unit = {},
     onOpenFile: (DeviceLibraryFile) -> Unit
 ) {
     val context = LocalContext.current
@@ -310,6 +322,7 @@ fun DeviceLibraryGridView(
                         savePinnedDeviceBookIds(context, updatedPinnedBookIds)
                     },
                     metadataRevision = metadataRevision,
+                    onRemoveFile = onRemoveFile,
                     onClick = { onOpenFile(file) }
                 )
             }
@@ -572,6 +585,7 @@ fun ShelfListRow(
     isPinned: Boolean,
     onTogglePin: () -> Unit,
     metadataRevision: Int = 0,
+    onRemoveFile: (DeviceLibraryFile) -> Unit = {},
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -691,6 +705,18 @@ fun ShelfListRow(
                             onDownloadCover = {
                                 showBookOptions = false
                                 showCoverDownload = true
+                            },
+                            onCreateShortcut = {
+                                showBookOptions = false
+                                createDeviceBookShortcut(context, file, title)
+                            },
+                            onShareFile = {
+                                showBookOptions = false
+                                shareDeviceBookFile(context, file)
+                            },
+                            onRemoveFromLibrary = {
+                                showBookOptions = false
+                                onRemoveFile(file)
                             }
                         )
                     }
@@ -1212,7 +1238,10 @@ fun DeviceLibraryBookOptionsMenu(
     onDismiss: () -> Unit,
     onTogglePin: () -> Unit,
     onShowBookInfo: () -> Unit,
-    onDownloadCover: () -> Unit
+    onDownloadCover: () -> Unit,
+    onCreateShortcut: () -> Unit,
+    onShareFile: () -> Unit,
+    onRemoveFromLibrary: () -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -1240,17 +1269,100 @@ fun DeviceLibraryBookOptionsMenu(
         )
         DeviceLibraryBookOptionItem(
             text = "Crear acceso directo en escritorio",
-            onClick = onDismiss
+            onClick = onCreateShortcut
         )
         DeviceLibraryBookOptionItem(
             text = "Enviar archivo",
-            onClick = onDismiss
+            onClick = onShareFile
         )
         DeviceLibraryBookOptionItem(
             text = "Quitar de mi biblioteca",
-            onClick = onDismiss
+            onClick = onRemoveFromLibrary
         )
     }
+}
+
+fun createDeviceBookShortcut(
+    context: Context,
+    file: DeviceLibraryFile,
+    title: String
+) {
+    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
+        android.widget.Toast.makeText(
+            context,
+            "Este lanzador no permite crear accesos directos",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+        return
+    }
+
+    val shortcutIntent = Intent(context, MainActivity::class.java).apply {
+        action = MainActivity.ACTION_OPEN_DEVICE_BOOK
+        putExtra(MainActivity.EXTRA_DEVICE_BOOK_URI, file.uri.toString())
+        addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+    val shortcutIcon = resolveDeviceBookShortcutIcon(context, file)
+        ?.let(IconCompat::createWithBitmap)
+        ?: IconCompat.createWithResource(context, R.mipmap.ic_launcher)
+    val shortcut = ShortcutInfoCompat.Builder(
+        context,
+        "device_book_${file.uri.toString().hashCode().toUInt().toString(16)}"
+    )
+        .setShortLabel(title.take(18).ifBlank { file.name.substringBeforeLast('.') })
+        .setLongLabel(title.ifBlank { file.name.substringBeforeLast('.') })
+        .setIcon(shortcutIcon)
+        .setIntent(shortcutIntent)
+        .build()
+
+    ShortcutManagerCompat.requestPinShortcut(context, shortcut, null)
+}
+
+private fun resolveDeviceBookShortcutIcon(
+    context: Context,
+    file: DeviceLibraryFile
+): Bitmap? {
+    val userMetadata = readDeviceBookUserMetadata(context, file)
+    val overrideCover = userMetadata.coverId
+        .takeIf { it.isNotBlank() }
+        ?.let { coverId -> findDefaultCoverOption(context, coverId) }
+        ?.let { cover -> loadDefaultCoverBitmap(context, cover) }
+    if (overrideCover != null) return overrideCover
+
+    val detectedCover = when {
+        isPdf(file) -> renderPdfFirstPage(context, file.uri)
+        isEpub(file) -> extractEpubCover(context, file.uri)
+        else -> null
+    }
+    if (detectedCover != null) return detectedCover
+
+    return findDefaultCoverOption(context, readDefaultCoverId(context))
+        ?.let { cover -> loadDefaultCoverBitmap(context, cover) }
+}
+
+private fun loadDefaultCoverBitmap(
+    context: Context,
+    cover: DefaultCoverOption
+): Bitmap? {
+    return when {
+        cover.resourceId != null -> BitmapFactory.decodeResource(context.resources, cover.resourceId)
+        cover.file != null -> BitmapFactory.decodeFile(cover.file.absolutePath)
+        cover.uri != null -> runCatching {
+            context.contentResolver.openInputStream(cover.uri)?.use(BitmapFactory::decodeStream)
+        }.getOrNull()
+        else -> null
+    }
+}
+
+fun shareDeviceBookFile(
+    context: Context,
+    file: DeviceLibraryFile
+) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = file.mimeType ?: "*/*"
+        putExtra(Intent.EXTRA_STREAM, file.uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(shareIntent, "Enviar archivo"))
 }
 
 @Composable
@@ -1280,6 +1392,7 @@ fun ShelfGridBook(
     isPinned: Boolean,
     onTogglePin: () -> Unit,
     metadataRevision: Int = 0,
+    onRemoveFile: (DeviceLibraryFile) -> Unit = {},
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1346,6 +1459,18 @@ fun ShelfGridBook(
                 onDownloadCover = {
                     showBookOptions = false
                     showCoverDownload = true
+                },
+                onCreateShortcut = {
+                    showBookOptions = false
+                    createDeviceBookShortcut(context, file, title)
+                },
+                onShareFile = {
+                    showBookOptions = false
+                    shareDeviceBookFile(context, file)
+                },
+                onRemoveFromLibrary = {
+                    showBookOptions = false
+                    onRemoveFile(file)
                 }
             )
         }

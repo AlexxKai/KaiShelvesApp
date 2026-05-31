@@ -137,7 +137,9 @@ fun friendListDetailRoute(friendUid: String, listId: String): String =
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
     activityNotificationToOpen: String? = null,
-    onActivityNotificationOpenConsumed: () -> Unit = {}
+    onActivityNotificationOpenConsumed: () -> Unit = {},
+    deviceLibraryBookToOpen: String? = null,
+    onDeviceLibraryBookOpenConsumed: () -> Unit = {}
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
@@ -177,10 +179,13 @@ fun AppNavigation(
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
     var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
     var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
+    var activeDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
+    var deviceBookShortcutLaunchActive by remember { mutableStateOf(!deviceLibraryBookToOpen.isNullOrBlank()) }
 
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
         authState.isLoggedIn && authState.user == null -> Routes.AUTH_LOADING
+        authState.isLoggedIn && deviceBookShortcutLaunchActive -> Routes.LIBRARY
         authState.isLoggedIn -> if (authState.user?.isGuest == true) Routes.DISCOVER else Routes.HOME
         else -> Routes.LOGIN
     }
@@ -222,6 +227,14 @@ fun AppNavigation(
         navController.navigate(route)
     }
 
+    fun navigateToDeviceLibraryShortcut() {
+        showOfflineAccessNotice = false
+        navController.navigate(Routes.LIBRARY) {
+            popUpTo(0) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
     fun refreshRecoveredRoute(route: String) {
         // Al recuperar conexión, limpia errores remotos antiguos y muestra carga en el destino solicitado.
         when (route) {
@@ -249,7 +262,14 @@ fun AppNavigation(
         }
     }
 
-    LaunchedEffect(authState.isLoggedIn, authState.user?.isGuest, authState.pendingEmailVerificationEmail) {
+    LaunchedEffect(
+        authState.isLoggedIn,
+        authState.user?.isGuest,
+        authState.pendingEmailVerificationEmail,
+        deviceLibraryBookToOpen,
+        pendingDeviceLibraryBookUri,
+        deviceBookShortcutLaunchActive
+    ) {
         if (authState.pendingEmailVerificationEmail != null) {
             initialLoggedInRouteResolved = false
             return@LaunchedEffect
@@ -262,6 +282,10 @@ fun AppNavigation(
 
         val user = authState.user ?: return@LaunchedEffect
         if (initialLoggedInRouteResolved) return@LaunchedEffect
+        if (deviceBookShortcutLaunchActive || !deviceLibraryBookToOpen.isNullOrBlank() || !pendingDeviceLibraryBookUri.isNullOrBlank()) {
+            initialLoggedInRouteResolved = true
+            return@LaunchedEffect
+        }
 
         val targetRoute = authenticatedStartRoute(user.isGuest)
         initialLoggedInRouteResolved = true
@@ -291,6 +315,18 @@ fun AppNavigation(
             navController.navigate(Routes.NOTIFICATION_CENTER)
         }
         onActivityNotificationOpenConsumed()
+    }
+
+    LaunchedEffect(deviceLibraryBookToOpen, authState.isLoggedIn) {
+        val bookUri = deviceLibraryBookToOpen?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        deviceBookShortcutLaunchActive = true
+        if (!authState.isLoggedIn) return@LaunchedEffect
+
+        initialLoggedInRouteResolved = true
+        activeDeviceLibraryBookUri = bookUri
+        pendingDeviceLibraryBookUri = bookUri
+        navigateToDeviceLibraryShortcut()
+        onDeviceLibraryBookOpenConsumed()
     }
 
     LaunchedEffect(currentRoute, helpChatState.isActive, catalogState.selectedBook?.titulo) {
@@ -369,6 +405,10 @@ fun AppNavigation(
     }
 
     fun logoutToLogin() {
+        activeDeviceLibraryBookUri = null
+        pendingDeviceLibraryBookUri = null
+        deviceBookShortcutLaunchActive = false
+        initialLoggedInRouteResolved = false
         authViewModel.logout()
         navController.navigate(Routes.LOGIN) {
             popUpTo(0) { inclusive = true }
@@ -404,7 +444,8 @@ fun AppNavigation(
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = { isGuest ->
-                    navController.navigate(authenticatedStartRoute(isGuest)) {
+                    val targetRoute = if (deviceBookShortcutLaunchActive) Routes.LIBRARY else authenticatedStartRoute(isGuest)
+                    navController.navigate(targetRoute) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -418,7 +459,8 @@ fun AppNavigation(
             RegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    val targetRoute = if (deviceBookShortcutLaunchActive) Routes.LIBRARY else Routes.HOME
+                    navController.navigate(targetRoute) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -681,8 +723,12 @@ fun AppNavigation(
                 // pendingRequestCount = friendRequestsState.pendingCount,
                 // onOpenNotifications = { navigateRoute(Routes.NOTIFICATION_CENTER) },
                 onSectionSelected = { navigateSection(it) },
-                openBookUri = pendingDeviceLibraryBookUri,
-                onOpenBookUriConsumed = { pendingDeviceLibraryBookUri = null }
+                openBookUri = activeDeviceLibraryBookUri ?: pendingDeviceLibraryBookUri,
+                onOpenBookUriConsumed = { pendingDeviceLibraryBookUri = null },
+                onReaderClosed = {
+                    activeDeviceLibraryBookUri = null
+                    pendingDeviceLibraryBookUri = null
+                }
             )
         }
 

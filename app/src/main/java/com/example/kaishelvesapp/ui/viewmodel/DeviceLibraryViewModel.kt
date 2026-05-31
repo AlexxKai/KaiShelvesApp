@@ -21,6 +21,7 @@ data class DeviceLibraryUiState(
     val searchQuery: String = "",
     val recentSearches: List<String> = emptyList(),
     val isLoading: Boolean = false,
+    val hasLoadedFiles: Boolean = false,
     val errorMessage: String? = null
 ) {
     val filteredFiles: List<DeviceLibraryFile>
@@ -80,6 +81,7 @@ class DeviceLibraryViewModel(
         }
         preferences.edit()
             .putString(KEY_FOLDER_URI, uri.toString())
+            .remove(KEY_HIDDEN_FILE_URIS)
             .apply()
         _uiState.update {
             it.copy(
@@ -88,6 +90,14 @@ class DeviceLibraryViewModel(
             )
         }
         refresh()
+    }
+
+    fun removeFromLibrary(file: DeviceLibraryFile) {
+        val hiddenUris = loadHiddenFileUris() + file.uri.toString()
+        persistHiddenFileUris(hiddenUris)
+        _uiState.update { state ->
+            state.copy(files = state.files.filterNot { it.uri == file.uri })
+        }
     }
 
     fun refresh() {
@@ -100,12 +110,13 @@ class DeviceLibraryViewModel(
                 repository.listFolderFiles(folderUri).also { files ->
                     // Registra los libros escaneados para que progreso y anotaciones tengan un origen comun.
                     libraryRepository.registerScannedBooks(files)
-                }
+                }.filterNot { file -> file.uri.toString() in loadHiddenFileUris() }
             }.onSuccess { files ->
                 _uiState.update {
                     it.copy(
                         files = files,
                         isLoading = false,
+                        hasLoadedFiles = true,
                         errorMessage = null
                     )
                 }
@@ -114,6 +125,7 @@ class DeviceLibraryViewModel(
                     it.copy(
                         files = emptyList(),
                         isLoading = false,
+                        hasLoadedFiles = true,
                         errorMessage = throwable.localizedMessage ?: "No se pudieron cargar los archivos."
                     )
                 }
@@ -150,9 +162,30 @@ class DeviceLibraryViewModel(
             .apply()
     }
 
+    private fun loadHiddenFileUris(): Set<String> {
+        val rawUris = preferences.getString(KEY_HIDDEN_FILE_URIS, null) ?: return emptySet()
+        return runCatching {
+            val jsonArray = JSONArray(rawUris)
+            buildSet {
+                for (index in 0 until jsonArray.length()) {
+                    jsonArray.optString(index).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }.getOrDefault(emptySet())
+    }
+
+    private fun persistHiddenFileUris(hiddenUris: Set<String>) {
+        val jsonArray = JSONArray()
+        hiddenUris.forEach { jsonArray.put(it) }
+        preferences.edit()
+            .putString(KEY_HIDDEN_FILE_URIS, jsonArray.toString())
+            .apply()
+    }
+
     private companion object {
         const val KEY_FOLDER_URI = "folder_uri"
         const val KEY_RECENT_SEARCHES = "recent_searches"
+        const val KEY_HIDDEN_FILE_URIS = "hidden_file_uris"
         const val MAX_RECENT_SEARCHES = 8
     }
 }
