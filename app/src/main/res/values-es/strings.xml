@@ -8,6 +8,7 @@
     <string name="open">Abrir</string>
     <string name="delete">Eliminar</string>
     <string name="retry">Reintentar</string>
+    <string name="reconnecting">Reconectando...</string>
     <string name="refresh">Actualizar</string>
     <string name="save">Guardar</string>
     <string name="close">Cerrar</string>

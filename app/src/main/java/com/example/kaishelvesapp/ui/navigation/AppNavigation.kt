@@ -1,5 +1,8 @@
 ﻿package com.example.kaishelvesapp.ui.navigation
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -19,11 +22,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +98,8 @@ import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.SearchResultsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object Routes {
     const val AUTH_LOADING = "auth_loading"
@@ -133,6 +140,16 @@ fun friendListsRoute(friendUid: String, friendName: String): String =
 fun friendListDetailRoute(friendUid: String, listId: String): String =
     "friend_list_detail/$friendUid/${Uri.encode(listId)}"
 
+private fun Context.hasActiveInternetConnection(): Boolean {
+    val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return false
+    val activeNetwork = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+}
+
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
@@ -158,6 +175,8 @@ fun AppNavigation(
     val userListsViewModel: UserListsViewModel = viewModel()
     val userListDetailViewModel: UserListDetailViewModel = viewModel()
     val bookDetailViewModel: BookDetailViewModel = viewModel()
+    val context = LocalContext.current
+    val offlineRetryScope = rememberCoroutineScope()
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val catalogState by catalogViewModel.uiState.collectAsStateWithLifecycle()
     val friendsState by friendsViewModel.uiState.collectAsStateWithLifecycle()
@@ -165,14 +184,6 @@ fun AppNavigation(
     val helpChatState by helpChatViewModel.uiState.collectAsStateWithLifecycle()
     val homeState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val isGuestUser = authState.user?.isGuest == true
-    val isRegisteredOffline = authState.isLoggedIn && !isGuestUser && homeState.isOfflineError
-    val guestRestrictedSections = remember(isGuestUser) {
-        if (isGuestUser) {
-            setOf(KaiSection.HOME, KaiSection.FRIENDS, KaiSection.GROUPS)
-        } else {
-            emptySet()
-        }
-    }
     var showGuestRestrictedNotice by remember { mutableStateOf(false) }
     var showOfflineAccessNotice by remember { mutableStateOf(false) }
     var pendingOfflineRoute by remember { mutableStateOf<String?>(null) }
@@ -181,6 +192,25 @@ fun AppNavigation(
     var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var activeDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var deviceBookShortcutLaunchActive by remember { mutableStateOf(!deviceLibraryBookToOpen.isNullOrBlank()) }
+    var deviceShortcutConnectivityBlocked by remember { mutableStateOf(false) }
+    var deviceShortcutConnectivityCheckRequested by remember { mutableStateOf(false) }
+    var deviceShortcutRemoteAccessConfirmed by remember { mutableStateOf(false) }
+    var offlineAccessRetryInProgress by remember { mutableStateOf(false) }
+    val isRegisteredOffline =
+        authState.isLoggedIn && (homeState.isOfflineError || deviceShortcutConnectivityBlocked)
+    val shouldBlockRemoteNavigation =
+        isRegisteredOffline ||
+            (authState.isLoggedIn &&
+                !isGuestUser &&
+                deviceBookShortcutLaunchActive &&
+                !deviceShortcutRemoteAccessConfirmed)
+    val guestRestrictedSections = remember(isGuestUser) {
+        if (isGuestUser) {
+            setOf(KaiSection.HOME, KaiSection.FRIENDS, KaiSection.GROUPS)
+        } else {
+            emptySet()
+        }
+    }
 
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
@@ -214,12 +244,26 @@ fun AppNavigation(
         }
     }
 
-    fun navigateRoute(route: String) {
-        if (isRegisteredOffline && route != Routes.LIBRARY) {
-            pendingOfflineRoute = route
-            showOfflineAccessNotice = true
-            return
+    fun showOfflineAccessFor(route: String) {
+        pendingOfflineRoute = route
+        showOfflineAccessNotice = true
+    }
+
+    fun shouldOpenOfflineAccessInstead(route: String): Boolean {
+        if (!authState.isLoggedIn || route == Routes.LIBRARY) return false
+
+        if (shouldBlockRemoteNavigation || !context.hasActiveInternetConnection()) {
+            deviceShortcutConnectivityBlocked = true
+            deviceShortcutRemoteAccessConfirmed = false
+            showOfflineAccessFor(route)
+            return true
         }
+
+        return false
+    }
+
+    fun navigateRoute(route: String) {
+        if (shouldOpenOfflineAccessInstead(route)) return
 
         if (route == Routes.LIBRARY) {
             showOfflineAccessNotice = false
@@ -248,6 +292,20 @@ fun AppNavigation(
             Routes.FOR_YOU -> forYouViewModel.loadRecommendations(
                 personalizedSuggestionsEnabled = authState.user?.privacySettings?.personalizedSuggestions != false
             )
+        }
+    }
+
+    fun onShortcutOnlineAccessChecked(hasOnlineAccess: Boolean) {
+        offlineAccessRetryInProgress = false
+        deviceShortcutRemoteAccessConfirmed = hasOnlineAccess
+        deviceShortcutConnectivityBlocked = !hasOnlineAccess
+
+        if (hasOnlineAccess && (showOfflineAccessNotice || pendingOfflineRoute != null)) {
+            val targetRoute = pendingOfflineRoute ?: Routes.HOME
+            showOfflineAccessNotice = false
+            pendingOfflineRoute = null
+            refreshRecoveredRoute(targetRoute)
+            navController.navigate(targetRoute)
         }
     }
 
@@ -306,6 +364,35 @@ fun AppNavigation(
         }
     }
 
+    LaunchedEffect(
+        deviceBookShortcutLaunchActive,
+        authState.isLoggedIn,
+        authState.user?.uid,
+        authState.user?.isGuest,
+        deviceShortcutConnectivityCheckRequested
+    ) {
+        if (!deviceBookShortcutLaunchActive ||
+            !authState.isLoggedIn ||
+            deviceShortcutConnectivityCheckRequested
+        ) {
+            return@LaunchedEffect
+        }
+
+        deviceShortcutConnectivityCheckRequested = true
+        if (context.hasActiveInternetConnection()) {
+            if (authState.user?.isGuest == true) {
+                deviceShortcutConnectivityBlocked = false
+                deviceShortcutRemoteAccessConfirmed = true
+            } else {
+                deviceShortcutConnectivityBlocked = false
+                homeViewModel.checkOnlineAccess(::onShortcutOnlineAccessChecked)
+            }
+        } else {
+            deviceShortcutRemoteAccessConfirmed = false
+            deviceShortcutConnectivityBlocked = true
+        }
+    }
+
     LaunchedEffect(activityNotificationToOpen, authState.isLoggedIn, authState.user?.isGuest) {
         val notificationId = activityNotificationToOpen?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         if (!authState.isLoggedIn || authState.user?.isGuest == true) return@LaunchedEffect
@@ -320,6 +407,9 @@ fun AppNavigation(
     LaunchedEffect(deviceLibraryBookToOpen, authState.isLoggedIn) {
         val bookUri = deviceLibraryBookToOpen?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         deviceBookShortcutLaunchActive = true
+        deviceShortcutConnectivityBlocked = false
+        deviceShortcutConnectivityCheckRequested = false
+        deviceShortcutRemoteAccessConfirmed = false
         if (!authState.isLoggedIn) return@LaunchedEffect
 
         initialLoggedInRouteResolved = true
@@ -342,11 +432,33 @@ fun AppNavigation(
         }
     }
 
+    LaunchedEffect(authState.isLoggedIn, authState.user?.uid, currentRoute) {
+        if (!authState.isLoggedIn ||
+            authState.user == null ||
+            currentRoute == Routes.LIBRARY ||
+            currentRoute == Routes.LOGIN ||
+            currentRoute == Routes.REGISTER ||
+            currentRoute == Routes.EMAIL_VERIFICATION ||
+            currentRoute == Routes.AUTH_LOADING ||
+            context.hasActiveInternetConnection()
+        ) {
+            return@LaunchedEffect
+        }
+
+        deviceShortcutConnectivityBlocked = true
+        deviceShortcutRemoteAccessConfirmed = false
+        showOfflineAccessFor(currentRoute)
+    }
+
     LaunchedEffect(homeState.isOfflineError, authState.isLoggedIn, authState.user?.isGuest) {
         if (!authState.isLoggedIn || authState.user?.isGuest == true || homeState.isOfflineError) {
             return@LaunchedEffect
         }
 
+        deviceShortcutConnectivityBlocked = false
+        if (deviceBookShortcutLaunchActive && deviceShortcutConnectivityCheckRequested) {
+            deviceShortcutRemoteAccessConfirmed = true
+        }
         if (showOfflineAccessNotice || pendingOfflineRoute != null) {
             val targetRoute = pendingOfflineRoute ?: Routes.HOME
             showOfflineAccessNotice = false
@@ -362,11 +474,7 @@ fun AppNavigation(
             return
         }
 
-        if (isRegisteredOffline && section != KaiSection.LIBRARY) {
-            pendingOfflineRoute = routeForSection(section)
-            showOfflineAccessNotice = true
-            return
-        }
+        if (shouldOpenOfflineAccessInstead(routeForSection(section))) return
 
         when (section) {
             KaiSection.HOME -> navController.navigate(Routes.HOME)
@@ -408,6 +516,10 @@ fun AppNavigation(
         activeDeviceLibraryBookUri = null
         pendingDeviceLibraryBookUri = null
         deviceBookShortcutLaunchActive = false
+        deviceShortcutConnectivityBlocked = false
+        deviceShortcutConnectivityCheckRequested = false
+        deviceShortcutRemoteAccessConfirmed = false
+        offlineAccessRetryInProgress = false
         initialLoggedInRouteResolved = false
         authViewModel.logout()
         navController.navigate(Routes.LOGIN) {
@@ -430,7 +542,7 @@ fun AppNavigation(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             val shouldShowOfflineAccessNotice =
-                isRegisteredOffline && (currentRoute != Routes.LIBRARY || showOfflineAccessNotice)
+                shouldBlockRemoteNavigation && (currentRoute != Routes.LIBRARY || showOfflineAccessNotice)
 
             NavHost(
                 navController = navController,
@@ -1123,12 +1235,27 @@ fun AppNavigation(
                 ) {}
 
                 OfflineAccessDialog(
-                    isRetrying = homeState.isLoading || homeState.isRefreshing,
+                    isRetrying = offlineAccessRetryInProgress || homeState.isLoading || homeState.isRefreshing,
                     onRetry = {
+                        offlineAccessRetryInProgress = true
                         if (pendingOfflineRoute == null) {
                             pendingOfflineRoute = Routes.HOME
                         }
-                        homeViewModel.loadFeed()
+                        if (context.hasActiveInternetConnection()) {
+                            deviceShortcutConnectivityBlocked = false
+                            if (authState.user?.isGuest == true) {
+                                onShortcutOnlineAccessChecked(true)
+                            } else {
+                                homeViewModel.checkOnlineAccess(::onShortcutOnlineAccessChecked)
+                            }
+                        } else {
+                            deviceShortcutRemoteAccessConfirmed = false
+                            deviceShortcutConnectivityBlocked = true
+                            offlineRetryScope.launch {
+                                delay(800)
+                                offlineAccessRetryInProgress = false
+                            }
+                        }
                     },
                     onOpenLibrary = {
                         showOfflineAccessNotice = false

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -109,6 +110,8 @@ fun OfflineAccessDialog(
                                 color = OldIvory,
                                 strokeWidth = 2.dp
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = stringResource(R.string.reconnecting))
                         } else {
                             Text(text = stringResource(R.string.retry))
                         }

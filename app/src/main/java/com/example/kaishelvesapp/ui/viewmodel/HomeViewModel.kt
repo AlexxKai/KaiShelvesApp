@@ -40,6 +40,36 @@ class HomeViewModel(
         fetchFeed(isRefresh = true)
     }
 
+    fun checkOnlineAccess(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            repository.loadHomeFeed()
+                .onSuccess { activities ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        activities = activities,
+                        errorMessageRes = null,
+                        isOfflineError = false
+                    )
+                    onResult(true)
+                }
+                .onFailure { error ->
+                    val isOffline = error.isOfflineFailure()
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        errorMessageRes = if (isOffline) {
+                            R.string.home_offline_dialog_body
+                        } else {
+                            R.string.home_recent_activity_load_error
+                        },
+                        isOfflineError = isOffline
+                    )
+                    onResult(!isOffline)
+                }
+        }
+    }
+
     private fun fetchFeed(isRefresh: Boolean) {
         hydrateCachedFeed()
         val currentState = _uiState.value
