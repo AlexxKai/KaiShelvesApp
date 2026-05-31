@@ -642,14 +642,24 @@ fun ShelfListRow(
                 .padding(start = 10.dp, top = verticalPadding, end = 6.dp, bottom = verticalPadding),
             verticalAlignment = Alignment.Top
         ) {
-            FilePagePreview(
-                file = file,
-                coverText = userMetadata.coverText,
-                overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(coverWidth)
-            )
+            ) {
+                FilePagePreview(
+                    file = file,
+                    coverText = userMetadata.coverText,
+                    overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (progress >= 100) {
+                    FinishedBookRibbon(
+                        text = stringResource(R.string.device_library_finished_banner),
+                        modifier = Modifier.matchParentSize()
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.width(contentGap))
 
@@ -1423,6 +1433,12 @@ fun ShelfGridBook(
             overrideCoverId = userMetadata.coverId.takeIf { it.isNotBlank() },
             modifier = Modifier.fillMaxSize()
         )
+        if (progress >= 100) {
+            FinishedBookRibbon(
+                text = stringResource(R.string.device_library_finished_banner),
+                modifier = Modifier.matchParentSize()
+            )
+        }
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -1573,6 +1589,36 @@ fun ReadingProgressBar(
                 .height(2.dp)
                 .background(Color(0xFF4F9FE3))
         )
+    }
+}
+
+@Composable
+fun FinishedBookRibbon(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(1.42f)
+                .height(24.dp)
+                .graphicsLayer { rotationZ = -35f }
+                .background(Color(0xDDB54747)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = OldIvory,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

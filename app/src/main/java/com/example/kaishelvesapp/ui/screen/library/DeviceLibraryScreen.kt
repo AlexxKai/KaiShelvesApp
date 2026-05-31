@@ -268,6 +268,7 @@ fun DeviceLibraryScreen(
         val requestedUri = openBookUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
         val targetFile = uiState.files.firstOrNull { it.uri.toString() == requestedUri }
         if (targetFile != null) {
+            saveLastOpenedDeviceBookUri(context, targetFile.uri.toString())
             readerFile = targetFile
             onOpenBookUriConsumed()
         } else if (uiState.hasLoadedFiles && !uiState.isLoading) {
@@ -279,6 +280,10 @@ fun DeviceLibraryScreen(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         if (uri != null) viewModel.useFolder(uri)
+    }
+    fun openReader(file: DeviceLibraryFile) {
+        saveLastOpenedDeviceBookUri(context, file.uri.toString())
+        readerFile = file
     }
 
     ModalNavigationDrawer(
@@ -374,7 +379,7 @@ fun DeviceLibraryScreen(
                             }
                             val randomBook = availableBooks.randomOrNull()
                             if (randomBook != null) {
-                                readerFile = randomBook
+                                openReader(randomBook)
                             } else {
                                 Toast.makeText(
                                     context,
@@ -397,11 +402,17 @@ fun DeviceLibraryScreen(
                 floatingActionButton = {
                     FloatingActionButton(
                         onClick = {
-                            Toast.makeText(
-                                context,
-                                "Lectura actual: proximamente",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            val lastBookUri = readLastOpenedDeviceBookUri(context)
+                            val lastBook = uiState.files.firstOrNull { it.uri.toString() == lastBookUri }
+                            if (lastBook != null) {
+                                openReader(lastBook)
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.device_library_no_recent_book),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         },
                         containerColor = Color(0xFF3A3A3A),
                         contentColor = OldIvory
@@ -426,7 +437,7 @@ fun DeviceLibraryScreen(
                     progressRevision = progressRevision,
                     metadataRevision = metadataRevision,
                     onRemoveFile = viewModel::removeFromLibrary,
-                    onOpenFile = { file -> readerFile = file }
+                    onOpenFile = { file -> openReader(file) }
                 )
             }
 
@@ -900,5 +911,24 @@ private fun readUrlBytes(url: String): ByteArray {
 private fun String.urlEncoded(): String {
     return java.net.URLEncoder.encode(this, "UTF-8")
 }
+
+private fun saveLastOpenedDeviceBookUri(
+    context: Context,
+    uri: String
+) {
+    context.getSharedPreferences(DEVICE_LIBRARY_LAST_READING_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(DEVICE_LIBRARY_LAST_READING_URI_KEY, uri)
+        .apply()
+}
+
+private fun readLastOpenedDeviceBookUri(context: Context): String? {
+    return context.getSharedPreferences(DEVICE_LIBRARY_LAST_READING_PREFS, Context.MODE_PRIVATE)
+        .getString(DEVICE_LIBRARY_LAST_READING_URI_KEY, null)
+        ?.takeIf { it.isNotBlank() }
+}
+
+private const val DEVICE_LIBRARY_LAST_READING_PREFS = "device_library_last_reading"
+private const val DEVICE_LIBRARY_LAST_READING_URI_KEY = "last_opened_uri"
 
 

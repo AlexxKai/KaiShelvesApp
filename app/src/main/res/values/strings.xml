@@ -168,6 +168,8 @@
     <string name="device_library_search_empty_title">No matches found</string>
     <string name="device_library_search_empty_body">We could not find any file matching "%1$s". Try another term or clear active filters.</string>
     <string name="device_library_error_title">Could not load files</string>
+    <string name="device_library_finished_banner">Finished</string>
+    <string name="device_library_no_recent_book">No recent reading found</string>
     <string name="device_library_file_type">File type</string>
     <string name="device_library_file_type_all">All</string>
     <string name="device_library_file_type_epub">EPUB</string>

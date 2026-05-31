@@ -168,6 +168,8 @@
     <string name="device_library_search_empty_title">No hay coincidencias</string>
     <string name="device_library_search_empty_body">No encontramos ningún archivo que coincida con "%1$s". Prueba con otro término o borra filtros activos.</string>
     <string name="device_library_error_title">No se pudieron cargar los archivos</string>
+    <string name="device_library_finished_banner">Finalizado</string>
+    <string name="device_library_no_recent_book">No hay ninguna lectura reciente</string>
     <string name="device_library_file_type">Tipo de archivo</string>
     <string name="device_library_file_type_all">Todo</string>
     <string name="device_library_file_type_epub">EPUB</string>
