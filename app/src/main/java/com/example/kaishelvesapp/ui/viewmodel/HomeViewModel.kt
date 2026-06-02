@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
+    val isCheckingForUpdates: Boolean = false,
     val activities: List<FriendActivityItem> = emptyList(),
     val commentsByActivityId: Map<String, List<ActivityComment>> = emptyMap(),
     val loadingCommentIds: Set<String> = emptySet(),
@@ -47,6 +48,7 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
+                        isCheckingForUpdates = false,
                         activities = activities,
                         errorMessageRes = null,
                         isOfflineError = false
@@ -58,6 +60,7 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
+                        isCheckingForUpdates = false,
                         errorMessageRes = if (isOffline) {
                             R.string.home_offline_dialog_body
                         } else {
@@ -73,11 +76,14 @@ class HomeViewModel(
     private fun fetchFeed(isRefresh: Boolean) {
         hydrateCachedFeed()
         val currentState = _uiState.value
-        if (currentState.isLoading || currentState.isRefreshing) return
+        if (currentState.isLoading || currentState.isRefreshing || currentState.isCheckingForUpdates) return
+
+        val isCheckingForUpdates = !isRefresh && currentState.activities.isNotEmpty()
 
         _uiState.value = currentState.copy(
             isLoading = !isRefresh && currentState.activities.isEmpty(),
             isRefreshing = isRefresh,
+            isCheckingForUpdates = isCheckingForUpdates,
             errorMessageRes = null,
             isOfflineError = currentState.isOfflineError
         )
@@ -88,6 +94,7 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
+                        isCheckingForUpdates = false,
                         activities = activities,
                         errorMessageRes = null,
                         isOfflineError = false
@@ -98,6 +105,7 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
+                        isCheckingForUpdates = false,
                         errorMessageRes = if (isOffline) {
                             R.string.home_offline_dialog_body
                         } else {

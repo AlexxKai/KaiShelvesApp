@@ -240,11 +240,24 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             item {
-                                Text(
-                                    text = stringResource(R.string.home_recent_activity_title),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = TarnishedGold
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.home_recent_activity_title),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        color = TarnishedGold
+                                    )
+                                    if (uiState.isCheckingForUpdates) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = TarnishedGold,
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
 
                             items(

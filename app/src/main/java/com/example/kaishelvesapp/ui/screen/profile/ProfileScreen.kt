@@ -9,6 +9,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
@@ -146,6 +148,7 @@ fun ProfileScreen(
     var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
     var selectedSettingsPanel by remember { mutableStateOf(ProfileSettingsPanel.Main) }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
+    var showProfilePhotoPreview by remember { mutableStateOf(false) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
     var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
@@ -163,6 +166,20 @@ fun ProfileScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { viewModel.importGoodreadsCsv(it.toString()) }
+    }
+    val profilePhotoDisplayName = uiState.username.ifBlank {
+        userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
+    }
+    val profilePhotoImageUrl = uiState.profilePhotoUri.ifBlank {
+        profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
+    }
+
+    if (showProfilePhotoPreview) {
+        ProfilePhotoPreviewDialog(
+            displayName = profilePhotoDisplayName,
+            imageUrl = profilePhotoImageUrl,
+            onDismiss = { showProfilePhotoPreview = false }
+        )
     }
 
     pendingProfilePhotoUri?.let { selectedPhotoUri ->
@@ -275,7 +292,10 @@ fun ProfileScreen(
         Scaffold(
             containerColor = Color.Transparent,
             snackbarHost = {
-                SnackbarHost(hostState = snackbarHostState)
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.imePadding()
+                )
             },
             topBar = {
                 KaiPrimaryTopBar(
@@ -301,6 +321,7 @@ fun ProfileScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
                     .padding(innerPadding)
+                    .imePadding()
             ) {
             Column(
                 modifier = Modifier
@@ -424,13 +445,10 @@ fun ProfileScreen(
 
                                         ProfileTab.Identity -> {
                                             ProfileAvatarSection(
-                                                displayName = uiState.username.ifBlank {
-                                                    userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
-                                                },
-                                                imageUrl = uiState.profilePhotoUri.ifBlank {
-                                                    profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
-                                                },
+                                                displayName = profilePhotoDisplayName,
+                                                imageUrl = profilePhotoImageUrl,
                                                 isAdmin = uiState.user?.isAdmin == true,
+                                                onOpenPhoto = { showProfilePhotoPreview = true },
                                                 onChangePhoto = { photoPickerLauncher.launch("image/*") }
                                             )
 
@@ -1671,6 +1689,7 @@ private fun ProfileAvatarSection(
     displayName: String,
     imageUrl: String,
     isAdmin: Boolean,
+    onOpenPhoto: () -> Unit,
     onChangePhoto: () -> Unit
 ) {
     Column(
@@ -1680,7 +1699,10 @@ private fun ProfileAvatarSection(
         KaiUserAvatar(
             displayName = displayName,
             imageUrl = imageUrl,
-            modifier = Modifier.size(132.dp),
+            modifier = Modifier
+                .size(132.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .clickable(onClick = onOpenPhoto),
             size = 104.dp
         )
 
@@ -1711,6 +1733,35 @@ private fun ProfileAvatarSection(
                 text = stringResource(R.string.change_profile_photo),
                 color = TarnishedGold
             )
+        }
+    }
+}
+
+@Composable
+private fun ProfilePhotoPreviewDialog(
+    displayName: String,
+    imageUrl: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.72f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(18.dp)
+                    .size(292.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                KaiUserAvatar(
+                    displayName = displayName,
+                    imageUrl = imageUrl,
+                    modifier = Modifier.size(292.dp),
+                    size = 260.dp
+                )
+            }
         }
     }
 }
