@@ -8,7 +8,7 @@
     <string name="open">Open</string>
     <string name="delete">Delete</string>
     <string name="retry">Retry</string>
-    <string name="reconnecting">Reconnecting...</string>
+    <string name="reconnecting">Reconnecting&#8230;</string>
     <string name="refresh">Refresh</string>
     <string name="save">Save</string>
     <string name="close">Close</string>
@@ -624,5 +624,28 @@
     <string name="reader_book_info_clear_statistics">Clear “Statistics”</string>
     <string name="reader_book_info_calendar">Calendar</string>
     <string name="reader_book_info_create_shortcut">Create desktop shortcut</string>
+    <string name="profile_reader_list_automation">Reader list automation</string>
+    <string name="profile_reader_list_automation_body">Choose what Kai Shelves does when a device book is opened for the first time or completed.</string>
+    <string name="reader_list_automation_ask">Ask every time</string>
+    <string name="reader_list_automation_ask_body">Show a dialog before adding books to Reading or Read.</string>
+    <string name="reader_list_automation_automatic">Add automatically</string>
+    <string name="reader_list_automation_automatic_body">Add the book and display a confirmation message.</string>
+    <string name="reader_list_automation_disabled">Disabled</string>
+    <string name="reader_list_automation_disabled_body">It does not add the books to any list.</string>
+    <string name="reader_add_to_reading_title">Add to Reading?</string>
+    <string name="reader_add_to_reading_body">Kai Shelves can search this book in the catalog and add it to your Reading list.</string>
+    <string name="reader_add_to_read_title">Add to Read?</string>
+    <string name="reader_add_to_read_body">You reached 100%. Kai Shelves can search this book in the catalog and add it to your Read list.</string>
+    <string name="reader_list_yes_add">Add</string>
+    <string name="reader_list_no_add">Not now</string>
+    <string name="reader_added_to_reading_snackbar">Book added to Reading</string>
+    <string name="reader_added_to_read_snackbar">Book added to Read</string>
+    <string name="reader_list_add_error">Could not add the book to the list</string>
+    <string name="system_list_want_to_read">Want to read</string>
+    <string name="system_list_reading">Reading</string>
+    <string name="system_list_read">Read</string>
+    <string name="system_list_pending">Pending</string>
+    <string name="system_list_unfinished">Unfinished</string>
+    <string name="system_list_owned">Owned</string>
 </resources>
 

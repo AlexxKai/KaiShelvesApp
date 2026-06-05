@@ -88,6 +88,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailUiState
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
@@ -672,7 +673,7 @@ private fun FeedShelfActionRow(
     val selectedList = remember(uiState.availableLists, uiState.selectedListIds) {
         uiState.availableLists.firstOrNull { it.id in uiState.selectedListIds }
     }
-    val buttonLabel = selectedList?.name ?: stringResource(R.string.want_to_read)
+    val buttonLabel = selectedList?.localizedName() ?: stringResource(R.string.want_to_read)
     val isAddedToShelf = selectedList != null
     val buttonColor = if (isAddedToShelf) {
         BloodWine.copy(alpha = 0.72f)
@@ -1007,7 +1008,7 @@ private fun FeedShelfOptionRow(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = list.name,
+                text = list.localizedName(),
                 color = OldIvory,
                 style = MaterialTheme.typography.titleMedium
             )

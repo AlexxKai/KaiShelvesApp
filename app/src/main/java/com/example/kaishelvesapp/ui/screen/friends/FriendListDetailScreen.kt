@@ -55,6 +55,7 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.FriendListDetailViewModel
 
@@ -228,7 +229,7 @@ private fun FriendListDetailHeaderCard(
                 }
 
                 Text(
-                    text = userList?.name ?: stringResource(R.string.list_detail_title),
+                    text = userList?.localizedName() ?: stringResource(R.string.list_detail_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = TarnishedGold,
                     fontWeight = FontWeight.SemiBold,

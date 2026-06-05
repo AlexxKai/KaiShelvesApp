@@ -167,7 +167,7 @@ class UserListsRepository(
         val books = ownedDeviceBooks()
         return UserBookList(
             id = SYSTEM_LIST_OWNED_ID,
-            name = "Tengo",
+            name = "Owned",
             description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
             bookCount = books.size,
             position = 5,
@@ -427,7 +427,7 @@ class UserListsRepository(
     private fun defaultSystemLists() = listOf(
         UserBookList(
             id = SYSTEM_LIST_WANT_TO_READ_ID,
-            name = "Quiero leer",
+            name = "Want to read",
             description = "Libros que quieres empezar pronto.",
             position = 0,
             isSystem = true,
@@ -435,7 +435,7 @@ class UserListsRepository(
         ),
         UserBookList(
             id = SYSTEM_LIST_READING_ID,
-            name = "Leyendo",
+            name = "Reading",
             description = "Libros que tienes ahora mismo entre manos.",
             position = 1,
             isSystem = true,
@@ -443,7 +443,7 @@ class UserListsRepository(
         ),
         UserBookList(
             id = SYSTEM_LIST_READ_ID,
-            name = "Leido",
+            name = "Read",
             description = "Libros que ya forman parte de tu historial de lectura.",
             position = 2,
             isSystem = true,
@@ -451,7 +451,7 @@ class UserListsRepository(
         ),
         UserBookList(
             id = SYSTEM_LIST_PENDING_ID,
-            name = "Pendientes",
+            name = "Pending",
             description = "Libros que quieres ordenar a tu manera para retomarlos después.",
             position = 3,
             isSystem = true,
@@ -459,7 +459,7 @@ class UserListsRepository(
         ),
         UserBookList(
             id = SYSTEM_LIST_UNFINISHED_ID,
-            name = "No terminado",
+            name = "Unfinished",
             description = "Libros que dejaste a medias o prefieres pausar.",
             position = 4,
             isSystem = true,
@@ -467,7 +467,7 @@ class UserListsRepository(
         ),
         UserBookList(
             id = SYSTEM_LIST_OWNED_ID,
-            name = "Tengo",
+            name = "Owned",
             description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
             position = 5,
             isSystem = true,

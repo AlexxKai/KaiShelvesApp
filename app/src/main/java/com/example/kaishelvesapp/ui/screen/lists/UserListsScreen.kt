@@ -92,6 +92,7 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.USER_TAG_DETAIL_PREFIX
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 import kotlinx.coroutines.delay
@@ -924,7 +925,7 @@ private fun UserListCard(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = userList.name,
+                            text = userList.localizedName(),
                             style = MaterialTheme.typography.titleMedium,
                             color = TarnishedGold,
                             fontWeight = FontWeight.SemiBold,
@@ -1076,7 +1077,7 @@ private fun ListPreviewStack(
                     } else {
                         BookCover(
                             imageUrl = preview.uri,
-                            title = userList.name,
+                            title = userList.localizedName(),
                             showFrame = false,
                             modifier = coverModifier
                         )

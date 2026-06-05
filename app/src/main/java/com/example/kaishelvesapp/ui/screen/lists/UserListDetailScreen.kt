@@ -94,6 +94,7 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailBookItem
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.USER_TAG_DETAIL_PREFIX
@@ -718,7 +719,7 @@ private fun ListDetailHeaderCard(
                 }
 
                 Text(
-                    text = userList?.name ?: stringResource(R.string.list_detail_title),
+                    text = userList?.localizedName() ?: stringResource(R.string.list_detail_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = TarnishedGold,
                     fontWeight = FontWeight.SemiBold,

@@ -95,6 +95,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -962,7 +963,7 @@ private fun FriendShelfRow(
         modifier = Modifier.width(rowWidth)
     ) {
         Text(
-            text = shelf.title,
+            text = shelf.localizedName(),
             style = MaterialTheme.typography.titleMedium,
             color = OldIvory
         )

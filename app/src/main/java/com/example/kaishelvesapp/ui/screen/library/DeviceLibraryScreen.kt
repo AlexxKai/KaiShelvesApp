@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FloatingActionButton
@@ -34,7 +36,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,10 +64,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.repository.BookRepository
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
+import com.example.kaishelvesapp.data.repository.ImportedReadMetadata
+import com.example.kaishelvesapp.data.repository.UserListsRepository
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.ReadReviewDialog
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -160,6 +170,7 @@ fun DeviceLibraryScreen(
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val snackbarHostState = remember { SnackbarHostState() }
     // Recupera todos los ajustes del panel de filtros para mantener la vista elegida entre sesiones.
     var layoutMode by remember { mutableStateOf(readDeviceLibraryLayoutMode(context)) }
     var sortOption by remember { mutableStateOf(readDeviceLibrarySortOption(context)) }
@@ -173,6 +184,11 @@ fun DeviceLibraryScreen(
     var showImportBooksDialog by remember { mutableStateOf(false) }
     var showDefaultCoverScreen by remember { mutableStateOf(false) }
     var readerFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
+    var readerStartProgress by remember { mutableStateOf(0) }
+    var pendingFirstOpenFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
+    var pendingFinishedFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
+    var pendingReadReviewBook by remember { mutableStateOf<Libro?>(null) }
+    var isAddingReaderListBook by remember { mutableStateOf(false) }
     var progressRevision by remember { mutableStateOf(0) }
     var metadataRevision by remember { mutableStateOf(0) }
     var rebuildingCovers by remember { mutableStateOf(false) }
@@ -271,18 +287,6 @@ fun DeviceLibraryScreen(
         if (sortDescending) sorted.asReversed() else sorted
     }
 
-    LaunchedEffect(openBookUri, uiState.files, uiState.isLoading, uiState.hasLoadedFiles) {
-        val requestedUri = openBookUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        val targetFile = uiState.files.firstOrNull { it.uri.toString() == requestedUri }
-        if (targetFile != null) {
-            saveLastOpenedDeviceBookUri(context, targetFile.uri.toString())
-            readerFile = targetFile
-            onOpenBookUriConsumed()
-        } else if (uiState.hasLoadedFiles && !uiState.isLoading) {
-            onOpenBookUriConsumed()
-        }
-    }
-
     val folderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -294,9 +298,143 @@ fun DeviceLibraryScreen(
             uiState.searchQuery.isBlank() &&
             selectedAuthor == null
 
-    fun openReader(file: DeviceLibraryFile) {
+    fun showReaderListResult(
+        result: Result<Unit>,
+        successMessage: String
+    ) {
+        scope.launch {
+            snackbarHostState.showSnackbar(
+                result.fold(
+                    onSuccess = { successMessage },
+                    onFailure = { context.getString(R.string.reader_list_add_error) }
+                )
+            )
+        }
+    }
+
+    fun addBookToReaderList(
+        file: DeviceLibraryFile,
+        listId: String,
+        readMetadata: ImportedReadMetadata? = null,
+        onDone: (Result<Unit>) -> Unit = {}
+    ) {
+        if (isAddingReaderListBook) return
+        isAddingReaderListBook = true
+        scope.launch {
+            val metadata = fileMetadata[file.uri.toString()]
+            val result = withContext(Dispatchers.IO) {
+                resolveDeviceLibraryBook(
+                    context = context,
+                    repository = BookRepository(),
+                    file = file,
+                    metadata = metadata
+                ).fold(
+                    onSuccess = { libro ->
+                        val listsRepository = UserListsRepository()
+                        if (listId == UserListsRepository.SYSTEM_LIST_READ_ID) {
+                            listsRepository.updateBookAssignments(
+                                libro = libro,
+                                selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_READ_ID),
+                                readMetadata = readMetadata
+                            )
+                        } else {
+                            listsRepository.updateBookAssignments(libro, setOf(listId))
+                        }
+                    },
+                    onFailure = { Result.failure(it) }
+                )
+            }
+            isAddingReaderListBook = false
+            onDone(result)
+        }
+    }
+
+    fun resolveBookForReadReview(
+        file: DeviceLibraryFile,
+        onDone: (Result<Libro>) -> Unit
+    ) {
+        if (isAddingReaderListBook) return
+        isAddingReaderListBook = true
+        scope.launch {
+            val metadata = fileMetadata[file.uri.toString()]
+            val result = withContext(Dispatchers.IO) {
+                resolveDeviceLibraryBook(
+                    context = context,
+                    repository = BookRepository(),
+                    file = file,
+                    metadata = metadata
+                )
+            }
+            isAddingReaderListBook = false
+            onDone(result)
+        }
+    }
+
+    fun addResolvedReadBook(
+        libro: Libro,
+        readMetadata: ImportedReadMetadata,
+        onDone: (Result<Unit>) -> Unit
+    ) {
+        if (isAddingReaderListBook) return
+        isAddingReaderListBook = true
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                UserListsRepository().updateBookAssignments(
+                    libro = libro,
+                    selectedListIds = setOf(UserListsRepository.SYSTEM_LIST_READ_ID),
+                    readMetadata = readMetadata
+                )
+            }
+            isAddingReaderListBook = false
+            onDone(result)
+        }
+    }
+
+    fun launchReader(file: DeviceLibraryFile) {
+        readerStartProgress = readDeviceBookProgressPercent(context, file)
         saveLastOpenedDeviceBookUri(context, file.uri.toString())
         readerFile = file
+    }
+
+    fun openReader(file: DeviceLibraryFile) {
+        when (readReaderListAutomationMode(context)) {
+            ReaderListAutomationMode.Disabled -> launchReader(file)
+            ReaderListAutomationMode.Ask -> {
+                if (readDeviceBookProgressPercent(context, file) == 0) {
+                    pendingFirstOpenFile = file
+                } else {
+                    launchReader(file)
+                }
+            }
+            ReaderListAutomationMode.Automatic -> {
+                if (readDeviceBookProgressPercent(context, file) == 0) {
+                    addBookToReaderList(
+                        file = file,
+                        listId = UserListsRepository.SYSTEM_LIST_READING_ID,
+                        onDone = { result ->
+                            showReaderListResult(
+                                result = result,
+                                successMessage = context.getString(R.string.reader_added_to_reading_snackbar)
+                            )
+                            launchReader(file)
+                        }
+                    )
+                } else {
+                    launchReader(file)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(openBookUri, uiState.files, uiState.isLoading, uiState.hasLoadedFiles) {
+        val requestedUri = openBookUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val targetFile = uiState.files.firstOrNull { it.uri.toString() == requestedUri }
+        if (targetFile != null) {
+            openReader(targetFile)
+            onOpenBookUriConsumed()
+        } else if (uiState.hasLoadedFiles && !uiState.isLoading) {
+            onOpenBookUriConsumed()
+        }
     }
 
     ModalNavigationDrawer(
@@ -330,6 +468,7 @@ fun DeviceLibraryScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 containerColor = Color.Transparent,
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 topBar = {
                     DeviceLibraryTopBar(
                         onOpenMenu = { scope.launch { drawerState.open() } },
@@ -529,14 +668,259 @@ fun DeviceLibraryScreen(
                     file = file,
                     onProgressChanged = { progressRevision++ },
                     onDismiss = {
+                        val finishedNow = readerStartProgress < 100 &&
+                            readDeviceBookProgressPercent(context, file) >= 100
                         readerFile = null
                         onReaderClosed()
+                        if (finishedNow) {
+                            when (readReaderListAutomationMode(context)) {
+                                ReaderListAutomationMode.Ask -> pendingFinishedFile = file
+                                ReaderListAutomationMode.Automatic -> {
+                                    addBookToReaderList(
+                                        file = file,
+                                        listId = UserListsRepository.SYSTEM_LIST_READ_ID,
+                                        onDone = { result ->
+                                            showReaderListResult(
+                                                result = result,
+                                                successMessage = context.getString(R.string.reader_added_to_read_snackbar)
+                                            )
+                                        }
+                                    )
+                                }
+                                ReaderListAutomationMode.Disabled -> Unit
+                            }
+                        }
+                    }
+                )
+            }
+
+            pendingFirstOpenFile?.let { file ->
+                ReaderListActionDialog(
+                    title = stringResource(R.string.reader_add_to_reading_title),
+                    body = stringResource(R.string.reader_add_to_reading_body),
+                    isLoading = isAddingReaderListBook,
+                    onDismiss = {
+                        if (!isAddingReaderListBook) pendingFirstOpenFile = null
+                    },
+                    onSkip = {
+                        pendingFirstOpenFile = null
+                        launchReader(file)
+                    },
+                    onConfirm = {
+                        addBookToReaderList(
+                            file = file,
+                            listId = UserListsRepository.SYSTEM_LIST_READING_ID,
+                            onDone = { result ->
+                                showReaderListResult(
+                                    result = result,
+                                    successMessage = context.getString(R.string.reader_added_to_reading_snackbar)
+                                )
+                                pendingFirstOpenFile = null
+                                launchReader(file)
+                            }
+                        )
+                    }
+                )
+            }
+
+            pendingFinishedFile?.let { file ->
+                ReaderListActionDialog(
+                    title = stringResource(R.string.reader_add_to_read_title),
+                    body = stringResource(R.string.reader_add_to_read_body),
+                    isLoading = isAddingReaderListBook,
+                    onDismiss = {
+                        if (!isAddingReaderListBook) pendingFinishedFile = null
+                    },
+                    onSkip = { pendingFinishedFile = null },
+                    onConfirm = {
+                        resolveBookForReadReview(file) { result ->
+                            result.fold(
+                                onSuccess = { libro ->
+                                    pendingFinishedFile = null
+                                    pendingReadReviewBook = libro
+                                },
+                                onFailure = {
+                                    showReaderListResult(
+                                        result = Result.failure(it),
+                                        successMessage = context.getString(R.string.reader_added_to_read_snackbar)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                )
+            }
+
+            pendingReadReviewBook?.let { libro ->
+                ReadReviewDialog(
+                    libro = libro,
+                    isSaving = isAddingReaderListBook,
+                    initialRating = 0,
+                    initialReview = "",
+                    initialContainsSpoilers = false,
+                    onDismiss = {
+                        if (!isAddingReaderListBook) pendingReadReviewBook = null
+                    },
+                    onSave = { rating, review, containsSpoilers ->
+                        addResolvedReadBook(
+                            libro = libro,
+                            readMetadata = ImportedReadMetadata(
+                                rating = rating,
+                                review = review,
+                                containsSpoilers = containsSpoilers
+                            ),
+                            onDone = { result ->
+                                showReaderListResult(
+                                    result = result,
+                                    successMessage = context.getString(R.string.reader_added_to_read_snackbar)
+                                )
+                                if (result.isSuccess) {
+                                    pendingReadReviewBook = null
+                                }
+                            }
+                        )
                     }
                 )
             }
         }
     }
 }
+
+@Composable
+private fun ReaderListActionDialog(
+    title: String,
+    body: String,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSkip: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = title)
+        },
+        text = {
+            Text(text = body)
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isLoading
+            ) {
+                Text(text = stringResource(R.string.reader_list_yes_add))
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onSkip,
+                enabled = !isLoading
+            ) {
+                Text(text = stringResource(R.string.reader_list_no_add))
+            }
+        }
+    )
+}
+
+private suspend fun resolveDeviceLibraryBook(
+    context: Context,
+    repository: BookRepository,
+    file: DeviceLibraryFile,
+    metadata: DeviceLibraryResolvedMetadata?
+): Result<Libro> {
+    val userMetadata = readDeviceBookUserMetadata(context, file)
+    val epubMetadata = if (isEpub(file)) extractEpubDisplayMetadata(context, file.uri) else null
+    val title = userMetadata.title
+        .ifBlank { epubMetadata?.title.orEmpty() }
+        .ifBlank { metadata?.title.orEmpty() }
+        .ifBlank { file.name.substringBeforeLast('.') }
+        .trim()
+    val author = userMetadata.author
+        .ifBlank { epubMetadata?.author.orEmpty() }
+        .ifBlank { metadata?.author.orEmpty().takeUnless { it.startsWith("(") }.orEmpty() }
+        .trim()
+    val query = listOf(title, author)
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+
+    return repository.searchBooksForResults(query = query, maxResults = 10)
+        .mapCatching { result ->
+            result.books
+                .map { candidate -> candidate to deviceBookMatchScore(title, author, candidate) }
+                .filter { (_, score) -> score >= DEVICE_BOOK_MIN_MATCH_SCORE }
+                .maxByOrNull { (_, score) -> score }
+                ?.first
+                ?: throw IllegalStateException("No se encontro una coincidencia fiable en la API")
+        }
+        .map { libro -> libro.copy(pdf = file.uri.toString()) }
+}
+
+private fun deviceBookMatchScore(
+    expectedTitle: String,
+    expectedAuthor: String,
+    candidate: Libro
+): Int {
+    val normalizedExpectedTitle = normalizeDeviceBookMatchText(expectedTitle)
+    val normalizedCandidateTitle = normalizeDeviceBookMatchText(candidate.titulo)
+    if (normalizedExpectedTitle.isBlank() || normalizedCandidateTitle.isBlank()) return 0
+
+    val expectedTitleTokens = deviceBookMatchTokens(normalizedExpectedTitle)
+    val candidateTitleTokens = deviceBookMatchTokens(normalizedCandidateTitle)
+    val titleCoverage = tokenCoverage(expectedTitleTokens, candidateTitleTokens)
+    val reverseTitleCoverage = tokenCoverage(candidateTitleTokens, expectedTitleTokens)
+    val exactTitle = normalizedExpectedTitle == normalizedCandidateTitle
+    val containedTitle = normalizedExpectedTitle.length >= 5 &&
+        (normalizedCandidateTitle.contains(normalizedExpectedTitle) ||
+            normalizedExpectedTitle.contains(normalizedCandidateTitle))
+
+    var score = when {
+        exactTitle -> 100
+        containedTitle -> 78
+        titleCoverage >= 0.8f && reverseTitleCoverage >= 0.55f -> 68
+        titleCoverage >= 0.65f && reverseTitleCoverage >= 0.45f -> 52
+        else -> return 0
+    }
+
+    val normalizedExpectedAuthor = normalizeDeviceBookMatchText(expectedAuthor)
+    if (normalizedExpectedAuthor.isNotBlank()) {
+        val normalizedCandidateAuthor = normalizeDeviceBookMatchText(candidate.autor)
+        val authorCoverage = tokenCoverage(
+            deviceBookMatchTokens(normalizedExpectedAuthor),
+            deviceBookMatchTokens(normalizedCandidateAuthor)
+        )
+        score += when {
+            normalizedCandidateAuthor == normalizedExpectedAuthor -> 35
+            normalizedCandidateAuthor.contains(normalizedExpectedAuthor) ||
+                normalizedExpectedAuthor.contains(normalizedCandidateAuthor) -> 28
+            authorCoverage >= 0.6f -> 22
+            exactTitle -> 0
+            else -> -45
+        }
+    }
+
+    return score
+}
+
+private fun normalizeDeviceBookMatchText(value: String): String {
+    return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")
+        .lowercase(Locale.ROOT)
+        .replace(Regex("[^a-z0-9]+"), " ")
+        .trim()
+}
+
+private fun deviceBookMatchTokens(value: String): Set<String> {
+    return value.split(' ')
+        .filter { it.length > 1 }
+        .toSet()
+}
+
+private fun tokenCoverage(expected: Set<String>, candidate: Set<String>): Float {
+    if (expected.isEmpty()) return 0f
+    return expected.count { it in candidate }.toFloat() / expected.size
+}
+
+private const val DEVICE_BOOK_MIN_MATCH_SCORE = 60
 
 @Composable
 private fun DeviceLibraryFolderHintArrow(

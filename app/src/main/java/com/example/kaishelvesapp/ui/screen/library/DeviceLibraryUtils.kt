@@ -174,6 +174,29 @@ fun readingStatusForProgress(progress: Int): DeviceLibraryReadingStatus {
     }
 }
 
+enum class ReaderListAutomationMode {
+    Ask,
+    Automatic,
+    Disabled
+}
+
+fun readReaderListAutomationMode(context: Context): ReaderListAutomationMode {
+    val rawValue = context.getSharedPreferences(READER_LIST_AUTOMATION_PREFS, Context.MODE_PRIVATE)
+        .getString(READER_LIST_AUTOMATION_MODE_KEY, ReaderListAutomationMode.Ask.name)
+    return ReaderListAutomationMode.entries.firstOrNull { it.name == rawValue }
+        ?: ReaderListAutomationMode.Ask
+}
+
+fun saveReaderListAutomationMode(
+    context: Context,
+    mode: ReaderListAutomationMode
+) {
+    context.getSharedPreferences(READER_LIST_AUTOMATION_PREFS, Context.MODE_PRIVATE)
+        .edit()
+        .putString(READER_LIST_AUTOMATION_MODE_KEY, mode.name)
+        .apply()
+}
+
 fun saveDeviceBookReadingProgress(
     context: Context,
     file: DeviceLibraryFile,
@@ -207,6 +230,9 @@ fun deviceLibraryProgressPreferences(context: Context) =
 fun deviceBookProgressKey(file: DeviceLibraryFile): String {
     return URLEncoder.encode(file.uri.toString(), "UTF-8")
 }
+
+private const val READER_LIST_AUTOMATION_PREFS = "reader_list_automation"
+private const val READER_LIST_AUTOMATION_MODE_KEY = "mode"
 
 fun extractEpubCover(context: Context, uri: Uri): Bitmap? {
     return runCatching {

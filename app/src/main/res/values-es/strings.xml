@@ -8,7 +8,7 @@
     <string name="open">Abrir</string>
     <string name="delete">Eliminar</string>
     <string name="retry">Reintentar</string>
-    <string name="reconnecting">Reconectando...</string>
+    <string name="reconnecting">Reconectando&#8230;</string>
     <string name="refresh">Actualizar</string>
     <string name="save">Guardar</string>
     <string name="close">Cerrar</string>
@@ -625,6 +625,29 @@
     <string name="reader_book_info_clear_statistics">Limpiar “Estadísticas”</string>
     <string name="reader_book_info_calendar">Calendario</string>
     <string name="reader_book_info_create_shortcut">Crear acceso directo en escritorio</string>
+    <string name="profile_reader_list_automation">Automatización de listas del lector</string>
+    <string name="profile_reader_list_automation_body">Elige qué hace Kai Shelves al abrir por primera vez o completar un libro del dispositivo.</string>
+    <string name="reader_list_automation_ask">Preguntar siempre</string>
+    <string name="reader_list_automation_ask_body">Muestra una ventana antes de añadir libros a Leyendo o Leído.</string>
+    <string name="reader_list_automation_automatic">Añadir automáticamente</string>
+    <string name="reader_list_automation_automatic_body">Añade el libro y muestra una notificación de confirmación.</string>
+    <string name="reader_list_automation_disabled">Desactivado</string>
+    <string name="reader_list_automation_disabled_body">No añade los libros a ninguna lista.</string>
+    <string name="reader_add_to_reading_title">¿Añadir a Leyendo?</string>
+    <string name="reader_add_to_reading_body">Kai Shelves puede buscar este libro en el catálogo y añadirlo a tu lista Leyendo.</string>
+    <string name="reader_add_to_read_title">¿Añadir a Leído?</string>
+    <string name="reader_add_to_read_body">Has llegado al 100%. Kai Shelves puede buscar este libro en el catálogo y añadirlo a tu lista Leído.</string>
+    <string name="reader_list_yes_add">Añadir</string>
+    <string name="reader_list_no_add">Ahora no</string>
+    <string name="reader_added_to_reading_snackbar">Libro añadido a Leyendo</string>
+    <string name="reader_added_to_read_snackbar">Libro añadido a Leído</string>
+    <string name="reader_list_add_error">No se pudo añadir el libro a la lista</string>
+    <string name="system_list_want_to_read">Quiero leer</string>
+    <string name="system_list_reading">Leyendo</string>
+    <string name="system_list_read">Leído</string>
+    <string name="system_list_pending">Pendientes</string>
+    <string name="system_list_unfinished">No terminado</string>
+    <string name="system_list_owned">Tengo</string>
 </resources>
 
 

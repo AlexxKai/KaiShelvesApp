@@ -58,6 +58,7 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.FriendListsViewModel
 
 @Composable
@@ -328,7 +329,7 @@ private fun FriendListSummaryCard(
                     list.previewImageUrls.take(3).forEach { imageUrl ->
                         BookCover(
                             imageUrl = imageUrl,
-                            title = list.name,
+                            title = list.localizedName(),
                             modifier = Modifier
                                 .width(34.dp)
                                 .height(52.dp)
@@ -358,7 +359,7 @@ private fun FriendListSummaryCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = list.name,
+                    text = list.localizedName(),
                     style = MaterialTheme.typography.titleLarge,
                     color = OldIvory,
                     fontWeight = FontWeight.SemiBold,

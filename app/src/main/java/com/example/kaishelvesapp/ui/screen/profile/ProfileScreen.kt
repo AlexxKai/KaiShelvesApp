@@ -46,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -55,6 +57,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +106,9 @@ import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.screen.friends.FriendProfileContent
+import com.example.kaishelvesapp.ui.screen.library.ReaderListAutomationMode
+import com.example.kaishelvesapp.ui.screen.library.readReaderListAutomationMode
+import com.example.kaishelvesapp.ui.screen.library.saveReaderListAutomationMode
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -147,6 +153,9 @@ fun ProfileScreen(
     val activity = context.findActivity()
     var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
     var selectedSettingsPanel by remember { mutableStateOf(ProfileSettingsPanel.Main) }
+    var readerListAutomationMode by remember {
+        mutableStateOf(readReaderListAutomationMode(context))
+    }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
     var showProfilePhotoPreview by remember { mutableStateOf(false) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
@@ -241,6 +250,14 @@ fun ProfileScreen(
     LaunchedEffect(isGuest, selectedProfileTab) {
         if (isGuest && selectedProfileTab.isGuestRestricted) {
             selectedProfileTab = ProfileTab.Identity
+        }
+    }
+
+    DisposableEffect(selectedProfileTab) {
+        onDispose {
+            if (selectedProfileTab == ProfileTab.Identity) {
+                viewModel.cancelEditingProfile()
+            }
         }
     }
 
@@ -547,6 +564,11 @@ fun ProfileScreen(
                                                     activity?.let {
                                                         LanguageManager.setLanguage(it, language)
                                                     }
+                                                },
+                                                readerListAutomationMode = readerListAutomationMode,
+                                                onReaderListAutomationModeChange = { mode ->
+                                                    readerListAutomationMode = mode
+                                                    saveReaderListAutomationMode(context, mode)
                                                 },
                                                 searchIntroAnimationEnabled = privacySettings.searchIntroAnimationEnabled != false,
                                                 onSearchIntroAnimationEnabledChange = {
@@ -1218,6 +1240,8 @@ private fun ProfileSettingsContent(
     selectedPanel: ProfileSettingsPanel,
     onSelectedPanelChange: (ProfileSettingsPanel) -> Unit,
     onSelectLanguage: (String) -> Unit,
+    readerListAutomationMode: ReaderListAutomationMode,
+    onReaderListAutomationModeChange: (ReaderListAutomationMode) -> Unit,
     searchIntroAnimationEnabled: Boolean,
     onSearchIntroAnimationEnabledChange: (Boolean) -> Unit,
     blockedMembers: List<BlockedMember>,
@@ -1269,6 +1293,16 @@ private fun ProfileSettingsContent(
             checked = searchIntroAnimationEnabled,
             onCheckedChange = onSearchIntroAnimationEnabledChange
         )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ReaderListAutomationSettings(
+            selectedMode = readerListAutomationMode,
+            onSelectedModeChange = onReaderListAutomationModeChange
+        )
     }
 
     ProfileSectionBlock(title = stringResource(R.string.profile_settings_social_safety)) {
@@ -1296,6 +1330,83 @@ private fun ProfileSettingsContent(
         colors = KaiShelvesThemeDefaults.primaryButtonColors()
     ) {
         Text(stringResource(R.string.logout))
+    }
+}
+
+@Composable
+private fun ReaderListAutomationSettings(
+    selectedMode: ReaderListAutomationMode,
+    onSelectedModeChange: (ReaderListAutomationMode) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.profile_reader_list_automation),
+            style = MaterialTheme.typography.bodyLarge,
+            color = OldIvory
+        )
+        Text(
+            text = stringResource(R.string.profile_reader_list_automation_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory.copy(alpha = 0.74f)
+        )
+
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_ask),
+            body = stringResource(R.string.reader_list_automation_ask_body),
+            selected = selectedMode == ReaderListAutomationMode.Ask,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Ask) }
+        )
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_automatic),
+            body = stringResource(R.string.reader_list_automation_automatic_body),
+            selected = selectedMode == ReaderListAutomationMode.Automatic,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Automatic) }
+        )
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_disabled),
+            body = stringResource(R.string.reader_list_automation_disabled_body),
+            selected = selectedMode == ReaderListAutomationMode.Disabled,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Disabled) }
+        )
+    }
+}
+
+@Composable
+private fun ReaderListAutomationOption(
+    title: String,
+    body: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = TarnishedGold,
+                unselectedColor = OldIvory.copy(alpha = 0.64f)
+            )
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = OldIvory.copy(alpha = 0.68f)
+            )
+        }
     }
 }
 
