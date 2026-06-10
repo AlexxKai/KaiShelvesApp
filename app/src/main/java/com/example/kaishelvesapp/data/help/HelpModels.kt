@@ -21,8 +21,8 @@ data class HelpScreenContext(
     val description: String,
     val availableActions: List<String>
 ) {
-    fun asPromptText(): String {
-        val spanish = LanguageManager.getCurrentLanguage() == "es"
+    fun asPromptText(languageTag: String = LanguageManager.getCurrentLanguage()): String {
+        val spanish = languageTag == "es"
         return buildString {
             appendLine("${if (spanish) "Pantalla actual" else "Current screen"}: $screenName")
             appendLine("${if (spanish) "Ruta" else "Route"}: $route")

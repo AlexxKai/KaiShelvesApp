@@ -15,22 +15,26 @@ object HelpKnowledgeBase {
     val commonErrors: List<String>
         get() = localized(spanishCommonErrors, englishCommonErrors)
 
-    fun asPromptText(): String {
-        val spanish = LanguageManager.getCurrentLanguage() == "es"
+    fun asPromptText(languageTag: String = LanguageManager.getCurrentLanguage()): String {
+        val spanish = languageTag == "es"
         return buildString {
             appendLine(if (spanish) "Preguntas frecuentes:" else "Frequently asked questions:")
-            faq.forEach { appendLine("- $it") }
+            localized(spanishFaq, englishFaq, languageTag).forEach { appendLine("- $it") }
             appendLine(if (spanish) "Primeros pasos:" else "Getting started:")
-            onboarding.forEach { appendLine("- $it") }
+            localized(spanishOnboarding, englishOnboarding, languageTag).forEach { appendLine("- $it") }
             appendLine(if (spanish) "Flujos guiados:" else "Guided flows:")
-            flows.forEach { appendLine("- $it") }
+            localized(spanishFlows, englishFlows, languageTag).forEach { appendLine("- $it") }
             appendLine(if (spanish) "Problemas frecuentes:" else "Common issues:")
-            commonErrors.forEach { appendLine("- $it") }
+            localized(spanishCommonErrors, englishCommonErrors, languageTag).forEach { appendLine("- $it") }
         }
     }
 
     private fun localized(spanish: List<String>, english: List<String>): List<String> {
-        return if (LanguageManager.getCurrentLanguage() == "es") spanish else english
+        return localized(spanish, english, LanguageManager.getCurrentLanguage())
+    }
+
+    private fun localized(spanish: List<String>, english: List<String>, languageTag: String): List<String> {
+        return if (languageTag == "es") spanish else english
     }
 
     private val spanishFaq = listOf(
