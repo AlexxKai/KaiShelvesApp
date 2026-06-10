@@ -1,52 +1,107 @@
 package com.example.kaishelvesapp.data.help
 
+import com.example.kaishelvesapp.ui.language.LanguageManager
+
 object HelpKnowledgeBase {
-    val faq = listOf(
-        "Para buscar libros usa la barra superior por título, autor o ISBN. El icono de cámara permite escanear códigos ISBN.",
-        "La sección Descubrir muestra resultados del catálogo y permite abrir el detalle de un libro.",
-        "Desde el detalle de un libro puedes marcarlo como leído y enviarlo a tus listas.",
-        "Mis libros y Listas agrupan los libros guardados por el usuario.",
-        "Biblioteca del dispositivo permite gestionar libros o archivos locales disponibles en el teléfono.",
-        "Estadísticas muestra progreso lector y resumen de lecturas.",
-        "Perfil permite revisar datos del usuario, privacidad y conexiones.",
-        "Amigos muestra actividad social, solicitudes y perfiles de otros lectores.",
-        "Si una sección está bloqueada como invitado, crea una cuenta para sincronizar y activar funciones sociales."
-    )
+    val faq: List<String>
+        get() = localized(spanishFaq, englishFaq)
 
-    val onboarding = listOf(
-        "Empieza en Descubrir buscando un libro o escaneando su ISBN.",
-        "Abre un resultado para revisar su ficha y guardarlo o marcarlo como leído.",
-        "Usa Mis libros para organizar tus lecturas en listas.",
-        "Revisa Estadísticas cuando quieras ver tu progreso.",
-        "Configura privacidad y datos desde Perfil."
-    )
+    val onboarding: List<String>
+        get() = localized(spanishOnboarding, englishOnboarding)
 
-    val flows = listOf(
-        "Buscar libro: escribe en la barra superior, pulsa buscar y abre un resultado.",
-        "Escanear ISBN: pulsa la cámara de la barra superior, concede permiso y enfoca el código.",
-        "Guardar lectura: abre el detalle del libro y usa la acción de marcar como leído.",
-        "Ver notificaciones: pulsa la campana superior cuando haya solicitudes pendientes.",
-        "Cambiar ajustes: abre el menú lateral, entra en Perfil y después en privacidad."
-    )
+    val flows: List<String>
+        get() = localized(spanishFlows, englishFlows)
 
-    val commonErrors = listOf(
-        "Si no aparecen resultados, revisa la conexión o prueba con menos palabras.",
-        "Si el escáner no abre, concede permiso de cámara en Android.",
-        "Si una función social no está disponible, puede que estés usando modo invitado.",
-        "Si el catálogo tarda, espera unos segundos y reintenta la búsqueda.",
-        "Si una portada no carga, el libro puede no tener imagen disponible en el proveedor."
-    )
+    val commonErrors: List<String>
+        get() = localized(spanishCommonErrors, englishCommonErrors)
 
     fun asPromptText(): String {
+        val spanish = LanguageManager.getCurrentLanguage() == "es"
         return buildString {
-            appendLine("FAQ:")
+            appendLine(if (spanish) "Preguntas frecuentes:" else "Frequently asked questions:")
             faq.forEach { appendLine("- $it") }
-            appendLine("Onboarding:")
+            appendLine(if (spanish) "Primeros pasos:" else "Getting started:")
             onboarding.forEach { appendLine("- $it") }
-            appendLine("Flujos:")
+            appendLine(if (spanish) "Flujos guiados:" else "Guided flows:")
             flows.forEach { appendLine("- $it") }
-            appendLine("Errores frecuentes:")
+            appendLine(if (spanish) "Problemas frecuentes:" else "Common issues:")
             commonErrors.forEach { appendLine("- $it") }
         }
     }
+
+    private fun localized(spanish: List<String>, english: List<String>): List<String> {
+        return if (LanguageManager.getCurrentLanguage() == "es") spanish else english
+    }
+
+    private val spanishFaq = listOf(
+        "Para buscar libros, usa la barra superior e introduce un título, un autor o un ISBN. El icono de la cámara permite escanear códigos ISBN.",
+        "La sección Descubrir muestra resultados del catálogo y permite abrir los detalles de cada libro.",
+        "Desde los detalles de un libro puedes marcarlo como leído y añadirlo a tus listas.",
+        "Mis libros agrupa las listas y etiquetas que utilizas para organizar tus lecturas.",
+        "La biblioteca del dispositivo permite gestionar los libros y archivos locales disponibles en el teléfono.",
+        "Estadísticas muestra tu progreso lector y un resumen de tus lecturas.",
+        "Perfil permite revisar tus datos, preferencias de privacidad y conexiones.",
+        "Amigos muestra actividad social, solicitudes y perfiles de otros lectores.",
+        "Si una sección está bloqueada en modo invitado, crea una cuenta para sincronizar tus datos y activar las funciones sociales."
+    )
+
+    private val englishFaq = listOf(
+        "To search for books, use the top bar and enter a title, author, or ISBN. The camera icon lets you scan ISBN codes.",
+        "Discover shows catalog results and lets you open each book's details.",
+        "From a book's details, you can mark it as read and add it to your lists.",
+        "My books groups the lists and tags you use to organize your reading.",
+        "The device library lets you manage books and local files available on your phone.",
+        "Statistics shows your reading progress and a summary of your reading.",
+        "Profile lets you review your details, privacy preferences, and connections.",
+        "Friends shows social activity, requests, and other readers' profiles.",
+        "If a section is unavailable in guest mode, create an account to sync your data and enable social features."
+    )
+
+    private val spanishOnboarding = listOf(
+        "Empieza en Descubrir buscando un libro o escaneando su ISBN.",
+        "Abre un resultado para revisar su ficha, guardarlo o marcarlo como leído.",
+        "Usa Mis libros para organizar tus lecturas en listas y etiquetas.",
+        "Consulta Estadísticas cuando quieras revisar tu progreso.",
+        "Configura la privacidad y tus datos desde Perfil."
+    )
+
+    private val englishOnboarding = listOf(
+        "Start in Discover by searching for a book or scanning its ISBN.",
+        "Open a result to review its details, save it, or mark it as read.",
+        "Use My books to organize your reading with lists and tags.",
+        "Open Statistics whenever you want to review your progress.",
+        "Configure privacy and your personal data from Profile."
+    )
+
+    private val spanishFlows = listOf(
+        "Buscar un libro: escribe en la barra superior, pulsa buscar y abre un resultado.",
+        "Escanear un ISBN: pulsa la cámara de la barra superior, concede el permiso y enfoca el código.",
+        "Guardar una lectura: abre los detalles del libro y usa la acción para marcarlo como leído.",
+        "Ver notificaciones: pulsa la campana superior cuando haya solicitudes pendientes.",
+        "Cambiar ajustes: abre el menú lateral, entra en Perfil y selecciona Ajustes."
+    )
+
+    private val englishFlows = listOf(
+        "Search for a book: type in the top bar, start the search, and open a result.",
+        "Scan an ISBN: tap the camera in the top bar, grant permission, and point it at the code.",
+        "Save a reading: open the book's details and use the action to mark it as read.",
+        "View notifications: tap the bell in the top bar when you have pending requests.",
+        "Change settings: open the side menu, go to Profile, and select Settings."
+    )
+
+    private val spanishCommonErrors = listOf(
+        "Si no aparecen resultados, revisa la conexión o prueba con menos palabras.",
+        "Si el escáner no se abre, concede el permiso de cámara desde los ajustes de Android.",
+        "Si una función social no está disponible, puede que estés usando el modo invitado.",
+        "Si el catálogo tarda en responder, espera unos segundos e inténtalo de nuevo.",
+        "Si una portada no se carga, es posible que el proveedor no disponga de una imagen para ese libro."
+    )
+
+    private val englishCommonErrors = listOf(
+        "If no results appear, check your connection or try using fewer words.",
+        "If the scanner does not open, grant camera permission from Android settings.",
+        "If a social feature is unavailable, you may be using guest mode.",
+        "If the catalog is slow to respond, wait a few seconds and try again.",
+        "If a cover does not load, the provider may not have an image for that book."
+    )
 }

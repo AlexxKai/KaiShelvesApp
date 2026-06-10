@@ -33,8 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.help.HelpKnowledgeBase
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
@@ -73,7 +75,7 @@ fun HelpScreen(
         drawerContent = {
             KaiNavigationDrawerContent(
                 currentSection = KaiSection.HELP,
-                subtitle = "Asistencia guiada para usar la app.",
+                subtitle = stringResource(R.string.help_subtitle),
                 userName = userName.orEmpty(),
                 profileImageUrl = profileImageUrl.orEmpty(),
                 expanded = drawerExpanded,
@@ -147,13 +149,13 @@ fun HelpScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Ayuda",
+                            text = stringResource(R.string.help_title),
                             style = MaterialTheme.typography.headlineMedium,
                             color = TarnishedGold,
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Inicia el chat para recibir guía contextual sobre la pantalla en la que estés.",
+                            text = stringResource(R.string.help_intro),
                             modifier = Modifier.padding(top = 8.dp),
                             style = MaterialTheme.typography.bodyLarge,
                             color = OldIvory,
@@ -169,21 +171,21 @@ fun HelpScreen(
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 8.dp)
                             )
-                            Text("Iniciar chat")
+                            Text(stringResource(R.string.help_start_chat))
                         }
                     }
                 }
 
                 HelpKnowledgeCard(
-                    title = "Preguntas frecuentes",
+                    title = stringResource(R.string.help_faq_title),
                     items = HelpKnowledgeBase.faq.take(4)
                 )
                 HelpKnowledgeCard(
-                    title = "Flujos guiados",
+                    title = stringResource(R.string.help_guided_flows_title),
                     items = HelpKnowledgeBase.flows.take(4)
                 )
                 HelpKnowledgeCard(
-                    title = "Errores frecuentes",
+                    title = stringResource(R.string.help_common_errors_title),
                     items = HelpKnowledgeBase.commonErrors.take(4)
                 )
             }

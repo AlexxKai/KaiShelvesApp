@@ -168,7 +168,7 @@ class UserListsRepository(
         return UserBookList(
             id = SYSTEM_LIST_OWNED_ID,
             name = "Owned",
-            description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
+            description = "Books detected automatically in your device library.",
             bookCount = books.size,
             position = 5,
             previewDeviceBooks = books.take(3).map { book ->
@@ -428,7 +428,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_WANT_TO_READ_ID,
             name = "Want to read",
-            description = "Libros que quieres empezar pronto.",
+            description = "Books you want to start soon.",
             position = 0,
             isSystem = true,
             systemKey = SYSTEM_LIST_WANT_TO_READ_KEY
@@ -436,7 +436,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_READING_ID,
             name = "Reading",
-            description = "Libros que tienes ahora mismo entre manos.",
+            description = "Books you are currently reading.",
             position = 1,
             isSystem = true,
             systemKey = SYSTEM_LIST_READING_KEY
@@ -444,7 +444,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_READ_ID,
             name = "Read",
-            description = "Libros que ya forman parte de tu historial de lectura.",
+            description = "Books that are already part of your reading history.",
             position = 2,
             isSystem = true,
             systemKey = SYSTEM_LIST_READ_KEY
@@ -452,7 +452,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_PENDING_ID,
             name = "Pending",
-            description = "Libros que quieres ordenar a tu manera para retomarlos después.",
+            description = "Books you want to organize and return to later.",
             position = 3,
             isSystem = true,
             systemKey = SYSTEM_LIST_PENDING_KEY
@@ -460,7 +460,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_UNFINISHED_ID,
             name = "Unfinished",
-            description = "Libros que dejaste a medias o prefieres pausar.",
+            description = "Books you stopped reading or chose to pause.",
             position = 4,
             isSystem = true,
             systemKey = SYSTEM_LIST_UNFINISHED_KEY
@@ -468,7 +468,7 @@ class UserListsRepository(
         UserBookList(
             id = SYSTEM_LIST_OWNED_ID,
             name = "Owned",
-            description = "Libros detectados automaticamente en la biblioteca del dispositivo.",
+            description = "Books detected automatically in your device library.",
             position = 5,
             isSystem = true,
             systemKey = SYSTEM_LIST_OWNED_KEY

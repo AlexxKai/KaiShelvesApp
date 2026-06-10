@@ -191,7 +191,7 @@ fun CatalogScreen(
                         uiState.errorMessage != null -> {
                             CatalogMessageBox {
                                 Text(
-                                    text = uiState.errorMessage ?: "Error desconocido",
+                                    text = uiState.errorMessage ?: stringResource(R.string.catalog_unknown_error),
                                     color = MaterialTheme.colorScheme.error,
                                     textAlign = TextAlign.Center
                                 )
@@ -298,7 +298,11 @@ private fun CatalogViewFab(
     ) {
         Icon(
             imageVector = if (compactSelected) Icons.Filled.ViewModule else Icons.Filled.ViewAgenda,
-            contentDescription = if (compactSelected) "Cambiar a vista detalle" else "Cambiar a vista portadas",
+            contentDescription = if (compactSelected) {
+                stringResource(R.string.catalog_switch_to_detail_view)
+            } else {
+                stringResource(R.string.catalog_switch_to_cover_view)
+            },
             tint = TarnishedGold
         )
     }

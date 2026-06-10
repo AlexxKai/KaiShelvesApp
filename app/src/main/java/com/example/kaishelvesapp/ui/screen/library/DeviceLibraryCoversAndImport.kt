@@ -212,7 +212,7 @@ fun DefaultCoverScreen(
                     )
                 }
                 Text(
-                    text = "Cubierta por defecto",
+                    text = stringResource(R.string.device_library_default_cover),
                     style = MaterialTheme.typography.titleLarge,
                     color = OldIvory,
                     maxLines = 1,
@@ -278,16 +278,17 @@ fun DefaultCoverScreen(
                 },
                 modifier = Modifier.border(1.dp, OldIvory.copy(alpha = 0.72f), RoundedCornerShape(2.dp))
             ) {
-                Text(text = "Descargar", color = OldIvory)
+                Text(text = stringResource(R.string.device_library_download), color = OldIvory)
             }
             TextButton(
                 onClick = { albumLauncher.launch("image/*") },
                 modifier = Modifier.border(1.dp, OldIvory.copy(alpha = 0.72f), RoundedCornerShape(2.dp))
             ) {
-                Text(text = "Álbum", color = OldIvory)
+                Text(text = stringResource(R.string.device_library_album), color = OldIvory)
             }
             Text(
-                text = backgroundTreeUri?.let { displayedBackgroundPath } ?: "Seleccionar carpeta",
+                text = backgroundTreeUri?.let { displayedBackgroundPath }
+                    ?: stringResource(R.string.device_library_select_folder),
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(2.dp))
@@ -300,7 +301,7 @@ fun DefaultCoverScreen(
             )
             Icon(
                 imageVector = Icons.Filled.Folder,
-                contentDescription = "Elegir carpeta de fondos",
+                contentDescription = stringResource(R.string.device_library_choose_background_folder),
                 tint = OldIvory,
                 modifier = Modifier
                     .size(30.dp)
@@ -416,7 +417,7 @@ fun DefaultCoverTile(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = "Renombrar",
+                                text = stringResource(R.string.device_library_rename),
                                 color = OldIvory,
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -429,7 +430,7 @@ fun DefaultCoverTile(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = "Borrar",
+                                text = stringResource(R.string.delete),
                                 color = OldIvory,
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -466,7 +467,7 @@ fun RenameDefaultCoverDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Renombrar",
+                    text = stringResource(R.string.device_library_rename),
                     style = MaterialTheme.typography.titleLarge,
                     color = OldIvory
                 )
@@ -480,13 +481,13 @@ fun RenameDefaultCoverDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text(text = "Cancelar", color = OldIvory)
+                        Text(text = stringResource(R.string.cancel), color = OldIvory)
                     }
                     TextButton(
                         onClick = { onRename(newName) },
                         enabled = newName.isNotBlank()
                     ) {
-                        Text(text = "Aceptar", color = OldIvory)
+                        Text(text = stringResource(R.string.ok), color = OldIvory)
                     }
                 }
             }
@@ -600,7 +601,7 @@ fun BackgroundImageSearchDialog(
                         )
                     }
                     Text(
-                        text = selectedImageUrl?.let { "Imagen seleccionada" }
+                        text = selectedImageUrl?.let { stringResource(R.string.device_library_selected_image) }
                             ?: "Consejo: Realice una pulsación larga para seleccionar una imagen",
                         modifier = if (selectedImageUrl == null) Modifier.fillMaxWidth() else Modifier,
                         style = MaterialTheme.typography.bodyMedium,
@@ -623,7 +624,7 @@ fun BackgroundImageSearchDialog(
                             .weight(1f)
                             .background(Color(0xFF242424), RoundedCornerShape(6.dp))
                     ) {
-                        Text(text = "Cancelar", color = OldIvory)
+                        Text(text = stringResource(R.string.cancel), color = OldIvory)
                     }
                     TextButton(
                         enabled = selectedImageUrl != null && !isSaving,
@@ -650,7 +651,14 @@ fun BackgroundImageSearchDialog(
                             .weight(1f)
                             .background(Color(0xFF242424), RoundedCornerShape(6.dp))
                     ) {
-                        Text(text = if (isSaving) "Guardando" else "Aceptar", color = OldIvory)
+                        Text(
+                            text = if (isSaving) {
+                                stringResource(R.string.device_library_saving)
+                            } else {
+                                stringResource(R.string.ok)
+                            },
+                            color = OldIvory
+                        )
                     }
                 }
             }
@@ -732,7 +740,7 @@ fun ImportBooksDialog(
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Text(
-                    text = "Importar libros",
+                    text = stringResource(R.string.device_library_import_books),
                     style = MaterialTheme.typography.titleLarge,
                     color = OldIvory,
                     fontWeight = FontWeight.Bold
@@ -757,7 +765,7 @@ fun ImportBooksDialog(
                     ImportDialogArrowButton(
                         expanded = showAdvancedOptions,
                         onClick = { showAdvancedOptions = !showAdvancedOptions },
-                        contentDescription = "Mostrar opciones de importación"
+                        contentDescription = stringResource(R.string.device_library_show_import_options)
                     )
                 }
 
@@ -801,7 +809,7 @@ fun ImportBooksDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Tamaño del archivo >",
+                                text = stringResource(R.string.device_library_file_size_greater),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = OldIvory
                             )
@@ -826,7 +834,7 @@ fun ImportBooksDialog(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             ImportOptionCheckbox(
-                                text = "Favorito",
+                                text = stringResource(R.string.favorite),
                                 checked = favorite,
                                 onCheckedChange = { favorite = it },
                                 modifier = Modifier.weight(1f)
@@ -846,7 +854,7 @@ fun ImportBooksDialog(
                                     ImportDialogArrowButton(
                                         expanded = showCategoryMenu,
                                         onClick = { showCategoryMenu = !showCategoryMenu },
-                                        contentDescription = "Seleccionar categoría"
+                                        contentDescription = stringResource(R.string.device_library_select_category)
                                     )
                                 }
                                 DropdownMenu(
@@ -882,10 +890,10 @@ fun ImportBooksDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text(text = "CANCELAR", color = OldIvory)
+                        Text(text = stringResource(R.string.cancel).uppercase(), color = OldIvory)
                     }
                     TextButton(onClick = onAccept) {
-                        Text(text = "ACEPTAR", color = OldIvory)
+                        Text(text = stringResource(R.string.ok).uppercase(), color = OldIvory)
                     }
                 }
             }
@@ -996,12 +1004,12 @@ fun ImportFolderBrowserDialog(
                     }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Volver",
+                            contentDescription = stringResource(R.string.back),
                             tint = OldIvory
                         )
                     }
                     Text(
-                        text = "Importar libros",
+                        text = stringResource(R.string.device_library_import_books),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                         color = OldIvory,
@@ -1011,7 +1019,7 @@ fun ImportFolderBrowserDialog(
                     IconButton(onClick = onChooseDifferentRoot) {
                         Icon(
                             imageVector = Icons.Filled.FolderOpen,
-                            contentDescription = "Elegir otra carpeta",
+                            contentDescription = stringResource(R.string.device_library_choose_another_folder),
                             tint = OldIvory
                         )
                     }
@@ -1085,7 +1093,7 @@ fun ImportFolderBrowserDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Ruta: $currentPath",
+                        text = stringResource(R.string.device_library_path, currentPath),
                         style = MaterialTheme.typography.bodyMedium,
                         color = OldIvory,
                         maxLines = 1,
@@ -1099,7 +1107,7 @@ fun ImportFolderBrowserDialog(
                                 .weight(1f)
                                 .background(Color(0xFF2B2B2B), RoundedCornerShape(6.dp))
                         ) {
-                            Text(text = "Cancelar", color = OldIvory)
+                            Text(text = stringResource(R.string.cancel), color = OldIvory)
                         }
                         TextButton(
                             onClick = { onFolderSelected(currentPath) },
@@ -1107,7 +1115,7 @@ fun ImportFolderBrowserDialog(
                                 .weight(1f)
                                 .background(Color(0xFF2B2B2B), RoundedCornerShape(6.dp))
                         ) {
-                            Text(text = "Aceptar", color = OldIvory)
+                            Text(text = stringResource(R.string.ok), color = OldIvory)
                         }
                     }
                 }

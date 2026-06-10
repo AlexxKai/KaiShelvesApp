@@ -496,7 +496,7 @@ fun DeviceLibraryScreen(
                                 rebuildingCovers = true
                                 Toast.makeText(
                                     context,
-                                    "Reconstruyendo portadas...",
+                                    context.getString(R.string.device_library_rebuilding_covers),
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 scope.launch {
@@ -516,9 +516,9 @@ fun DeviceLibraryScreen(
                                     Toast.makeText(
                                         context,
                                         if (rebuiltCount > 0) {
-                                            "Portadas reconstruidas: $rebuiltCount"
+                                            context.getString(R.string.device_library_rebuilt_covers, rebuiltCount)
                                         } else {
-                                            "No se encontraron portadas nuevas"
+                                            context.getString(R.string.device_library_no_new_covers)
                                         },
                                         Toast.LENGTH_SHORT
                                     ).show()
@@ -535,7 +535,7 @@ fun DeviceLibraryScreen(
                             } else {
                                 Toast.makeText(
                                     context,
-                                    "No hay libros pendientes para abrir al azar",
+                                    context.getString(R.string.device_library_no_pending_random_book),
                                     Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -650,7 +650,7 @@ fun DeviceLibraryScreen(
                         showImportBooksDialog = false
                         Toast.makeText(
                             context,
-                            "Importación configurada",
+                            context.getString(R.string.device_library_import_configured),
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -1084,7 +1084,7 @@ private fun DeviceLibraryTopBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = selectedAuthor ?: "Todos los libros",
+                text = selectedAuthor ?: stringResource(R.string.device_library_all_books),
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleSmall,
                     color = OldIvory,
@@ -1126,7 +1126,7 @@ private fun DeviceLibraryTopBar(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.FilterAlt,
-                    contentDescription = "Filtro",
+                    contentDescription = stringResource(R.string.device_library_filter),
                     tint = OldIvory
                 )
             }
@@ -1239,19 +1239,19 @@ private fun DeviceLibraryTopBarOptionsMenu(
         shadowElevation = 8.dp
     ) {
         DeviceLibraryBookOptionItem(
-            text = "Importar libros",
+            text = stringResource(R.string.device_library_import_books),
             onClick = onImportBooks
         )
         DeviceLibraryBookOptionItem(
-            text = "Cubierta por defecto",
+            text = stringResource(R.string.device_library_default_cover),
             onClick = onDefaultCover
         )
         DeviceLibraryBookOptionItem(
-            text = "Reconstruir portadas de libros",
+            text = stringResource(R.string.device_library_rebuild_covers),
             onClick = onRebuildBookCovers
         )
         DeviceLibraryBookOptionItem(
-            text = "Abre un libro al azar",
+            text = stringResource(R.string.device_library_open_random_book),
             onClick = onOpenRandomBook
         )
         // DeviceLibraryBookOptionItem(

@@ -8,6 +8,7 @@ import com.example.kaishelvesapp.data.help.HelpScreenContext
 import com.example.kaishelvesapp.data.remote.groq.GroqChatCompletionRequest
 import com.example.kaishelvesapp.data.remote.groq.GroqClient
 import com.example.kaishelvesapp.data.remote.groq.GroqMessage
+import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.gson.Gson
 
 class HelpChatRepository(
@@ -29,8 +30,7 @@ class HelpChatRepository(
                     messages = buildMessages(userQuestion, screenContext, history)
                 )
             )
-            val content = response.choices.firstOrNull()?.message?.content.orEmpty()
-            parseStructuredAnswer(content)
+            parseStructuredAnswer(response.choices.firstOrNull()?.message?.content.orEmpty())
         }.recoverCatching {
             localFallback(userQuestion, screenContext)
         }
@@ -41,6 +41,22 @@ class HelpChatRepository(
         screenContext: HelpScreenContext,
         history: List<HelpChatMessage>
     ): List<GroqMessage> {
+        val spanish = LanguageManager.getCurrentLanguage() == "es"
+        val instructions = if (spanish) {
+            """
+                Eres el asistente de ayuda integrado de Kai Shelves.
+                Responde únicamente sobre el uso de la aplicación. Usa el contexto de pantalla y la base de conocimiento.
+                No inventes funciones. Devuelve un único JSON válido, sin Markdown, con estas claves:
+                {"respuesta":"texto breve y claro en español","confidence":0.0,"suggestedAction":"acción concreta o null"}
+            """.trimIndent()
+        } else {
+            """
+                You are Kai Shelves' built-in help assistant.
+                Answer only about using the app. Use the screen context and knowledge base.
+                Do not invent features. Return one valid JSON object without Markdown using these keys:
+                {"respuesta":"brief and clear English text","confidence":0.0,"suggestedAction":"specific action or null"}
+            """.trimIndent()
+        }
         val recentHistory = history.takeLast(8).map { message ->
             GroqMessage(
                 role = if (message.author == HelpMessageAuthor.USER) "user" else "assistant",
@@ -52,29 +68,27 @@ class HelpChatRepository(
             GroqMessage(
                 role = "system",
                 content = """
-                    Eres el asistente de ayuda integrado de KaiShelves, una app Kotlin/Jetpack Compose para gestionar libros, seguir lecturas, descubrir libros y leer desde el entorno de la app.
-                    Responde solo sobre el uso de KaiShelves. Si el usuario pregunta algo fuera de la aplicación, redirige amablemente a una duda sobre la app.
-                    Usa siempre el contexto de pantalla actual y la base de conocimiento. No inventes funciones que no estén descritas.
-                    Devuelve siempre un único JSON válido, sin markdown, con estas claves:
-                    {"respuesta":"texto breve y claro en español","confidence":0.0,"suggestedAction":"acción concreta o null"}
+                    $instructions
 
-                    Base de conocimiento:
+                    Knowledge base / Base de conocimiento:
                     ${HelpKnowledgeBase.asPromptText()}
 
-                    Contexto de pantalla:
+                    Screen context / Contexto de pantalla:
                     ${screenContext.asPromptText()}
                 """.trimIndent()
             )
-        ) + recentHistory + GroqMessage(
-            role = "user",
-            content = userQuestion
-        )
+        ) + recentHistory + GroqMessage(role = "user", content = userQuestion)
     }
 
     private fun parseStructuredAnswer(content: String): HelpBotStructuredAnswer {
         val parsed = gson.fromJson(content, HelpBotStructuredAnswer::class.java)
+        val fallback = if (LanguageManager.getCurrentLanguage() == "es") {
+            "No he podido preparar una respuesta clara. Reformula la pregunta sobre esta pantalla."
+        } else {
+            "I could not prepare a clear answer. Try rephrasing your question about this screen."
+        }
         return parsed.copy(
-            respuesta = parsed.respuesta.ifBlank { "No he podido preparar una respuesta clara. Prueba a reformular la duda sobre esta pantalla." },
+            respuesta = parsed.respuesta.ifBlank { fallback },
             confidence = parsed.confidence.coerceIn(0f, 1f),
             suggestedAction = parsed.suggestedAction?.takeIf { it.isNotBlank() }
         )
@@ -85,16 +99,31 @@ class HelpChatRepository(
         screenContext: HelpScreenContext
     ): HelpBotStructuredAnswer {
         val normalized = userQuestion.lowercase()
-        val action = when {
-            "isbn" in normalized || "escane" in normalized || "camara" in normalized -> "Pulsa el icono de cámara de la barra superior y concede permiso si Android lo pide."
-            "buscar" in normalized || "catalogo" in normalized || "libro" in normalized -> "Usa la barra superior para buscar por título, autor o ISBN."
-            "perfil" in normalized || "privacidad" in normalized || "ajustes" in normalized -> "Abre el menú lateral, entra en Perfil y revisa la configuración de privacidad."
-            "amigo" in normalized || "solicitud" in normalized || "notificacion" in normalized -> "Pulsa la campana superior o entra en Amigos desde el menú lateral."
-            else -> screenContext.availableActions.firstOrNull()
+        val spanish = LanguageManager.getCurrentLanguage() == "es"
+        val action = if (spanish) {
+            when {
+                "isbn" in normalized || "escane" in normalized || "camara" in normalized -> "Pulsa el icono de cámara de la barra superior y concede el permiso si Android lo solicita."
+                "buscar" in normalized || "catalogo" in normalized || "libro" in normalized -> "Usa la barra superior para buscar por título, autor o ISBN."
+                "perfil" in normalized || "privacidad" in normalized || "ajustes" in normalized -> "Abre el menú lateral, entra en Perfil y revisa la configuración de privacidad."
+                "amigo" in normalized || "solicitud" in normalized || "notificacion" in normalized -> "Pulsa la campana superior o entra en Amigos desde el menú lateral."
+                else -> screenContext.availableActions.firstOrNull()
+            }
+        } else {
+            when {
+                "isbn" in normalized || "scan" in normalized || "camera" in normalized -> "Tap the camera icon in the top bar and grant permission if Android requests it."
+                "search" in normalized || "catalog" in normalized || "book" in normalized -> "Use the top bar to search by title, author, or ISBN."
+                "profile" in normalized || "privacy" in normalized || "settings" in normalized -> "Open the side menu, go to Profile, and review your privacy settings."
+                "friend" in normalized || "request" in normalized || "notification" in normalized -> "Tap the bell in the top bar or open Friends from the side menu."
+                else -> screenContext.availableActions.firstOrNull()
+            }
         }
 
         return HelpBotStructuredAnswer(
-            respuesta = "Puedo ayudarte con el uso de KaiShelves. Ahora estás en ${screenContext.screenName}: ${screenContext.description}",
+            respuesta = if (spanish) {
+                "Puedo ayudarte a usar Kai Shelves. Ahora estás en ${screenContext.screenName}: ${screenContext.description}"
+            } else {
+                "I can help you use Kai Shelves. You are currently on ${screenContext.screenName}: ${screenContext.description}"
+            },
             confidence = 0.62f,
             suggestedAction = action
         )

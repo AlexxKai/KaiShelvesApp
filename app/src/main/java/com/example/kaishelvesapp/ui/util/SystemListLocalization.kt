@@ -15,6 +15,12 @@ fun UserBookList.localizedName(): String {
 }
 
 @Composable
+fun UserBookList.localizedDescription(): String {
+    val resource = systemListDescriptionResource(id, systemKey)
+    return resource?.let { stringResource(it) } ?: description
+}
+
+@Composable
 fun FriendBookListSummary.localizedName(): String {
     return systemListNameResource(id)?.let { stringResource(it) } ?: name
 }
@@ -38,6 +44,24 @@ private fun systemListNameResource(id: String, systemKey: String = ""): Int? {
             systemKey == UserListsRepository.SYSTEM_LIST_UNFINISHED_KEY -> R.string.system_list_unfinished
         id == UserListsRepository.SYSTEM_LIST_OWNED_ID ||
             systemKey == UserListsRepository.SYSTEM_LIST_OWNED_KEY -> R.string.system_list_owned
+        else -> null
+    }
+}
+
+private fun systemListDescriptionResource(id: String, systemKey: String = ""): Int? {
+    return when {
+        id == UserListsRepository.SYSTEM_LIST_WANT_TO_READ_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_WANT_TO_READ_KEY -> R.string.system_list_want_to_read_description
+        id == UserListsRepository.SYSTEM_LIST_READING_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_READING_KEY -> R.string.system_list_reading_description
+        id == UserListsRepository.SYSTEM_LIST_READ_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_READ_KEY -> R.string.system_list_read_description
+        id == UserListsRepository.SYSTEM_LIST_PENDING_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_PENDING_KEY -> R.string.system_list_pending_description
+        id == UserListsRepository.SYSTEM_LIST_UNFINISHED_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_UNFINISHED_KEY -> R.string.system_list_unfinished_description
+        id == UserListsRepository.SYSTEM_LIST_OWNED_ID ||
+            systemKey == UserListsRepository.SYSTEM_LIST_OWNED_KEY -> R.string.system_list_owned_description
         else -> null
     }
 }

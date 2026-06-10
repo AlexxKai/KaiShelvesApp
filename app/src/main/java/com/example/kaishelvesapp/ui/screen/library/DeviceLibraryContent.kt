@@ -925,7 +925,7 @@ fun DeviceLibraryBookInfoDialog(
                             trailingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Search,
-                                    contentDescription = "Buscar autor",
+                                    contentDescription = stringResource(R.string.device_library_search_author),
                                     tint = OldIvory.copy(alpha = 0.72f)
                                 )
                             }
@@ -1036,7 +1036,7 @@ fun DeviceLibraryBookInfoDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Filtro de lectura",
+                        text = stringResource(R.string.device_library_reading_filter),
                         modifier = Modifier.width(122.dp),
                         style = MaterialTheme.typography.bodyMedium,
                         color = OldIvory.copy(alpha = 0.76f),
@@ -1286,7 +1286,7 @@ fun DeviceLibraryBookOptionsMenu(
             onClick = onShareFile
         )
         DeviceLibraryBookOptionItem(
-            text = "Quitar de mi biblioteca",
+            text = stringResource(R.string.device_library_remove_from_library),
             onClick = onRemoveFromLibrary
         )
     }

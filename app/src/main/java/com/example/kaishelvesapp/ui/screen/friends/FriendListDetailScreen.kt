@@ -56,6 +56,7 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.localizedName
+import com.example.kaishelvesapp.ui.util.localizedDescription
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.FriendListDetailViewModel
 
@@ -251,7 +252,7 @@ private fun FriendListDetailHeaderCard(
                 }
             }
 
-            userList?.description?.takeIf { it.isNotBlank() }?.let { description ->
+            userList?.localizedDescription()?.takeIf { it.isNotBlank() }?.let { description ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = description,

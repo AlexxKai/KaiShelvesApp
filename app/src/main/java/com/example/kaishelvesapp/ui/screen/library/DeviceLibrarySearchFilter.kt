@@ -76,7 +76,15 @@ fun LibrarySelectorMenu(
     onAllBooksSelected: () -> Unit,
     onAuthorSelected: (String) -> Unit
 ) {
-    var activeSection by remember { mutableStateOf("Autor") }
+    var activeSection by remember { mutableStateOf("author") }
+    val selectorSections = listOf(
+        "all" to stringResource(R.string.device_library_all_books),
+        "favorites" to stringResource(R.string.device_library_favorites),
+        "series" to stringResource(R.string.device_library_series),
+        "author" to stringResource(R.string.device_library_author),
+        "tag" to stringResource(R.string.device_library_tag),
+        "folders" to stringResource(R.string.device_library_folders)
+    )
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -97,15 +105,15 @@ fun LibrarySelectorMenu(
                     .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                listOf("Todos los libros", "Mis Favoritos", "Serie", "Autor", "Etiqueta", "Carpetas").forEach { label ->
+                selectorSections.forEach { (section, label) ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                if (label == "Todos los libros") {
+                                if (section == "all") {
                                     onAllBooksSelected()
                                 } else {
-                                    activeSection = label
+                                    activeSection = section
                                 }
                             }
                             .padding(horizontal = 16.dp, vertical = 7.dp),
@@ -115,7 +123,7 @@ fun LibrarySelectorMenu(
                             text = label,
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (label == activeSection || label == "Todos los libros" && selectedAuthor == null) {
+                            color = if (section == activeSection || section == "all" && selectedAuthor == null) {
                                 OldIvory
                             } else {
                                 OldIvory.copy(alpha = 0.82f)
@@ -123,7 +131,7 @@ fun LibrarySelectorMenu(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (label == "Autor") {
+                        if (section == "author") {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = null,
@@ -135,10 +143,10 @@ fun LibrarySelectorMenu(
                 }
 
                 Text(
-                    text = "Mi clasificación",
+                    text = stringResource(R.string.device_library_my_classification),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { activeSection = "Mi clasificación" }
+                        .clickable { activeSection = "classification" }
                         .padding(horizontal = 16.dp, vertical = 7.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = OldIvory.copy(alpha = 0.82f),
@@ -155,7 +163,7 @@ fun LibrarySelectorMenu(
             )
 
             when (activeSection) {
-                "Autor" -> {
+                "author" -> {
                     LazyColumn(
                         modifier = Modifier
                             .weight(0.58f)
@@ -493,7 +501,7 @@ fun DeviceLibraryFilterPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Ordenado por",
+                            stringResource(R.string.device_library_sorted_by),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                             color = OldIvory
@@ -504,38 +512,42 @@ fun DeviceLibraryFilterPanel(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.SwapVert,
-                                contentDescription = if (sortDescending) "Orden descendente" else "Orden ascendente",
+                                contentDescription = if (sortDescending) {
+                                    stringResource(R.string.device_library_descending_order)
+                                } else {
+                                    stringResource(R.string.device_library_ascending_order)
+                                },
                                 tint = TarnishedGold,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                     }
                     FilterOptionRow(
-                        "Título del libro",
+                        stringResource(R.string.device_library_book_title),
                         selected = sortOption == DeviceLibrarySortOption.Title,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.Title) }
                     )
                     FilterOptionRow(
-                        "Autor",
+                        stringResource(R.string.device_library_author),
                         selected = sortOption == DeviceLibrarySortOption.Author,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.Author) }
                     )
                     FilterOptionRow(
-                        "Reciente",
+                        stringResource(R.string.device_library_recent),
                         selected = sortOption == DeviceLibrarySortOption.Recent,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.Recent) }
                     )
                     FilterOptionRow(
-                        "Carpetas",
+                        stringResource(R.string.device_library_folders),
                         selected = sortOption == DeviceLibrarySortOption.Folder,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.Folder) }
                     )
                     FilterOptionRow(
-                        "Lista reciente",
+                        stringResource(R.string.device_library_recent_list),
                         selected = sortOption == DeviceLibrarySortOption.RecentList,
                         radio = true,
                         onClick = { onSortOptionChange(DeviceLibrarySortOption.RecentList) }
@@ -551,7 +563,7 @@ fun DeviceLibraryFilterPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "Filtro de lectura",
+                            stringResource(R.string.device_library_reading_filter),
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                             color = OldIvory
@@ -559,19 +571,19 @@ fun DeviceLibraryFilterPanel(
                         Icon(Icons.Filled.Settings, contentDescription = null, tint = TarnishedGold, modifier = Modifier.size(18.dp))
                     }
                     ReadingStatusFilterOption(
-                        label = "Sin leer",
+                        label = stringResource(R.string.device_library_unread),
                         status = DeviceLibraryReadingStatus.Unread,
                         selectedReadingStatuses = selectedReadingStatuses,
                         onReadingStatusesChange = onReadingStatusesChange
                     )
                     ReadingStatusFilterOption(
-                        label = "Leyendo",
+                        label = stringResource(R.string.device_library_reading),
                         status = DeviceLibraryReadingStatus.Reading,
                         selectedReadingStatuses = selectedReadingStatuses,
                         onReadingStatusesChange = onReadingStatusesChange
                     )
                     ReadingStatusFilterOption(
-                        label = "Finalizado",
+                        label = stringResource(R.string.device_library_finished),
                         status = DeviceLibraryReadingStatus.Finished,
                         selectedReadingStatuses = selectedReadingStatuses,
                         onReadingStatusesChange = onReadingStatusesChange
@@ -584,7 +596,7 @@ fun DeviceLibraryFilterPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "Disposición",
+                    stringResource(R.string.device_library_layout),
                     modifier = Modifier.widthIn(min = 86.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = OldIvory

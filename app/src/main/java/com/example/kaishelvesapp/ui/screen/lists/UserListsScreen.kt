@@ -93,6 +93,7 @@ import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.util.localizedName
+import com.example.kaishelvesapp.ui.util.localizedDescription
 import com.example.kaishelvesapp.ui.viewmodel.USER_TAG_DETAIL_PREFIX
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 import kotlinx.coroutines.delay
@@ -970,11 +971,11 @@ private fun UserListCard(
                     }
                 }
 
-                if (userList.description.isNotBlank()) {
+                if (userList.localizedDescription().isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = userList.description,
+                        text = userList.localizedDescription(),
                         style = MaterialTheme.typography.bodySmall,
                         color = OldIvory.copy(alpha = 0.86f),
                         maxLines = 2,
