@@ -16,6 +16,7 @@ data class GuestLibraryState(
     val lists: List<UserBookList> = emptyList(),
     val listBooks: Map<String, List<Libro>> = emptyMap(),
     val readBooks: List<LibroLeido> = emptyList(),
+    val scanHistory: List<Libro> = emptyList(),
     val tags: List<UserBookTag> = emptyList(),
     val bookTagIds: Map<String, List<String>> = emptyMap()
 )

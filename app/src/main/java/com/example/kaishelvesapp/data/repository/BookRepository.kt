@@ -15,7 +15,10 @@ import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
 import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import retrofit2.HttpException
@@ -34,6 +37,7 @@ class BookRepository(
     private val publicApi = GoogleBooksClient.publicApi
     private val inventaireApi = InventaireClient.api
     private val openLibraryApi = OpenLibraryClient.api
+    private val maxScanHistoryItems = 50
 
     data class BookSearchResult(
         val totalItems: Int,
@@ -119,6 +123,13 @@ class BookRepository(
         val author = book.autor.trim().lowercase(Locale.ROOT)
         return book.id.ifBlank { book.isbn }
             .ifBlank { "$title-$author" }
+    }
+
+    private fun scanHistoryBookKey(book: Libro): String {
+        return book.isbn.ifBlank { book.id.ifBlank { book.titulo } }
+            .trim()
+            .ifBlank { "unknown_book" }
+            .replace("/", "_")
     }
 
     private fun searchResultComparator(sort: BookSearchSort): Comparator<Pair<Libro, Int>> {
@@ -301,6 +312,91 @@ class BookRepository(
             ?.takeIf { book ->
                 book.titulo.isNotBlank() || book.autor.isNotBlank()
             }
+    }
+
+    suspend fun getScannerHistory(): Result<List<Libro>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(
+                    GuestLocalStore.readState().scanHistory
+                        .map { book -> book.withCoverFallback() }
+                )
+            }
+
+            val uid = auth.currentUser?.uid
+                ?: return Result.success(emptyList())
+
+            val snapshot = firestore.collection("usuarios")
+                .document(uid)
+                .collection("historial_escaneos")
+                .orderBy("scannedAt", Query.Direction.DESCENDING)
+                .limit(maxScanHistoryItems.toLong())
+                .get()
+                .await()
+
+            val books = snapshot.documents
+                .mapNotNull { document ->
+                    document.toObject(Libro::class.java)
+                        ?.copy(id = document.getString("id").orEmpty().ifBlank { document.id })
+                }
+                .map { book -> book.withCoverFallback() }
+
+            Result.success(books)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveScannerHistoryBook(book: Libro): Result<List<Libro>> {
+        return try {
+            val normalizedBook = book.withCoverFallback()
+            val key = scanHistoryBookKey(normalizedBook)
+            if (key == "unknown_book") {
+                return Result.success(getScannerHistory().getOrDefault(emptyList()))
+            }
+
+            if (isGuestSessionActive()) {
+                val updatedState = GuestLocalStore.updateState { currentState ->
+                    val updatedHistory = (listOf(normalizedBook) + currentState.scanHistory.filter { existing ->
+                        scanHistoryBookKey(existing) != key
+                    }).take(maxScanHistoryItems)
+
+                    currentState.copy(scanHistory = updatedHistory)
+                }
+                return Result.success(updatedState.scanHistory)
+            }
+
+            val uid = auth.currentUser?.uid
+                ?: return Result.success(emptyList())
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .collection("historial_escaneos")
+                .document(key)
+                .set(
+                    mapOf(
+                        "id" to normalizedBook.id.ifBlank { normalizedBook.isbn.ifBlank { key } },
+                        "isbn" to normalizedBook.isbn,
+                        "titulo" to normalizedBook.titulo,
+                        "autor" to normalizedBook.autor,
+                        "editorial" to normalizedBook.editorial,
+                        "genero" to normalizedBook.genero,
+                        "fechaPublicacion" to normalizedBook.fechaPublicacion,
+                        "paginas" to normalizedBook.paginas,
+                        "averageRating" to normalizedBook.averageRating,
+                        "ratingsCount" to normalizedBook.ratingsCount,
+                        "imagen" to normalizedBook.imagen,
+                        "pdf" to normalizedBook.pdf,
+                        "scannedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            getScannerHistory()
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun obtenerLibros(

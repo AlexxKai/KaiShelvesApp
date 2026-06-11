@@ -284,7 +284,11 @@ private fun BookShelfActionRow(
             enabled = false,
             colors = KaiShelvesThemeDefaults.secondaryButtonColors()
         ) {
-            CircularProgressIndicator(color = OldIvory)
+            CircularProgressIndicator(
+                modifier = Modifier.size(if (compact) 18.dp else 26.dp),
+                color = OldIvory,
+                strokeWidth = if (compact) 2.dp else 3.dp
+            )
         }
     } else if (uiState.availableLists.isNotEmpty()) {
         Surface(

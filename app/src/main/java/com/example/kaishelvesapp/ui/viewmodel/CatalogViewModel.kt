@@ -45,7 +45,17 @@ class CatalogViewModel(
 
     init {
         cargarLibros()
+        loadScannerHistory()
         preloadDiscoverModes()
+    }
+
+    private fun loadScannerHistory() {
+        viewModelScope.launch {
+            repository.getScannerHistory()
+                .onSuccess { history ->
+                    _uiState.value = _uiState.value.copy(scanHistory = history)
+                }
+        }
     }
 
     fun cargarLibros(refresh: Boolean = false) {
@@ -201,12 +211,13 @@ class CatalogViewModel(
 
         if (isbnCache.containsKey(normalizedIsbn)) {
             val cachedBook = isbnCache[normalizedIsbn]
+            val updatedHistory = cachedBook?.let { currentState.scanHistory.withScannedBook(it) }
+                ?: currentState.scanHistory
 
             _uiState.value = currentState.copy(
                 scannedIsbn = normalizedIsbn,
                 scannedBook = cachedBook,
-                scanHistory = cachedBook?.let { currentState.scanHistory.withScannedBook(it) }
-                    ?: currentState.scanHistory,
+                scanHistory = updatedHistory,
                 isIsbnLookupLoading = false,
                 isbnLookupError = if (cachedBook == null) {
                     "No se encontró ningún libro para este ISBN"
@@ -215,6 +226,7 @@ class CatalogViewModel(
                 }
             )
 
+            cachedBook?.let(::persistScannerHistoryBook)
             return
         }
 
@@ -235,19 +247,22 @@ class CatalogViewModel(
                 .onSuccess { libros ->
                     val book = libros.firstOrNull()
                     isbnCache[normalizedIsbn] = book
+                    val updatedHistory = book?.let { _uiState.value.scanHistory.withScannedBook(it) }
+                        ?: _uiState.value.scanHistory
 
                     _uiState.value = _uiState.value.copy(
                         isIsbnLookupLoading = false,
                         scannedIsbn = normalizedIsbn,
                         scannedBook = book,
-                        scanHistory = book?.let { _uiState.value.scanHistory.withScannedBook(it) }
-                            ?: _uiState.value.scanHistory,
+                        scanHistory = updatedHistory,
                         isbnLookupError = if (book == null) {
                             "No se encontró ningún libro para este ISBN"
                         } else {
                             null
                         }
                     )
+
+                    book?.let { persistScannerHistoryBook(it) }
                 }
                 .onFailure { error ->
                     val message = error.message.orEmpty()
@@ -330,6 +345,15 @@ class CatalogViewModel(
                         isLoading = false,
                         errorMessage = error.message ?: "Error al cargar el género"
                     )
+                }
+        }
+    }
+
+    private fun persistScannerHistoryBook(book: Libro) {
+        viewModelScope.launch {
+            repository.saveScannerHistoryBook(book)
+                .onSuccess { history ->
+                    _uiState.value = _uiState.value.copy(scanHistory = history)
                 }
         }
     }
