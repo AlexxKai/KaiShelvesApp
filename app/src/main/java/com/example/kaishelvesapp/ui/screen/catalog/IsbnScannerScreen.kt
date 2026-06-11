@@ -28,11 +28,17 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,9 +58,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,7 +93,9 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import java.util.Locale
 import java.util.concurrent.Executors
+import kotlinx.coroutines.launch
 
 @Composable
 fun IsbnScannerScreen(
@@ -99,8 +107,10 @@ fun IsbnScannerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val selectedTab = pagerState.currentPage
 
-    var selectedTab by remember { mutableIntStateOf(0) }
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -143,6 +153,12 @@ fun IsbnScannerScreen(
         }
     }
 
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) {
+            resetCurrentScan()
+        }
+    }
+
     Scaffold(
         containerColor = Obsidian,
         topBar = {
@@ -154,7 +170,7 @@ fun IsbnScannerScreen(
         },
         bottomBar = {
             KaiBottomBar(
-                current = KaiSection.DISCOVER,
+                current = null,
                 onSelect = onSectionSelected
             )
         }
@@ -168,20 +184,27 @@ fun IsbnScannerScreen(
         ) {
             ScannerTabs(
                 selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
+                historyCount = uiState.scanHistory.size,
+                onTabSelected = { page ->
+                    scope.launch {
+                        pagerState.animateScrollToPage(page)
+                    }
+                }
             )
 
-            Box(
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f)
-            ) {
-                when (selectedTab) {
+            ) { page ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                when (page) {
                     0 -> {
                         if (hasCameraPermission) {
                             BarcodeCameraPreview(
                                 modifier = Modifier.fillMaxSize(),
-                                enabled = !scannerLocked,
+                                enabled = selectedTab == 0 && !scannerLocked,
                                 onIsbnDetected = { isbn ->
                                     if (!scannerLocked && isbn != lastIsbn) {
                                         scannerLocked = true
@@ -205,33 +228,38 @@ fun IsbnScannerScreen(
                     }
 
                     1 -> {
-                        ScannerHistoryPlaceholder(
-                            modifier = Modifier.align(Alignment.Center)
+                        ScannerHistoryContent(
+                            books = uiState.scanHistory,
+                            onBookClick = onBookClick,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
 
-                ScannedBookBottomArea(
-                    book = uiState.scannedBook,
-                    scannedIsbn = uiState.scannedIsbn ?: lastIsbn,
-                    errorMessage = uiState.isbnLookupError,
-                    isLoading = uiState.isIsbnLookupLoading,
-                    onDismiss = ::resetCurrentScan,
-                    onScanAgain = ::resetCurrentScan,
-                    onRetry = {
-                        val isbnToRetry = uiState.scannedIsbn ?: lastIsbn
-                        if (!isbnToRetry.isNullOrBlank()) {
-                            scannerLocked = true
-                            viewModel.buscarPorIsbn(isbnToRetry)
-                        }
-                    },
-                    onOpenBook = {
-                        uiState.scannedBook?.let(onBookClick)
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                )
+                if (page == 0 && selectedTab == 0) {
+                    ScannedBookBottomArea(
+                        book = uiState.scannedBook,
+                        scannedIsbn = uiState.scannedIsbn ?: lastIsbn,
+                        errorMessage = uiState.isbnLookupError,
+                        isLoading = uiState.isIsbnLookupLoading,
+                        onDismiss = ::resetCurrentScan,
+                        onScanAgain = ::resetCurrentScan,
+                        onRetry = {
+                            val isbnToRetry = uiState.scannedIsbn ?: lastIsbn
+                            if (!isbnToRetry.isNullOrBlank()) {
+                                scannerLocked = true
+                                viewModel.buscarPorIsbn(isbnToRetry)
+                            }
+                        },
+                        onOpenBook = {
+                            uiState.scannedBook?.let(onBookClick)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                    )
+                }
+                }
             }
         }
     }
@@ -284,6 +312,7 @@ private fun ScannerTopBar(
 @Composable
 private fun ScannerTabs(
     selectedTab: Int,
+    historyCount: Int,
     onTabSelected: (Int) -> Unit
 ) {
     val tabs = listOf(
@@ -308,7 +337,7 @@ private fun ScannerTabs(
                 onClick = { onTabSelected(index) },
                 text = {
                     Text(
-                        text = if (index == 1) "$title (0)" else title,
+                        text = if (index == 1) "$title ($historyCount)" else title,
                         color = if (selectedTab == index) OldIvory else ColdAsh,
                         fontWeight = FontWeight.Bold
                     )
@@ -355,12 +384,151 @@ private fun CameraPermissionMessage(
 private fun ScannerHistoryPlaceholder(
     modifier: Modifier = Modifier
 ) {
-    Text(
-        text = stringResource(R.string.scan_history_placeholder),
-        modifier = modifier.padding(24.dp),
-        color = OldIvory,
-        style = MaterialTheme.typography.bodyLarge
-    )
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = stringResource(R.string.scan_history_placeholder),
+            modifier = Modifier.padding(24.dp),
+            color = OldIvory,
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+
+@Composable
+private fun ScannerHistoryContent(
+    books: List<Libro>,
+    onBookClick: (Libro) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (books.isEmpty()) {
+        ScannerHistoryPlaceholder(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(24.dp)
+        )
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier.background(Obsidian),
+        contentPadding = PaddingValues(bottom = 18.dp)
+    ) {
+        items(
+            items = books,
+            key = { book -> book.id.ifBlank { book.isbn.ifBlank { book.titulo } } }
+        ) { book ->
+            ScannerHistoryBookRow(
+                book = book,
+                onClick = { onBookClick(book) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScannerHistoryBookRow(
+    book: Libro,
+    onClick: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            BookCover(
+                imageUrl = book.imagen,
+                title = book.titulo,
+                modifier = Modifier
+                    .width(100.dp)
+                    .height(150.dp)
+                    .clickable(onClick = onClick),
+                showFrame = false
+            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Column(
+                    modifier = Modifier.clickable(onClick = onClick),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = book.titulo.ifBlank { stringResource(R.string.unknown_title) },
+                        color = Color(0xFF6BC6C0),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (book.autor.isNotBlank()) {
+                        Text(
+                            text = stringResource(R.string.book_by_author, book.autor),
+                            color = OldIvory,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (book.averageRating > 0.0) {
+                    ScannerHistoryRating(
+                        averageRating = book.averageRating,
+                        ratingsCount = book.ratingsCount
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                BookShelfActions(
+                    book = book,
+                    viewModelKeyPrefix = "scanner_history_shelf",
+                    compact = true
+                )
+            }
+        }
+
+        HorizontalDivider(color = OldIvory.copy(alpha = 0.28f))
+    }
+}
+
+@Composable
+private fun ScannerHistoryRating(
+    averageRating: Double,
+    ratingsCount: Int
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Star,
+            contentDescription = null,
+            tint = Color(0xFFFFB326),
+            modifier = Modifier.size(17.dp)
+        )
+
+        Text(
+            text = stringResource(
+                R.string.google_books_rating_summary,
+                String.format(Locale.getDefault(), "%.1f", averageRating),
+                ratingsCount
+            ),
+            color = OldIvory.copy(alpha = 0.86f),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

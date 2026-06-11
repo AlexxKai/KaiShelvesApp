@@ -23,6 +23,7 @@ data class CatalogUiState(
     val selectedBook: Libro? = null,
     val scannedBook: Libro? = null,
     val scannedIsbn: String? = null,
+    val scanHistory: List<Libro> = emptyList(),
     val isIsbnLookupLoading: Boolean = false,
     val isbnLookupError: String? = null,
     val errorMessage: String? = null
@@ -204,6 +205,8 @@ class CatalogViewModel(
             _uiState.value = currentState.copy(
                 scannedIsbn = normalizedIsbn,
                 scannedBook = cachedBook,
+                scanHistory = cachedBook?.let { currentState.scanHistory.withScannedBook(it) }
+                    ?: currentState.scanHistory,
                 isIsbnLookupLoading = false,
                 isbnLookupError = if (cachedBook == null) {
                     "No se encontró ningún libro para este ISBN"
@@ -237,12 +240,13 @@ class CatalogViewModel(
                         isIsbnLookupLoading = false,
                         scannedIsbn = normalizedIsbn,
                         scannedBook = book,
+                        scanHistory = book?.let { _uiState.value.scanHistory.withScannedBook(it) }
+                            ?: _uiState.value.scanHistory,
                         isbnLookupError = if (book == null) {
                             "No se encontró ningún libro para este ISBN"
                         } else {
                             null
-                        },
-                        libros = if (book != null) listOf(book) else _uiState.value.libros
+                        }
                     )
                 }
                 .onFailure { error ->
@@ -327,6 +331,14 @@ class CatalogViewModel(
                         errorMessage = error.message ?: "Error al cargar el género"
                     )
                 }
+        }
+    }
+
+    private fun List<Libro>.withScannedBook(book: Libro): List<Libro> {
+        val key = book.id.ifBlank { book.isbn.ifBlank { book.titulo } }
+        return listOf(book) + filter { existing ->
+            val existingKey = existing.id.ifBlank { existing.isbn.ifBlank { existing.titulo } }
+            existingKey != key
         }
     }
 }

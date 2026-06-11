@@ -510,7 +510,7 @@ fun AppNavigation(
 
     fun scanFromSharedTopBar(isbn: String) {
         catalogViewModel.buscarPorIsbn(isbn)
-        navController.navigate(Routes.DISCOVER)
+        navController.navigate(Routes.SCAN_BOOKS)
     }
 
     fun logoutToLogin() {

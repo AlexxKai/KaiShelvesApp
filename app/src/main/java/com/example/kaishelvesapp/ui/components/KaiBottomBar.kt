@@ -17,12 +17,11 @@ import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -54,7 +53,7 @@ enum class KaiSection {
 
 @Composable
 fun KaiBottomBar(
-    current: KaiSection,
+    current: KaiSection?,
     onSelect: (KaiSection) -> Unit,
     disabledSections: Set<KaiSection> = emptySet(),
     onDisabledSectionClick: ((KaiSection) -> Unit)? = null
