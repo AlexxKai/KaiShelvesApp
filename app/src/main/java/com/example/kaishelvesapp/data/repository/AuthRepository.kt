@@ -1,6 +1,7 @@
 ﻿package com.example.kaishelvesapp.data.repository
 
 import android.net.Uri
+import androidx.core.net.toUri
 import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.model.AdminAccess
 import com.example.kaishelvesapp.data.model.Libro
@@ -103,10 +104,6 @@ class AuthRepository(
         if (hasPendingEmailVerification()) {
             auth.signOut()
         }
-    }
-
-    fun getCurrentUid(): String? {
-        return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
     }
 
     fun hasPasswordLogin(): Boolean {
@@ -318,8 +315,7 @@ class AuthRepository(
                 return Result.success(guestProfile)
             }
 
-            val uid = firebaseUser?.uid
-                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val uid = firebaseUser.uid
 
             val snapshot = firestore.collection("usuarios")
                 .document(uid)
@@ -330,11 +326,11 @@ class AuthRepository(
             val usuario = Usuario(
                 uid = uid,
                 usuario = storedUser?.usuario?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.displayName.orEmpty(),
+                    ?: firebaseUser.displayName.orEmpty(),
                 email = storedUser?.email?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.email.orEmpty(),
+                    ?: firebaseUser.email.orEmpty(),
                 photoUrl = storedUser?.photoUrl?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.photoUrl?.toString().orEmpty(),
+                    ?: firebaseUser.photoUrl?.toString().orEmpty(),
                 isAdmin = storedUser?.isAdmin ?: false,
                 privacySettings = storedUser?.privacySettings ?: UserPrivacySettings()
             )
@@ -463,8 +459,7 @@ class AuthRepository(
                 val resolvedPhotoUrl = when {
                     selectedPhotoUri.isBlank() -> currentProfile.photoUrl
                     selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(
-                        GuestLocalStore.GUEST_UID,
-                        Uri.parse(selectedPhotoUri)
+                        selectedPhotoUri.toUri()
                     )
                     else -> selectedPhotoUri
                 }
@@ -487,12 +482,12 @@ class AuthRepository(
             }
 
             if (!currentUser.email.equals(resolvedEmail, ignoreCase = true)) {
-                currentUser.updateEmail(resolvedEmail).await()
+                currentUser.updateEmailAddress(resolvedEmail)
             }
 
             val resolvedPhotoUrl = when {
                 selectedPhotoUri.isBlank() -> currentProfile?.photoUrl.orEmpty()
-                selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(uid, Uri.parse(selectedPhotoUri))
+                selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(selectedPhotoUri.toUri())
                 else -> selectedPhotoUri
             }
 
@@ -565,7 +560,7 @@ class AuthRepository(
 
             if (hasPasswordLogin()) {
                 if (!currentUser.email.equals(credentialEmail, ignoreCase = true)) {
-                    currentUser.updateEmail(credentialEmail).await()
+                    currentUser.updateEmailAddress(credentialEmail)
                 }
                 currentUser.updatePassword(password).await()
             } else {
@@ -820,7 +815,12 @@ class AuthRepository(
         }
     }
 
-    private suspend fun uploadProfilePhoto(uid: String, uri: Uri): String {
+    @Suppress("DEPRECATION")
+    private suspend fun FirebaseUser.updateEmailAddress(email: String) {
+        updateEmail(email).await()
+    }
+
+    private fun uploadProfilePhoto(uri: Uri): String {
         return ProfileImageCodec.encodeImageAsDataUri(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
@@ -1417,7 +1417,7 @@ class AuthRepository(
 
         val currentUserEmail = currentUserSnapshot.getString("email")
             ?.takeIf { it.isNotBlank() }
-            ?: firebaseUser?.email.orEmpty()
+            ?: firebaseUser.email.orEmpty()
         val isBootstrapAdmin = isBootstrapAdminAccount(currentUid, currentUserEmail)
         val hasFirestoreAdminFlag = currentUserSnapshot.getBoolean("isAdmin") == true
 

@@ -109,6 +109,7 @@ fun NotificationCenterScreen(
     onInitialSelectedNotificationHandled: () -> Unit = {},
     onBack: () -> Unit,
     onOpenFriendProfile: (String) -> Unit = {},
+    onOpenReportReview: (String) -> Unit = {},
     onRequestsChanged: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
@@ -169,24 +170,31 @@ fun NotificationCenterScreen(
     selectedNotificationId
         ?.let { notificationId -> uiState.notifications.firstOrNull { it.id == notificationId } }
         ?.let { notification ->
-        ActivityNotificationDialog(
-            notification = notification,
-            comments = uiState.commentsByActivityId[notification.activityId].orEmpty(),
-            isLoadingComments = notification.activityId in uiState.loadingCommentIds,
-            isSaving = uiState.socialActionIds.any { actionId ->
-                actionId == notification.activityId || actionId.startsWith("${notification.activityId}:")
-            },
-            onDismiss = closeSelectedNotification,
-            onOpenUserProfile = { userUid ->
+        if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+            LaunchedEffect(notification.id) {
                 closeSelectedNotification()
-                onOpenFriendProfile(userUid)
-            },
-            onToggleLike = viewModel::toggleLike,
-            onLoadComments = viewModel::loadComments,
-            onAddComment = viewModel::addComment,
-            onToggleCommentLike = viewModel::toggleCommentLike,
-            onReplyToComment = viewModel::replyToComment
-        )
+                onOpenReportReview(notification.reportId)
+            }
+        } else {
+            ActivityNotificationDialog(
+                notification = notification,
+                comments = uiState.commentsByActivityId[notification.activityId].orEmpty(),
+                isLoadingComments = notification.activityId in uiState.loadingCommentIds,
+                isSaving = uiState.socialActionIds.any { actionId ->
+                    actionId == notification.activityId || actionId.startsWith("${notification.activityId}:")
+                },
+                onDismiss = closeSelectedNotification,
+                onOpenUserProfile = { userUid ->
+                    closeSelectedNotification()
+                    onOpenFriendProfile(userUid)
+                },
+                onToggleLike = viewModel::toggleLike,
+                onLoadComments = viewModel::loadComments,
+                onAddComment = viewModel::addComment,
+                onToggleCommentLike = viewModel::toggleCommentLike,
+                onReplyToComment = viewModel::replyToComment
+            )
+        }
     }
 
     LaunchedEffect(uiState.errorMessage, uiState.successMessage) {
@@ -277,7 +285,14 @@ fun NotificationCenterScreen(
                                         ) { notification ->
                                             ActivityNotificationCard(
                                                 notification = notification,
-                                                onClick = { selectedNotificationId = notification.id }
+                                                onClick = {
+                                                    if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+                                                        viewModel.markNotificationAsRead(notification.id)
+                                                        onOpenReportReview(notification.reportId)
+                                                    } else {
+                                                        selectedNotificationId = notification.id
+                                                    }
+                                                }
                                             )
                                         }
                                     }
@@ -292,7 +307,14 @@ fun NotificationCenterScreen(
                                         ) { notification ->
                                             ActivityNotificationCard(
                                                 notification = notification,
-                                                onClick = { selectedNotificationId = notification.id }
+                                                onClick = {
+                                                    if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+                                                        viewModel.markNotificationAsRead(notification.id)
+                                                        onOpenReportReview(notification.reportId)
+                                                    } else {
+                                                        selectedNotificationId = notification.id
+                                                    }
+                                                }
                                             )
                                         }
                                     }
@@ -527,7 +549,17 @@ private fun ActivityNotificationCard(
                 )
             }
 
-            NotificationActivityPreview(item = notification.activity)
+            if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+                Text(
+                    text = notification.reportPublicId,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = DeepWalnut.copy(alpha = 0.76f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                NotificationActivityPreview(item = notification.activity)
+            }
         }
     }
 }
@@ -901,6 +933,10 @@ private fun OriginalActivityCard(
 
 @Composable
 private fun notificationMessage(notification: ActivityNotificationItem): String {
+    if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+        val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
+        return "Hay cambios en tu denuncia: $subject"
+    }
     val userName = notification.user.usuario
         .ifBlank { notification.user.email }
         .ifBlank { stringResource(R.string.unknown_username) }
@@ -909,6 +945,7 @@ private fun notificationMessage(notification: ActivityNotificationItem): String 
         ActivityNotificationType.COMMENT -> "$userName ha comentado en tu publicaci\u00f3n."
         ActivityNotificationType.COMMENT_LIKE -> "$userName le ha dado me gusta a tu comentario."
         ActivityNotificationType.COMMENT_REPLY -> "$userName ha respondido a tu comentario."
+        ActivityNotificationType.REPORT_UPDATE -> ""
     }
 }
 
@@ -939,6 +976,7 @@ private fun notificationIcon(type: ActivityNotificationType): ImageVector {
         ActivityNotificationType.COMMENT -> Icons.Filled.ChatBubbleOutline
         ActivityNotificationType.COMMENT_LIKE -> Icons.Filled.ThumbUp
         ActivityNotificationType.COMMENT_REPLY -> Icons.AutoMirrored.Filled.FormatListBulleted
+        ActivityNotificationType.REPORT_UPDATE -> Icons.Filled.NotificationsNone
     }
 }
 
@@ -948,6 +986,7 @@ private fun notificationIconTint(type: ActivityNotificationType): Color {
         ActivityNotificationType.COMMENT -> Color(0xFF0E7C86)
         ActivityNotificationType.COMMENT_LIKE -> Color(0xFF5B6EA6)
         ActivityNotificationType.COMMENT_REPLY -> Color(0xFF0D7C79)
+        ActivityNotificationType.REPORT_UPDATE -> TarnishedGold
     }
 }
 
@@ -1188,4 +1227,3 @@ private fun FriendRequestCard(
         }
     }
 }
-

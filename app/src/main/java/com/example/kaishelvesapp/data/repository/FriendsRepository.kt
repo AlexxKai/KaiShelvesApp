@@ -25,6 +25,8 @@ import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.S
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_WANT_TO_READ_ID
 
 private const val LAST_QUARTER_MILLIS = 90L * 24L * 60L * 60L * 1000L
+const val REPORT_SENDER_ADMIN = "admin"
+const val REPORT_SENDER_REPORTER = "reporter"
 const val FRIEND_TAG_DETAIL_PREFIX = "friend_tag__"
 
 enum class SuggestionSource {
@@ -104,7 +106,8 @@ enum class ActivityNotificationType {
     LIKE,
     COMMENT,
     COMMENT_LIKE,
-    COMMENT_REPLY
+    COMMENT_REPLY,
+    REPORT_UPDATE
 }
 
 data class ActivityNotificationItem(
@@ -116,6 +119,9 @@ data class ActivityNotificationItem(
     val text: String = "",
     val commentId: String = "",
     val replyId: String = "",
+    val reportId: String = "",
+    val reportPublicId: String = "",
+    val reportSubject: String = "",
     val timestampMillis: Long? = null,
     val isRead: Boolean = false
 )
@@ -181,19 +187,32 @@ data class BlockedMember(
 )
 
 enum class AccountReportStatus {
-    PENDING,
-    NEEDS_INFO,
-    RESOLVED
+    NEW,
+    IN_PROGRESS,
+    PROCESSED,
+    CLOSED
 }
+
+data class AccountReportChatMessage(
+    val id: String = "",
+    val sender: String = "",
+    val text: String = "",
+    val imageUris: List<String> = emptyList(),
+    val createdAtMillis: Long? = null
+)
 
 data class AccountReport(
     val id: String = "",
+    val publicId: String = "",
+    val reporterUser: Usuario = Usuario(),
     val reportedUser: Usuario = Usuario(),
     val subject: String = "",
     val message: String = "",
     val photoUris: List<String> = emptyList(),
-    val status: AccountReportStatus = AccountReportStatus.PENDING,
+    val status: AccountReportStatus = AccountReportStatus.NEW,
     val adminMessage: String = "",
+    val reporterReply: String = "",
+    val chatMessages: List<AccountReportChatMessage> = emptyList(),
     val createdAtMillis: Long? = null,
     val updatedAtMillis: Long? = null
 )
@@ -305,6 +324,17 @@ class FriendsRepository(
         .collection("report_reviews")
 
     private fun accountReportsCollection() = firestore.collection("accountReports")
+
+    private suspend fun requireAdminAccess() {
+        val uid = currentUid() ?: throw Exception("No hay sesión iniciada")
+        val user = getUserProfile(uid)
+        val email = user?.email?.takeIf { it.isNotBlank() }
+            ?: auth.currentUser?.email.orEmpty()
+
+        if (!AdminAccess.isBootstrapAdminAccount(uid, email)) {
+            throw Exception("No tienes permisos de administrador")
+        }
+    }
 
     private fun DocumentSnapshot.stringValue(vararg keys: String): String {
         return keys.firstNotNullOfOrNull { key ->
@@ -431,6 +461,148 @@ class FriendsRepository(
                 ?: fallback?.privacySettings
                 ?: UserPrivacySettings()
         )
+    }
+
+    private fun DocumentSnapshot.toAccountReport(): AccountReport {
+        val documentId = this.id
+        val reportId = getString("id").orEmpty().ifBlank { documentId }
+        val publicId = getString("publicId").orEmpty().ifBlank { reportId }
+        val createdAtMillis = timestampMillis("createdAt")
+        val message = getString("message").orEmpty()
+        val photoUris = (get("photoUris") as? List<*>)
+            ?.mapNotNull { it as? String }
+            .orEmpty()
+        val adminMessage = getString("adminMessage").orEmpty()
+        val reporterReply = getString("reporterReply").orEmpty()
+        val chatMessages = parseAccountReportChatMessages(
+            rawMessages = get("chatMessages"),
+            fallbackMessage = message,
+            fallbackPhotoUris = photoUris,
+            fallbackAdminMessage = adminMessage,
+            fallbackReporterReply = reporterReply,
+            fallbackCreatedAtMillis = createdAtMillis
+        )
+        return AccountReport(
+            id = reportId,
+            publicId = publicId,
+            reporterUser = Usuario(
+                uid = getString("reporterUid").orEmpty(),
+                usuario = getString("reporterUsuario").orEmpty(),
+                email = getString("reporterEmail").orEmpty(),
+                photoUrl = getString("reporterPhotoUrl").orEmpty()
+            ),
+            reportedUser = Usuario(
+                uid = getString("reportedUid").orEmpty(),
+                usuario = getString("reportedUsuario").orEmpty(),
+                email = getString("reportedEmail").orEmpty(),
+                photoUrl = getString("reportedPhotoUrl").orEmpty()
+            ),
+            subject = getString("subject").orEmpty(),
+            message = message,
+            photoUris = photoUris,
+            status = parseAccountReportStatus(getString("status").orEmpty()),
+            adminMessage = adminMessage,
+            reporterReply = reporterReply,
+            chatMessages = chatMessages,
+            createdAtMillis = createdAtMillis,
+            updatedAtMillis = timestampMillis("updatedAt")
+        )
+    }
+
+    private fun parseAccountReportChatMessages(
+        rawMessages: Any?,
+        fallbackMessage: String,
+        fallbackPhotoUris: List<String>,
+        fallbackAdminMessage: String,
+        fallbackReporterReply: String,
+        fallbackCreatedAtMillis: Long?
+    ): List<AccountReportChatMessage> {
+        val storedMessages = (rawMessages as? List<*>)
+            ?.mapNotNull { rawMessage ->
+                val map = rawMessage as? Map<*, *> ?: return@mapNotNull null
+                AccountReportChatMessage(
+                    id = map["id"] as? String ?: "",
+                    sender = map["sender"] as? String ?: "",
+                    text = map["text"] as? String ?: "",
+                    imageUris = (map["imageUris"] as? List<*>)
+                        ?.mapNotNull { it as? String }
+                        .orEmpty(),
+                    createdAtMillis = (map["createdAtMillis"] as? Number)?.toLong()
+                )
+            }
+            .orEmpty()
+
+        if (storedMessages.isNotEmpty()) {
+            return storedMessages.sortedBy { it.createdAtMillis ?: Long.MIN_VALUE }
+        }
+
+        return buildList {
+            if (fallbackMessage.isNotBlank() || fallbackPhotoUris.isNotEmpty()) {
+                add(
+                    AccountReportChatMessage(
+                        id = "initial",
+                        sender = REPORT_SENDER_REPORTER,
+                        text = fallbackMessage,
+                        imageUris = fallbackPhotoUris,
+                        createdAtMillis = fallbackCreatedAtMillis
+                    )
+                )
+            }
+            if (fallbackAdminMessage.isNotBlank()) {
+                add(
+                    AccountReportChatMessage(
+                        id = "admin_legacy",
+                        sender = REPORT_SENDER_ADMIN,
+                        text = fallbackAdminMessage,
+                        createdAtMillis = fallbackCreatedAtMillis?.plus(1)
+                    )
+                )
+            }
+            if (fallbackReporterReply.isNotBlank()) {
+                add(
+                    AccountReportChatMessage(
+                        id = "reporter_reply_legacy",
+                        sender = REPORT_SENDER_REPORTER,
+                        text = fallbackReporterReply,
+                        createdAtMillis = fallbackCreatedAtMillis?.plus(2)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun buildAccountReportChatMessage(
+        sender: String,
+        text: String,
+        imageUris: List<String> = emptyList(),
+        createdAtMillis: Long = System.currentTimeMillis()
+    ): Map<String, Any> {
+        return mapOf(
+            "id" to "${createdAtMillis}_${sender}_${(1000..9999).random()}",
+            "sender" to sender,
+            "text" to text.trim(),
+            "imageUris" to imageUris.filter { it.isNotBlank() },
+            "createdAtMillis" to createdAtMillis
+        )
+    }
+
+    private fun parseAccountReportStatus(value: String): AccountReportStatus {
+        return when (value.uppercase(Locale.ROOT)) {
+            "PENDING" -> AccountReportStatus.NEW
+            "NEEDS_INFO" -> AccountReportStatus.IN_PROGRESS
+            "RESOLVED" -> AccountReportStatus.CLOSED
+            else -> runCatching { AccountReportStatus.valueOf(value) }
+                .getOrDefault(AccountReportStatus.NEW)
+        }
+    }
+
+    private fun buildAccountReportPublicId(createdAtMillis: Long, reporterUsername: String): String {
+        val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.ROOT)
+            .format(java.util.Date(createdAtMillis))
+        val cleanReporter = reporterUsername
+            .filter { it.isLetterOrDigit() }
+            .ifBlank { "usuario" }
+        return "$timestamp$cleanReporter"
     }
 
     private fun defaultSystemListTitle(listId: String): String {
@@ -1535,9 +1707,18 @@ class FriendsRepository(
 
             val reporter = getUserProfile(uid) ?: Usuario(uid = uid)
             val reported = getUserProfile(targetUid) ?: Usuario(uid = targetUid)
-            val reportRef = accountReportsCollection().document()
+            val createdAtMillis = System.currentTimeMillis()
+            val publicId = buildAccountReportPublicId(createdAtMillis, reporter.usuario.ifBlank { uid })
+            val reportRef = accountReportsCollection().document(publicId)
+            val initialChatMessage = buildAccountReportChatMessage(
+                sender = REPORT_SENDER_REPORTER,
+                text = trimmedMessage,
+                imageUris = photoUris,
+                createdAtMillis = createdAtMillis
+            )
             val reportData = mapOf(
                 "id" to reportRef.id,
+                "publicId" to publicId,
                 "reporterUid" to uid,
                 "reporterUsuario" to reporter.usuario,
                 "reporterEmail" to reporter.email,
@@ -1549,8 +1730,11 @@ class FriendsRepository(
                 "subject" to trimmedSubject,
                 "message" to trimmedMessage,
                 "photoUris" to photoUris.filter { it.isNotBlank() },
-                "status" to AccountReportStatus.PENDING.name,
+                "status" to AccountReportStatus.NEW.name,
                 "adminMessage" to "",
+                "reporterReply" to "",
+                "chatMessages" to listOf(initialChatMessage),
+                "lastUpdatedBy" to REPORT_SENDER_REPORTER,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -1579,31 +1763,227 @@ class FriendsRepository(
                 .get()
                 .await()
                 .documents
-                .map { document ->
-                    AccountReport(
-                        id = document.getString("id").orEmpty().ifBlank { document.id },
-                        reportedUser = Usuario(
-                            uid = document.getString("reportedUid").orEmpty(),
-                            usuario = document.getString("reportedUsuario").orEmpty(),
-                            email = document.getString("reportedEmail").orEmpty(),
-                            photoUrl = document.getString("reportedPhotoUrl").orEmpty()
-                        ),
-                        subject = document.getString("subject").orEmpty(),
-                        message = document.getString("message").orEmpty(),
-                        photoUris = (document.get("photoUris") as? List<*>)
-                            ?.mapNotNull { it as? String }
-                            .orEmpty(),
-                        status = runCatching {
-                            AccountReportStatus.valueOf(document.getString("status").orEmpty())
-                        }.getOrDefault(AccountReportStatus.PENDING),
-                        adminMessage = document.getString("adminMessage").orEmpty(),
-                        createdAtMillis = document.timestampMillis("createdAt"),
-                        updatedAtMillis = document.timestampMillis("updatedAt")
-                    )
-                }
+                .map { document -> document.toAccountReport() }
                 .sortedByDescending { it.createdAtMillis ?: Long.MIN_VALUE }
 
             Result.success(reports)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeMyReports(onResult: (Result<List<AccountReport>>) -> Unit): ListenerRegistration? {
+        if (isGuestSessionActive()) {
+            onResult(Result.success(emptyList()))
+            return null
+        }
+
+        val uid = currentUid()
+        if (uid == null) {
+            onResult(Result.failure(Exception("No hay sesión iniciada")))
+            return null
+        }
+
+        return reportReviewsCollection(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                onResult(Result.failure(error))
+                return@addSnapshotListener
+            }
+
+            val reports = snapshot
+                ?.documents
+                .orEmpty()
+                .map { document -> document.toAccountReport() }
+                .sortedByDescending { it.createdAtMillis ?: Long.MIN_VALUE }
+            onResult(Result.success(reports))
+        }
+    }
+
+    suspend fun loadAdminReports(): Result<List<AccountReport>> {
+        return try {
+            requireAdminAccess()
+
+            val reports = accountReportsCollection()
+                .get()
+                .await()
+                .documents
+                .map { document -> document.toAccountReport() }
+                .sortedByDescending { it.createdAtMillis ?: Long.MIN_VALUE }
+
+            Result.success(reports)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeAdminReports(onResult: (Result<List<AccountReport>>) -> Unit): ListenerRegistration? {
+        val firebaseUser = auth.currentUser
+        if (firebaseUser == null) {
+            onResult(Result.failure(Exception("No hay sesión iniciada")))
+            return null
+        }
+        if (!AdminAccess.isBootstrapAdminAccount(firebaseUser.uid, firebaseUser.email.orEmpty())) {
+            onResult(Result.failure(Exception("No tienes permisos de administrador")))
+            return null
+        }
+
+        return accountReportsCollection().addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                onResult(Result.failure(error))
+                return@addSnapshotListener
+            }
+
+            val reports = snapshot
+                ?.documents
+                .orEmpty()
+                .map { document -> document.toAccountReport() }
+                .sortedByDescending { it.createdAtMillis ?: Long.MIN_VALUE }
+            onResult(Result.success(reports))
+        }
+    }
+
+    suspend fun updateAdminReport(
+        reportId: String,
+        status: AccountReportStatus,
+        adminMessage: String
+    ): Result<Unit> {
+        return try {
+            requireAdminAccess()
+
+            val reportSnapshot = accountReportsCollection()
+                .document(reportId)
+                .get()
+                .await()
+
+            if (!reportSnapshot.exists()) {
+                return Result.failure(Exception("No se encontro la denuncia"))
+            }
+
+            val reporterUid = reportSnapshot.getString("reporterUid").orEmpty()
+            val payload = mapOf(
+                "status" to status.name,
+                "adminMessage" to adminMessage.trim(),
+                "lastUpdatedBy" to REPORT_SENDER_ADMIN,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            val batch = firestore.batch()
+            batch.set(reportSnapshot.reference, payload, SetOptions.merge())
+            if (reporterUid.isNotBlank()) {
+                batch.set(
+                    reportReviewsCollection(reporterUid).document(reportId),
+                    payload,
+                    SetOptions.merge()
+                )
+            }
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addAdminReportMessage(
+        reportId: String,
+        text: String,
+        imageUris: List<String> = emptyList()
+    ): Result<Unit> {
+        return try {
+            requireAdminAccess()
+
+            val reportSnapshot = accountReportsCollection()
+                .document(reportId)
+                .get()
+                .await()
+
+            if (!reportSnapshot.exists()) {
+                return Result.failure(Exception("No se encontro la denuncia"))
+            }
+
+            val trimmedText = text.trim()
+            val cleanImages = imageUris.filter { it.isNotBlank() }
+            if (trimmedText.isBlank() && cleanImages.isEmpty()) {
+                return Result.failure(Exception("Escribe un mensaje o adjunta una imagen"))
+            }
+
+            val reporterUid = reportSnapshot.getString("reporterUid").orEmpty()
+            val chatMessage = buildAccountReportChatMessage(
+                sender = REPORT_SENDER_ADMIN,
+                text = trimmedText,
+                imageUris = cleanImages
+            )
+            val payload = mapOf(
+                "chatMessages" to FieldValue.arrayUnion(chatMessage),
+                "adminMessage" to trimmedText.ifBlank { reportSnapshot.getString("adminMessage").orEmpty() },
+                "lastUpdatedBy" to REPORT_SENDER_ADMIN,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            val batch = firestore.batch()
+            batch.set(reportSnapshot.reference, payload, SetOptions.merge())
+            if (reporterUid.isNotBlank()) {
+                batch.set(
+                    reportReviewsCollection(reporterUid).document(reportId),
+                    payload,
+                    SetOptions.merge()
+                )
+            }
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun replyToReportReview(
+        reportId: String,
+        reply: String,
+        imageUris: List<String> = emptyList()
+    ): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesión para responder a la revisión"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val trimmedReply = reply.trim()
+            val cleanImages = imageUris.filter { it.isNotBlank() }
+            if (reportId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la denuncia"))
+            }
+            if (trimmedReply.isBlank() && cleanImages.isEmpty()) {
+                return Result.failure(Exception("Escribe una respuesta o adjunta una imagen"))
+            }
+
+            val chatMessage = buildAccountReportChatMessage(
+                sender = REPORT_SENDER_REPORTER,
+                text = trimmedReply,
+                imageUris = cleanImages
+            )
+            val payload = mapOf(
+                "chatMessages" to FieldValue.arrayUnion(chatMessage),
+                "reporterReply" to trimmedReply.ifBlank {
+                    reportReviewsCollection(uid).document(reportId).get().await()
+                        .getString("reporterReply").orEmpty()
+                },
+                "lastUpdatedBy" to REPORT_SENDER_REPORTER,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            val batch = firestore.batch()
+            batch.set(
+                reportReviewsCollection(uid).document(reportId),
+                payload,
+                SetOptions.merge()
+            )
+            batch.set(
+                accountReportsCollection().document(reportId),
+                payload,
+                SetOptions.merge()
+            )
+            batch.commit().await()
+
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1756,7 +2136,7 @@ class FriendsRepository(
                 uid
             ).associateBy { it.id }
 
-            val notifications = activitySocialCollection()
+            val activityNotifications = activitySocialCollection()
                 .get()
                 .await()
                 .documents
@@ -1969,6 +2349,40 @@ class FriendsRepository(
                         .distinctBy { it.id }
                         .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
                 }
+            val reportNotifications = reportReviewsCollection(uid)
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val updatedAt = document.timestampMillis("updatedAt") ?: return@mapNotNull null
+                    val createdAt = document.timestampMillis("createdAt") ?: Long.MIN_VALUE
+                    if (updatedAt <= createdAt) return@mapNotNull null
+                    if (document.getString("lastUpdatedBy").orEmpty() != REPORT_SENDER_ADMIN) return@mapNotNull null
+
+                    val reportId = document.id
+                    val notificationId = notificationId(reportId, "report_update", updatedAt.toString())
+                    ActivityNotificationItem(
+                        id = notificationId,
+                        type = ActivityNotificationType.REPORT_UPDATE,
+                        activityId = reportId,
+                        user = currentUser.visibleTo(uid),
+                        activity = FriendActivityItem(
+                            id = reportId,
+                            type = FriendActivityType.FRIENDSHIP,
+                            user = currentUser.visibleTo(uid),
+                            timestampMillis = updatedAt
+                        ),
+                        reportId = reportId,
+                        reportPublicId = document.getString("publicId").orEmpty().ifBlank { reportId },
+                        reportSubject = document.getString("subject").orEmpty(),
+                        timestampMillis = updatedAt,
+                        isRead = notificationId in readNotificationIds
+                    )
+                }
+
+            val notifications = (activityNotifications + reportNotifications)
+                .distinctBy { it.id }
+                .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
 
             cacheActivityNotifications(notifications)
             Result.success(notifications)
@@ -2038,9 +2452,15 @@ class FriendsRepository(
                 onChange()
             }
         }
+        val reportReviewsListener = reportReviewsCollection(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) return@addSnapshotListener
+            if (snapshot?.documentChanges?.isNotEmpty() == true) {
+                onChange()
+            }
+        }
 
         return CompositeListenerRegistration(
-            listOf(socialListener, likesListener, commentsListener, repliesListener, readsListener)
+            listOf(socialListener, likesListener, commentsListener, repliesListener, readsListener, reportReviewsListener)
         )
     }
 

@@ -80,11 +80,13 @@ import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
 import com.example.kaishelvesapp.ui.screen.settings.AdminHubScreen
+import com.example.kaishelvesapp.ui.screen.settings.AdminReportsScreen
 import com.example.kaishelvesapp.ui.screen.settings.AdminUsernamesScreen
 import com.example.kaishelvesapp.ui.screen.settings.SettingsPrivacyScreen
 import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AdminUsernamesViewModel
+import com.example.kaishelvesapp.ui.viewmodel.AdminReportsViewModel
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.CatalogViewModel
@@ -122,6 +124,7 @@ object Routes {
     const val SETTINGS_PRIVACY = "settings_privacy"
     const val ADMIN = "admin"
     const val ADMIN_USERNAMES = "admin_usernames"
+    const val ADMIN_REPORTS = "admin_reports"
     const val READING_STATS = "reading_stats"
     const val LIBRARY = "library"
     const val FRIENDS = "friends"
@@ -173,6 +176,7 @@ fun AppNavigation(
     val friendsViewModel: FriendsViewModel = viewModel()
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
+    val adminReportsViewModel: AdminReportsViewModel = viewModel()
     val helpChatViewModel: HelpChatViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val forYouViewModel: ForYouViewModel = viewModel()
@@ -193,6 +197,7 @@ fun AppNavigation(
     var pendingOfflineRoute by remember { mutableStateOf<String?>(null) }
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
     var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
+    var pendingProfileReportReviewId by remember { mutableStateOf<String?>(null) }
     var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var activeDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var deviceBookShortcutLaunchActive by remember { mutableStateOf(!deviceLibraryBookToOpen.isNullOrBlank()) }
@@ -859,6 +864,10 @@ fun AppNavigation(
             ProfileScreen(
                 viewModel = authViewModel,
                 myProfileViewModel = friendProfileViewModel,
+                initialReportReviewId = pendingProfileReportReviewId,
+                onInitialReportReviewHandled = {
+                    pendingProfileReportReviewId = null
+                },
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
                 searchQuery = catalogState.searchQuery,
@@ -971,6 +980,59 @@ fun AppNavigation(
                     },
                     onOpenConflicts = {
                         navController.navigate(Routes.ADMIN_USERNAMES)
+                    },
+                    onOpenReports = {
+                        navController.navigate(Routes.ADMIN_REPORTS)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            } else {
+                PlaceholderScreen(
+                    title = stringResource(R.string.restricted_access_title),
+                    subtitle = stringResource(R.string.admin_restricted_access_subtitle),
+                    currentSection = KaiSection.PROFILE,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            }
+        }
+
+        composable(Routes.ADMIN_REPORTS) {
+            if (authState.user?.isAdmin == true) {
+                AdminReportsScreen(
+                    viewModel = adminReportsViewModel,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
                     },
                     onSectionSelected = { navigateSection(it) }
                 )
@@ -1132,6 +1194,10 @@ fun AppNavigation(
                 onBack = { navController.popBackStack() },
                 onOpenFriendProfile = { friendUid ->
                     navController.navigate(friendProfileRoute(friendUid))
+                },
+                onOpenReportReview = { reportId ->
+                    pendingProfileReportReviewId = reportId
+                    navController.navigate(Routes.PROFILE)
                 },
                 onRequestsChanged = {
                     friendRequestsViewModel.loadReceivedRequests()

@@ -8,6 +8,7 @@ import com.example.kaishelvesapp.data.repository.AccountReport
 import com.example.kaishelvesapp.data.repository.BlockedMember
 import com.example.kaishelvesapp.data.repository.FriendProfileData
 import com.example.kaishelvesapp.data.repository.FriendsRepository
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,7 @@ data class FriendProfileUiState(
     val isLoadingBlockedMembers: Boolean = false,
     val isLoadingReports: Boolean = false,
     val isSubmittingReport: Boolean = false,
+    val isSavingReportReply: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -39,6 +41,13 @@ class FriendProfileViewModel(
 
     private val _uiState = MutableStateFlow(FriendProfileUiState())
     val uiState: StateFlow<FriendProfileUiState> = _uiState.asStateFlow()
+    private var myReportsListener: ListenerRegistration? = null
+
+    override fun onCleared() {
+        myReportsListener?.remove()
+        myReportsListener = null
+        super.onCleared()
+    }
 
     fun loadProfile(friendUid: String, refresh: Boolean = false) {
         if (friendUid.isBlank()) {
@@ -496,6 +505,55 @@ class FriendProfileViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoadingReports = false,
                         errorMessage = error.message ?: "No se pudieron cargar las denuncias"
+                    )
+                }
+        }
+    }
+
+    fun observeMyReports() {
+        myReportsListener?.remove()
+        _uiState.value = _uiState.value.copy(
+            isLoadingReports = _uiState.value.accountReports.isEmpty(),
+            errorMessage = null
+        )
+        myReportsListener = repository.observeMyReports { result ->
+            result
+                .onSuccess { reports ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingReports = false,
+                        accountReports = reports,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingReports = false,
+                        errorMessage = error.message ?: "No se pudieron escuchar las denuncias"
+                    )
+                }
+        }
+    }
+
+    fun replyToReportReview(reportId: String, reply: String, imageUris: List<String> = emptyList()) {
+        if (_uiState.value.isSavingReportReply) return
+
+        _uiState.value = _uiState.value.copy(
+            isSavingReportReply = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.replyToReportReview(reportId, reply, imageUris)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isSavingReportReply = false,
+                        errorMessage = null
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isSavingReportReply = false,
+                        errorMessage = error.message ?: "No se pudo enviar la respuesta"
                     )
                 }
         }

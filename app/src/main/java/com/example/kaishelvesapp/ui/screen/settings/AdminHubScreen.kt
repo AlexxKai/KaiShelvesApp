@@ -78,6 +78,7 @@ fun AdminHubScreen(
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
     onOpenConflicts: () -> Unit,
+    onOpenReports: () -> Unit,
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -141,6 +142,7 @@ fun AdminHubScreen(
             ) {
                 AdminHubContent(
                     onOpenConflicts = onOpenConflicts,
+                    onOpenReports = onOpenReports,
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
@@ -154,6 +156,7 @@ fun AdminHubScreen(
 @Composable
 private fun AdminHubContent(
     onOpenConflicts: () -> Unit,
+    onOpenReports: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -174,8 +177,9 @@ private fun AdminHubContent(
             AdminHubItem(
                 title = stringResource(R.string.admin_reports_panel_title),
                 body = stringResource(R.string.admin_reports_panel_body),
-                status = stringResource(R.string.implementation_in_progress),
-                icon = Icons.Filled.Report
+                status = stringResource(R.string.admin_available_status),
+                icon = Icons.Filled.Report,
+                onClick = onOpenReports
             ),
             AdminHubItem(
                 title = stringResource(R.string.admin_contact_panel_title),

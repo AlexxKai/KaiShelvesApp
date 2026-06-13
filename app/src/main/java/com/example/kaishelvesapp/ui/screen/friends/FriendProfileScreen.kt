@@ -2,6 +2,7 @@
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -67,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -84,6 +86,7 @@ import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.FriendProfileData
 import com.example.kaishelvesapp.data.repository.FriendShelfBookItem
 import com.example.kaishelvesapp.data.repository.FriendShelfPreview
+import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.ActivitySocialActions
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.GothicBackground
@@ -838,6 +841,7 @@ private fun ReportAccountDialog(
     onDismiss: () -> Unit,
     onSubmit: (String, String, List<String>) -> Unit
 ) {
+    val context = LocalContext.current
     var subject by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var photoUris by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -895,7 +899,18 @@ private fun ReportAccountDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSubmit(subject, message, photoUris) },
+                onClick = {
+                    val encodedPhotos = photoUris.mapNotNull { photoUri ->
+                        runCatching {
+                            if (photoUri.startsWith("content://")) {
+                                ProfileImageCodec.encodeImageAsDataUri(context, Uri.parse(photoUri))
+                            } else {
+                                photoUri
+                            }
+                        }.getOrNull()
+                    }
+                    onSubmit(subject, message, encodedPhotos)
+                },
                 enabled = canSubmit
             ) {
                 Text(text = stringResource(R.string.send))

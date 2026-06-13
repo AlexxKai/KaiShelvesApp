@@ -434,10 +434,15 @@ class FriendRequestsViewModel(
             ActivityNotificationType.COMMENT -> "Nuevo comentario"
             ActivityNotificationType.COMMENT_LIKE -> "Nuevo me gusta en tu comentario"
             ActivityNotificationType.COMMENT_REPLY -> "Nueva respuesta"
+            ActivityNotificationType.REPORT_UPDATE -> "Cambios en tu denuncia"
         }
     }
 
     private fun notificationDeviceBody(notification: ActivityNotificationItem): String {
+        if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+            val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
+            return "Hay cambios en la revisión de tu denuncia${subject.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
+        }
         val userName = notification.user.usuario
             .ifBlank { notification.user.email }
             .ifBlank { "Alguien" }
@@ -452,6 +457,7 @@ class FriendRequestsViewModel(
                 val text = notification.text.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
                 "$userName ha respondido a tu comentario$text"
             }
+            ActivityNotificationType.REPORT_UPDATE -> ""
         }
     }
 }
