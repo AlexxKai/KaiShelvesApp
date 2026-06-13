@@ -127,6 +127,9 @@
     <string name="report_photos_selected">%1$d photos selected</string>
     <string name="report_sent_title">Report created</string>
     <string name="report_sent_message">Your report has been created correctly. You can review its status from your profile.</string>
+    <string name="admin_open_review">Open review</string>
+    <string name="admin_review_created_title">Review created</string>
+    <string name="admin_review_created_message">The review has been opened successfully and is now available in the reports panel.</string>
     <string name="remove_friend_title">Remove friend</string>
     <string name="remove_friend_message">Do you want to remove this friend? You will stop appearing in each other\'s friends lists.</string>
     <string name="currently_reading">Reading</string>
@@ -559,6 +562,7 @@
     <string name="admin_report_response">Administrator response</string>
     <string name="admin_report_save">Save review</string>
     <string name="admin_report_reporter">Reporter</string>
+    <string name="admin_report_administrative_review">Administrative review</string>
     <string name="admin_report_reported">Reported user</string>
     <string name="admin_report_created_at">Created</string>
     <string name="admin_report_images">Attached images</string>

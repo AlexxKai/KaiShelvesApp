@@ -129,6 +129,9 @@ import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -181,6 +184,7 @@ fun ProfileScreen(
     val guestUiRestrictions = LocalGuestUiRestrictions.current
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
     var pendingInitialReportReviewId by remember { mutableStateOf<String?>(null) }
+    var reportReviewDetailActive by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialReportReviewId) {
         val reportId = initialReportReviewId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
@@ -402,7 +406,7 @@ fun ProfileScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 51.dp),
+                                    .padding(top = if (reportReviewDetailActive) 0.dp else 51.dp),
                                 shape = RoundedCornerShape(28.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
@@ -626,6 +630,7 @@ fun ProfileScreen(
                                                     pendingInitialReportReviewId = null
                                                     onInitialReportReviewHandled()
                                                 },
+                                                onReportDetailActiveChange = { reportReviewDetailActive = it },
                                                 onLogout = onLogout
                                             )
                                         }
@@ -640,44 +645,46 @@ fun ProfileScreen(
                                 }
                             }
 
-                            Canvas(
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .padding(top = 51.dp)
-                                    .height(18.dp)
-                            ) {
-                                val cornerRadius = 18.dp.toPx()
-                                val strokeWidth = 1.dp.toPx()
-                                val topBorderPath = Path().apply {
-                                    moveTo(0f, cornerRadius)
-                                    quadraticTo(0f, 0f, cornerRadius, 0f)
-                                    lineTo(size.width - cornerRadius, 0f)
-                                    quadraticTo(size.width, 0f, size.width, cornerRadius)
+                            if (!reportReviewDetailActive) {
+                                Canvas(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .padding(top = 51.dp)
+                                        .height(18.dp)
+                                ) {
+                                    val cornerRadius = 18.dp.toPx()
+                                    val strokeWidth = 1.dp.toPx()
+                                    val topBorderPath = Path().apply {
+                                        moveTo(0f, cornerRadius)
+                                        quadraticTo(0f, 0f, cornerRadius, 0f)
+                                        lineTo(size.width - cornerRadius, 0f)
+                                        quadraticTo(size.width, 0f, size.width, cornerRadius)
+                                    }
+
+                                    drawPath(
+                                        path = topBorderPath,
+                                        color = TarnishedGold.copy(alpha = 0.86f),
+                                        style = Stroke(width = strokeWidth)
+                                    )
                                 }
 
-                                drawPath(
-                                    path = topBorderPath,
-                                    color = TarnishedGold.copy(alpha = 0.86f),
-                                    style = Stroke(width = strokeWidth)
+                                ProfileTabSelector(
+                                    selectedTab = selectedProfileTab,
+                                    guestRestricted = isGuest,
+                                    onSelectTab = { tab ->
+                                        if (isGuest && tab.isGuestRestricted) {
+                                            guestUiRestrictions.onBlockedSectionClick?.invoke(KaiSection.PROFILE)
+                                        } else {
+                                            selectedProfileTab = tab
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(horizontal = 26.dp)
+                                        .zIndex(1f)
                                 )
                             }
-
-                            ProfileTabSelector(
-                                selectedTab = selectedProfileTab,
-                                guestRestricted = isGuest,
-                                onSelectTab = { tab ->
-                                    if (isGuest && tab.isGuestRestricted) {
-                                        guestUiRestrictions.onBlockedSectionClick?.invoke(KaiSection.PROFILE)
-                                    } else {
-                                        selectedProfileTab = tab
-                                    }
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(horizontal = 26.dp)
-                                    .zIndex(1f)
-                            )
                         }
                     }
                 }
@@ -1299,8 +1306,15 @@ private fun ProfileSettingsContent(
     onReplyToReport: (String, String, List<String>) -> Unit,
     initialReportReviewId: String? = null,
     onInitialReportReviewConsumed: () -> Unit = {},
+    onReportDetailActiveChange: (Boolean) -> Unit = {},
     onLogout: () -> Unit
 ) {
+    LaunchedEffect(selectedPanel) {
+        if (selectedPanel != ProfileSettingsPanel.ReportReview) {
+            onReportDetailActiveChange(false)
+        }
+    }
+
     when (selectedPanel) {
         ProfileSettingsPanel.BlockedMembers -> {
             ProfileSettingsBackButton(
@@ -1323,7 +1337,8 @@ private fun ProfileSettingsContent(
                 onBackToSettings = { onSelectedPanelChange(ProfileSettingsPanel.Main) },
                 onReplyToReport = onReplyToReport,
                 initialReportReviewId = initialReportReviewId,
-                onInitialReportReviewConsumed = onInitialReportReviewConsumed
+                onInitialReportReviewConsumed = onInitialReportReviewConsumed,
+                onReportDetailActiveChange = onReportDetailActiveChange
             )
             return
         }
@@ -1587,7 +1602,8 @@ private fun ReportReviewSettingsSection(
     onBackToSettings: () -> Unit,
     onReplyToReport: (String, String, List<String>) -> Unit,
     initialReportReviewId: String? = null,
-    onInitialReportReviewConsumed: () -> Unit = {}
+    onInitialReportReviewConsumed: () -> Unit = {},
+    onReportDetailActiveChange: (Boolean) -> Unit = {}
 ) {
     var selectedReportId by remember { mutableStateOf<String?>(null) }
     val selectedReport = reports.firstOrNull { it.id == selectedReportId }
@@ -1598,6 +1614,10 @@ private fun ReportReviewSettingsSection(
 
     BackHandler(enabled = selectedReport != null) {
         backToReports()
+    }
+
+    LaunchedEffect(selectedReport?.id) {
+        onReportDetailActiveChange(selectedReport != null)
     }
 
     LaunchedEffect(initialReportReviewId, reports) {
@@ -1770,6 +1790,20 @@ private fun ReportReviewDetail(
             style = MaterialTheme.typography.labelMedium,
             color = TarnishedGold
         )
+        if (report.isAdministrativeReview) {
+            Text(
+                text = stringResource(R.string.admin_report_administrative_review),
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+        }
+        report.createdAtMillis?.let { createdAt ->
+            Text(
+                text = "${stringResource(R.string.admin_report_created_at)}: ${formatReportReviewDate(createdAt)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = OldIvory.copy(alpha = 0.78f)
+            )
+        }
         Text(
             text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
             modifier = Modifier
@@ -2130,6 +2164,11 @@ private fun reportStatusLabel(status: AccountReportStatus): String {
             AccountReportStatus.CLOSED -> R.string.report_status_closed
         }
     )
+}
+
+private fun formatReportReviewDate(timestampMillis: Long): String {
+    return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        .format(Date(timestampMillis))
 }
 
 @Composable

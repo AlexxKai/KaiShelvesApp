@@ -127,6 +127,9 @@
     <string name="report_photos_selected">%1$d fotos seleccionadas</string>
     <string name="report_sent_title">Denuncia creada</string>
     <string name="report_sent_message">Tu denuncia se ha generado correctamente. Puedes revisar su estado desde tu perfil.</string>
+    <string name="admin_open_review">Abrir revisión</string>
+    <string name="admin_review_created_title">Revisión creada</string>
+    <string name="admin_review_created_message">La revisión se ha abierto correctamente y ya está disponible en el panel de denuncias.</string>
     <string name="remove_friend_title">Eliminar amigo</string>
     <string name="remove_friend_message">¿Confirmas que quieres eliminar a este amigo? Dejaréis de aparecer en vuestras listas de amigos.</string>
     <string name="currently_reading">Leyendo</string>
@@ -559,6 +562,7 @@
     <string name="admin_report_response">Respuesta del administrador</string>
     <string name="admin_report_save">Guardar revisión</string>
     <string name="admin_report_reporter">Denunciante</string>
+    <string name="admin_report_administrative_review">Revisión administrativa</string>
     <string name="admin_report_reported">Usuario denunciado</string>
     <string name="admin_report_created_at">Creada</string>
     <string name="admin_report_images">Imágenes adjuntas</string>

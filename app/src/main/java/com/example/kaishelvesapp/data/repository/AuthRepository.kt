@@ -1446,6 +1446,7 @@ class AuthRepository(
         if (normalizedUsername.isBlank()) {
             throw Exception("El nombre de usuario no puede estar vacio")
         }
+        ensureUsernameIsNotReserved(normalizedUsername)
 
         val previousNormalizedUsername = normalizeUsername(previousUsername)
         val userRef = firestore.collection("usuarios").document(user.uid)
@@ -1483,6 +1484,7 @@ class AuthRepository(
         if (normalizedUsername.isBlank()) {
             throw Exception("El nombre de usuario no puede estar vacio")
         }
+        ensureUsernameIsNotReserved(normalizedUsername)
 
         val reservedSnapshot = firestore.collection("usernames")
             .document(normalizedUsername)
@@ -1510,6 +1512,12 @@ class AuthRepository(
 
     private fun normalizeUsername(username: String): String {
         return username.trim().lowercase()
+    }
+
+    private fun ensureUsernameIsNotReserved(normalizedUsername: String) {
+        if (normalizedUsername == "administrador") {
+            throw Exception("Ese nombre de usuario está reservado")
+        }
     }
 
     private suspend fun setPrimaryLoginProviderIfMissing(uid: String, providerId: String) {

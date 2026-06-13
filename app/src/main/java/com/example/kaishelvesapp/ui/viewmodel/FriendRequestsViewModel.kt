@@ -434,13 +434,18 @@ class FriendRequestsViewModel(
             ActivityNotificationType.COMMENT -> "Nuevo comentario"
             ActivityNotificationType.COMMENT_LIKE -> "Nuevo me gusta en tu comentario"
             ActivityNotificationType.COMMENT_REPLY -> "Nueva respuesta"
-            ActivityNotificationType.REPORT_UPDATE -> "Cambios en tu denuncia"
+            ActivityNotificationType.REPORT_UPDATE -> {
+                if (notification.reportIsAdministrativeReview) "Nueva revisión administrativa" else "Cambios en tu denuncia"
+            }
         }
     }
 
     private fun notificationDeviceBody(notification: ActivityNotificationItem): String {
         if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
             val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
+            if (notification.reportIsAdministrativeReview) {
+                return "Administración ha abierto una revisión${subject.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
+            }
             return "Hay cambios en la revisión de tu denuncia${subject.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
         }
         val userName = notification.user.usuario

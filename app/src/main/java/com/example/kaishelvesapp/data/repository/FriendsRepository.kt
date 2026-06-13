@@ -122,6 +122,7 @@ data class ActivityNotificationItem(
     val reportId: String = "",
     val reportPublicId: String = "",
     val reportSubject: String = "",
+    val reportIsAdministrativeReview: Boolean = false,
     val timestampMillis: Long? = null,
     val isRead: Boolean = false
 )
@@ -213,6 +214,7 @@ data class AccountReport(
     val adminMessage: String = "",
     val reporterReply: String = "",
     val chatMessages: List<AccountReportChatMessage> = emptyList(),
+    val isAdministrativeReview: Boolean = false,
     val createdAtMillis: Long? = null,
     val updatedAtMillis: Long? = null
 )
@@ -504,6 +506,7 @@ class FriendsRepository(
             adminMessage = adminMessage,
             reporterReply = reporterReply,
             chatMessages = chatMessages,
+            isAdministrativeReview = getBoolean("administrativeReview") == true,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = timestampMillis("updatedAt")
         )
@@ -1734,6 +1737,7 @@ class FriendsRepository(
                 "adminMessage" to "",
                 "reporterReply" to "",
                 "chatMessages" to listOf(initialChatMessage),
+                "reviewRecipientUid" to uid,
                 "lastUpdatedBy" to REPORT_SENDER_REPORTER,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp()
@@ -1742,6 +1746,73 @@ class FriendsRepository(
             val batch = firestore.batch()
             batch.set(reportRef, reportData)
             batch.set(reportReviewsCollection(uid).document(reportRef.id), reportData)
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun openAdminReportReview(
+        targetUid: String,
+        subject: String,
+        message: String,
+        photoUris: List<String>
+    ): Result<Unit> {
+        return try {
+            requireAdminAccess()
+
+            val adminUid = currentUid()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val trimmedSubject = subject.trim()
+            val trimmedMessage = message.trim()
+            if (targetUid.isBlank() || targetUid == adminUid) {
+                return Result.failure(Exception("No se pudo identificar el perfil"))
+            }
+            if (trimmedSubject.isBlank() || trimmedMessage.isBlank()) {
+                return Result.failure(Exception("Completa el asunto y el mensaje"))
+            }
+
+            val admin = getUserProfile(adminUid) ?: Usuario(uid = adminUid, email = auth.currentUser?.email.orEmpty())
+            val reviewed = getUserProfile(targetUid) ?: Usuario(uid = targetUid)
+            val createdAtMillis = System.currentTimeMillis()
+            val publicId = buildAccountReportPublicId(createdAtMillis, "administrador")
+            val reportRef = accountReportsCollection().document(publicId)
+            val initialChatMessage = buildAccountReportChatMessage(
+                sender = REPORT_SENDER_ADMIN,
+                text = trimmedMessage,
+                imageUris = photoUris,
+                createdAtMillis = createdAtMillis
+            )
+            val reportData = mapOf(
+                "id" to reportRef.id,
+                "publicId" to publicId,
+                "reporterUid" to adminUid,
+                "reporterUsuario" to admin.usuario,
+                "reporterEmail" to admin.email,
+                "reporterPhotoUrl" to admin.photoUrl,
+                "reportedUid" to reviewed.uid,
+                "reportedUsuario" to reviewed.usuario,
+                "reportedEmail" to reviewed.email,
+                "reportedPhotoUrl" to reviewed.photoUrl,
+                "subject" to trimmedSubject,
+                "message" to trimmedMessage,
+                "photoUris" to photoUris.filter { it.isNotBlank() },
+                "status" to AccountReportStatus.NEW.name,
+                "adminMessage" to trimmedMessage,
+                "reporterReply" to "",
+                "chatMessages" to listOf(initialChatMessage),
+                "administrativeReview" to true,
+                "reviewRecipientUid" to targetUid,
+                "lastUpdatedBy" to REPORT_SENDER_ADMIN,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            val batch = firestore.batch()
+            batch.set(reportRef, reportData)
+            batch.set(reportReviewsCollection(targetUid).document(reportRef.id), reportData)
             batch.commit().await()
 
             Result.success(Unit)
@@ -1860,6 +1931,7 @@ class FriendsRepository(
             }
 
             val reporterUid = reportSnapshot.getString("reporterUid").orEmpty()
+            val reviewRecipientUid = reportSnapshot.getString("reviewRecipientUid").orEmpty()
             val payload = mapOf(
                 "status" to status.name,
                 "adminMessage" to adminMessage.trim(),
@@ -1868,9 +1940,11 @@ class FriendsRepository(
             )
             val batch = firestore.batch()
             batch.set(reportSnapshot.reference, payload, SetOptions.merge())
-            if (reporterUid.isNotBlank()) {
+            setOf(reporterUid, reviewRecipientUid)
+                .filter { it.isNotBlank() }
+                .forEach { uid ->
                 batch.set(
-                    reportReviewsCollection(reporterUid).document(reportId),
+                    reportReviewsCollection(uid).document(reportId),
                     payload,
                     SetOptions.merge()
                 )
@@ -1907,6 +1981,7 @@ class FriendsRepository(
             }
 
             val reporterUid = reportSnapshot.getString("reporterUid").orEmpty()
+            val reviewRecipientUid = reportSnapshot.getString("reviewRecipientUid").orEmpty()
             val chatMessage = buildAccountReportChatMessage(
                 sender = REPORT_SENDER_ADMIN,
                 text = trimmedText,
@@ -1920,9 +1995,11 @@ class FriendsRepository(
             )
             val batch = firestore.batch()
             batch.set(reportSnapshot.reference, payload, SetOptions.merge())
-            if (reporterUid.isNotBlank()) {
+            setOf(reporterUid, reviewRecipientUid)
+                .filter { it.isNotBlank() }
+                .forEach { uid ->
                 batch.set(
-                    reportReviewsCollection(reporterUid).document(reportId),
+                    reportReviewsCollection(uid).document(reportId),
                     payload,
                     SetOptions.merge()
                 )
@@ -2356,11 +2433,16 @@ class FriendsRepository(
                 .mapNotNull { document ->
                     val updatedAt = document.timestampMillis("updatedAt") ?: return@mapNotNull null
                     val createdAt = document.timestampMillis("createdAt") ?: Long.MIN_VALUE
-                    if (updatedAt <= createdAt) return@mapNotNull null
+                    val isAdministrativeReview = document.getBoolean("administrativeReview") == true
+                    if (!isAdministrativeReview && updatedAt <= createdAt) return@mapNotNull null
                     if (document.getString("lastUpdatedBy").orEmpty() != REPORT_SENDER_ADMIN) return@mapNotNull null
 
                     val reportId = document.id
-                    val notificationId = notificationId(reportId, "report_update", updatedAt.toString())
+                    val notificationId = notificationId(
+                        reportId,
+                        if (isAdministrativeReview && updatedAt <= createdAt) "admin_review" else "report_update",
+                        updatedAt.toString()
+                    )
                     ActivityNotificationItem(
                         id = notificationId,
                         type = ActivityNotificationType.REPORT_UPDATE,
@@ -2375,6 +2457,7 @@ class FriendsRepository(
                         reportId = reportId,
                         reportPublicId = document.getString("publicId").orEmpty().ifBlank { reportId },
                         reportSubject = document.getString("subject").orEmpty(),
+                        reportIsAdministrativeReview = isAdministrativeReview,
                         timestampMillis = updatedAt,
                         isRead = notificationId in readNotificationIds
                     )

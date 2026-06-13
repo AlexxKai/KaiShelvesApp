@@ -442,7 +442,15 @@ private fun AdminReportInfoCard(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(report.subject, style = MaterialTheme.typography.titleLarge, color = OldIvory)
-        ReportLine(R.string.admin_report_reporter, report.reporterUser.usuario.ifBlank { report.reporterUser.email })
+        if (report.isAdministrativeReview) {
+            Text(
+                text = stringResource(R.string.admin_report_administrative_review),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TarnishedGold
+            )
+        } else {
+            ReportLine(R.string.admin_report_reporter, report.reporterUser.usuario.ifBlank { report.reporterUser.email })
+        }
         ReportLine(R.string.admin_report_reported, report.reportedUser.usuario.ifBlank { report.reportedUser.email })
         report.createdAtMillis?.let {
             ReportLine(R.string.admin_report_created_at, formatAdminReportDate(it))

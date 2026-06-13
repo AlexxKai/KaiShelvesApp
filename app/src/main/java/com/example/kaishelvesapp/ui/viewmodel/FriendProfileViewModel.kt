@@ -443,6 +443,43 @@ class FriendProfileViewModel(
         }
     }
 
+    fun openAdminReportReview(
+        subject: String,
+        message: String,
+        photoUris: List<String>,
+        onSuccess: () -> Unit = {}
+    ) {
+        val profile = _uiState.value.profile ?: return
+        if (_uiState.value.isSubmittingReport) return
+
+        _uiState.value = _uiState.value.copy(
+            isSubmittingReport = true,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.openAdminReportReview(
+                targetUid = profile.user.uid,
+                subject = subject,
+                message = message,
+                photoUris = photoUris
+            )
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingReport = false,
+                        errorMessage = null
+                    )
+                    onSuccess()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isSubmittingReport = false,
+                        errorMessage = error.message ?: "No se pudo abrir la revisión"
+                    )
+                }
+        }
+    }
+
     fun loadBlockedMembers() {
         _uiState.value = _uiState.value.copy(
             isLoadingBlockedMembers = true,

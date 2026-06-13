@@ -935,6 +935,9 @@ private fun OriginalActivityCard(
 private fun notificationMessage(notification: ActivityNotificationItem): String {
     if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
         val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
+        if (notification.reportIsAdministrativeReview) {
+            return "Tienes una nueva revisión administrativa: $subject"
+        }
         return "Hay cambios en tu denuncia: $subject"
     }
     val userName = notification.user.usuario

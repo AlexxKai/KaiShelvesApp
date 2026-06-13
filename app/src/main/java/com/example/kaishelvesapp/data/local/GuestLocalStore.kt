@@ -171,6 +171,9 @@ object GuestLocalStore {
         require(trimmedUsername.isNotBlank()) {
             "El nombre de usuario no puede estar vacio"
         }
+        require(!trimmedUsername.equals("administrador", ignoreCase = true)) {
+            "Ese nombre de usuario está reservado"
+        }
 
         val updatedState = updateState { currentState ->
             val existingProfile = currentState.profile
@@ -200,6 +203,9 @@ object GuestLocalStore {
         val trimmedUsername = username.trim()
         require(trimmedUsername.isNotBlank()) {
             "El nombre de usuario no puede estar vacio"
+        }
+        require(!trimmedUsername.equals("administrador", ignoreCase = true)) {
+            "Ese nombre de usuario está reservado"
         }
 
         val updatedState = updateState { currentState ->
