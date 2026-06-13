@@ -17,11 +17,13 @@ import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -48,8 +50,11 @@ enum class KaiSection {
     FILE_CONVERTER,
     CHALLENGES,
     FOR_YOU,
-    HELP
+    HELP,
+    ADMIN
 }
+
+val LocalAdminUiAccess = staticCompositionLocalOf { false }
 
 @Composable
 fun KaiBottomBar(
@@ -64,6 +69,7 @@ fun KaiBottomBar(
     } else {
         disabledSections
     }
+    val showAdminSection = LocalAdminUiAccess.current
     val effectiveDisabledClick = onDisabledSectionClick ?: guestUiRestrictions.onBlockedSectionClick
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val compactLayout = screenWidthDp < 380
@@ -86,12 +92,17 @@ fun KaiBottomBar(
         color = Obsidian,
         shape = RoundedCornerShape(0.dp)
     ) {
-        val items = listOf(
+        val mainItems = listOf(
             Triple(KaiSection.HOME, stringResource(R.string.home), Icons.Filled.Home),
             Triple(KaiSection.MY_BOOKS, stringResource(R.string.my_books), Icons.AutoMirrored.Filled.LibraryBooks),
             Triple(KaiSection.DISCOVER, stringResource(R.string.discover), Icons.AutoMirrored.Filled.MenuBook),
             Triple(KaiSection.SEARCH, stringResource(R.string.search_tab), Icons.Filled.Search)
         )
+        val items = if (showAdminSection) {
+            mainItems + Triple(KaiSection.ADMIN, stringResource(R.string.admin), Icons.Filled.Settings)
+        } else {
+            mainItems
+        }
 
         Row(
             modifier = Modifier

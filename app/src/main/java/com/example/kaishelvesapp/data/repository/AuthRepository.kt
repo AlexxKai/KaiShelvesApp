@@ -2,6 +2,7 @@
 
 import android.net.Uri
 import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.model.AdminAccess
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
@@ -66,11 +67,6 @@ data class LoginProviderState(
     val isPrimary: Boolean
 )
 
-private data class BootstrapAdminAccount(
-    val uid: String,
-    val email: String
-)
-
 private data class CloudLibrarySnapshot(
     val lists: List<UserBookList>,
     val listBooks: Map<String, List<Libro>>,
@@ -89,13 +85,6 @@ class AuthRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
     private var pendingGuestMergeState: PendingGuestMergeState? = null
-
-    private val bootstrapAdminAccounts = listOf(
-        BootstrapAdminAccount(
-            uid = "npVZkecTBzLHU9r9Tof4FRLdn0k2",
-            email = "admin@admin.com"
-        )
-    )
 
     fun isAuthenticated(): Boolean {
         return auth.currentUser != null || GuestLocalStore.isSessionActive()
@@ -1429,9 +1418,7 @@ class AuthRepository(
         val currentUserEmail = currentUserSnapshot.getString("email")
             ?.takeIf { it.isNotBlank() }
             ?: firebaseUser?.email.orEmpty()
-        val isBootstrapAdmin = bootstrapAdminAccounts.any { admin ->
-            admin.uid == currentUid || admin.email.equals(currentUserEmail, ignoreCase = true)
-        }
+        val isBootstrapAdmin = isBootstrapAdminAccount(currentUid, currentUserEmail)
         val hasFirestoreAdminFlag = currentUserSnapshot.getBoolean("isAdmin") == true
 
         if (isBootstrapAdmin && !hasFirestoreAdminFlag) {
@@ -1441,7 +1428,12 @@ class AuthRepository(
             return
         }
 
-        if (!hasFirestoreAdminFlag) {
+        if (!isBootstrapAdmin) {
+            if (hasFirestoreAdminFlag) {
+                currentUserSnapshot.reference
+                    .set(mapOf("isAdmin" to false), SetOptions.merge())
+                    .await()
+            }
             throw Exception("No tienes permisos para acceder al panel de administracion")
         }
     }
@@ -1607,20 +1599,22 @@ class AuthRepository(
     }
 
     private suspend fun syncBootstrapAdminAccess(user: Usuario): Usuario {
-        val shouldBeAdmin = bootstrapAdminAccounts.any { admin ->
-            admin.uid == user.uid || admin.email.equals(user.email, ignoreCase = true)
-        }
+        val shouldBeAdmin = isBootstrapAdminAccount(user.uid, user.email)
 
-        if (!shouldBeAdmin || user.isAdmin) {
+        if (user.isAdmin == shouldBeAdmin) {
             return user
         }
 
-        val updatedUser = user.copy(isAdmin = true)
+        val updatedUser = user.copy(isAdmin = shouldBeAdmin)
         saveUserProfile(
             user = updatedUser,
             previousUsername = user.usuario
         )
         return updatedUser
+    }
+
+    private fun isBootstrapAdminAccount(uid: String, email: String): Boolean {
+        return AdminAccess.isBootstrapAdminAccount(uid, email)
     }
 
     private companion object {

@@ -50,6 +50,7 @@ import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
 import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.HelpChatOverlay
 import com.example.kaishelvesapp.ui.components.KaiSection
+import com.example.kaishelvesapp.ui.components.LocalAdminUiAccess
 import com.example.kaishelvesapp.ui.components.LocalGuestUiRestrictions
 import com.example.kaishelvesapp.ui.components.LocalOpenScanner
 import com.example.kaishelvesapp.ui.components.OfflineAccessDialog
@@ -78,6 +79,7 @@ import com.example.kaishelvesapp.ui.screen.placeholder.PlaceholderScreen
 import com.example.kaishelvesapp.ui.screen.profile.ProfileScreen
 import com.example.kaishelvesapp.ui.screen.readinglist.ReadingListScreen
 import com.example.kaishelvesapp.ui.screen.register.RegisterScreen
+import com.example.kaishelvesapp.ui.screen.settings.AdminHubScreen
 import com.example.kaishelvesapp.ui.screen.settings.AdminUsernamesScreen
 import com.example.kaishelvesapp.ui.screen.settings.SettingsPrivacyScreen
 import com.example.kaishelvesapp.ui.screen.stats.ReadingStatsScreen
@@ -118,6 +120,7 @@ object Routes {
     const val READING_LIST = "reading_list"
     const val PROFILE = "profile"
     const val SETTINGS_PRIVACY = "settings_privacy"
+    const val ADMIN = "admin"
     const val ADMIN_USERNAMES = "admin_usernames"
     const val READING_STATS = "reading_stats"
     const val LIBRARY = "library"
@@ -242,6 +245,7 @@ fun AppNavigation(
             KaiSection.CHALLENGES -> Routes.CHALLENGES
             KaiSection.FOR_YOU -> Routes.FOR_YOU
             KaiSection.HELP -> Routes.HELP
+            KaiSection.ADMIN -> Routes.ADMIN
         }
     }
 
@@ -470,6 +474,10 @@ fun AppNavigation(
     }
 
     fun navigateSection(section: KaiSection) {
+        if (section == KaiSection.ADMIN && authState.user?.isAdmin != true) {
+            return
+        }
+
         if (guestRestrictedSections.contains(section)) {
             showGuestRestrictedNotice = true
             return
@@ -494,6 +502,7 @@ fun AppNavigation(
             KaiSection.CHALLENGES -> navController.navigate(Routes.CHALLENGES)
             KaiSection.FOR_YOU -> navController.navigate(Routes.FOR_YOU)
             KaiSection.HELP -> navController.navigate(Routes.HELP)
+            KaiSection.ADMIN -> navController.navigate(Routes.ADMIN)
         }
     }
 
@@ -534,6 +543,7 @@ fun AppNavigation(
                 navController.navigate(Routes.SCAN_BOOKS)
             }
         },
+        LocalAdminUiAccess provides (authState.user?.isAdmin == true),
         LocalGuestUiRestrictions provides GuestUiRestrictions(
             disabledSections = guestRestrictedSections,
             onBlockedSectionClick = {
@@ -911,6 +921,58 @@ fun AppNavigation(
                 AdminUsernamesScreen(
                     viewModel = adminUsernamesViewModel,
                     onBack = { navController.popBackStack() }
+                )
+            } else {
+                PlaceholderScreen(
+                    title = stringResource(R.string.restricted_access_title),
+                    subtitle = stringResource(R.string.admin_restricted_access_subtitle),
+                    currentSection = KaiSection.PROFILE,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            }
+        }
+
+        composable(Routes.ADMIN) {
+            if (authState.user?.isAdmin == true) {
+                AdminHubScreen(
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onOpenConflicts = {
+                        navController.navigate(Routes.ADMIN_USERNAMES)
+                    },
+                    onSectionSelected = { navigateSection(it) }
                 )
             } else {
                 PlaceholderScreen(

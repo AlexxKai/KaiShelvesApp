@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
@@ -61,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -505,6 +507,11 @@ private fun FriendProfileHero(
                 color = OldIvory
             )
 
+            if (profile.user.isAdmin) {
+                Spacer(modifier = Modifier.height(10.dp))
+                AdminProfileBadge()
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
@@ -513,6 +520,38 @@ private fun FriendProfileHero(
                 color = OldIvory.copy(alpha = 0.9f)
             )
         }
+    }
+}
+
+@Composable
+private fun AdminProfileBadge() {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        TarnishedGold.copy(alpha = 0.28f),
+                        BloodWine.copy(alpha = 0.54f)
+                    )
+                )
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.AdminPanelSettings,
+            contentDescription = null,
+            tint = TarnishedGold,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = stringResource(R.string.admin_badge),
+            style = MaterialTheme.typography.labelMedium,
+            color = TarnishedGold,
+            maxLines = 1
+        )
     }
 }
 

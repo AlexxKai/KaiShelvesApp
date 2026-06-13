@@ -2,6 +2,7 @@
 
 import com.example.kaishelvesapp.data.local.GuestLocalStore
 import com.example.kaishelvesapp.data.local.FriendsLocalStore
+import com.example.kaishelvesapp.data.model.AdminAccess
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
@@ -343,7 +344,7 @@ class FriendsRepository(
                 usuario = username,
                 email = email,
                 photoUrl = photoUrl,
-                isAdmin = storedUser?.isAdmin ?: false,
+                isAdmin = AdminAccess.isBootstrapAdminAccount(uid, email),
                 isGuest = storedUser?.isGuest ?: false,
                 privacySettings = storedUser?.privacySettings ?: UserPrivacySettings()
             )
@@ -414,15 +415,17 @@ class FriendsRepository(
             return null
         }
 
+        val resolvedEmail = primary?.email?.takeIf { it.isNotBlank() }
+            ?: fallback?.email.orEmpty()
+
         return Usuario(
             uid = uid,
             usuario = primary?.usuario?.takeIf { it.isNotBlank() }
                 ?: fallback?.usuario.orEmpty(),
-            email = primary?.email?.takeIf { it.isNotBlank() }
-                ?: fallback?.email.orEmpty(),
+            email = resolvedEmail,
             photoUrl = primary?.photoUrl?.takeIf { it.isNotBlank() }
                 ?: fallback?.photoUrl.orEmpty(),
-            isAdmin = primary?.isAdmin ?: fallback?.isAdmin ?: false,
+            isAdmin = AdminAccess.isBootstrapAdminAccount(uid, resolvedEmail),
             isGuest = primary?.isGuest ?: fallback?.isGuest ?: false,
             privacySettings = primary?.privacySettings
                 ?: fallback?.privacySettings
