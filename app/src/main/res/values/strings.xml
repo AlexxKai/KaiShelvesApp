@@ -302,6 +302,17 @@
     <string name="admin_usernames_entry_action">Review duplicates</string>
     <string name="admin_usernames_title">Admin usernames</string>
     <string name="admin_usernames_subtitle">Resolve legacy conflicts before they affect access and profile edits.</string>
+    <string name="admin_username_registry_title">User registry</string>
+    <string name="admin_username_duplicates_title">Duplicate usernames</string>
+    <string name="admin_username_filter_all">All</string>
+    <string name="admin_username_filter_new">New</string>
+    <string name="admin_username_filter_modified">Modified</string>
+    <string name="admin_username_notified_users">Notified users</string>
+    <string name="admin_username_mark_reviewed">Mark as reviewed</string>
+    <string name="admin_username_request_change">Request username change</string>
+    <string name="admin_username_reviewed">Reviewed</string>
+    <string name="admin_username_notified">Notified</string>
+    <string name="admin_username_registry_empty">There are no users for this filter.</string>
     <string name="admin_usernames_summary_title">Open conflicts</string>
     <string name="admin_usernames_summary_body">There are %1$d duplicate username groups pending manual review.</string>
     <string name="admin_conflict_group_title">Conflict: %1$s</string>
@@ -572,6 +583,7 @@
     <string name="report_no_admin_response">The administrator has not sent a response yet.</string>
     <string name="report_send_reply">Send response</string>
     <string name="profile_reports_back">Back to reports</string>
+    <string name="go_to_profile">Go to profile</string>
     <string name="chat_you">you</string>
     <string name="chat_admin">administrator</string>
     <string name="private_profile_title">Private profile</string>

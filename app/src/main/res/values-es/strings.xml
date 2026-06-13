@@ -302,6 +302,17 @@
     <string name="admin_usernames_entry_action">Revisar duplicados</string>
     <string name="admin_usernames_title">Admin de usuarios</string>
     <string name="admin_usernames_subtitle">Resuelve conflictos heredados antes de que afecten al acceso y a la edición del perfil.</string>
+    <string name="admin_username_registry_title">Registro de usuarios</string>
+    <string name="admin_username_duplicates_title">Nombres duplicados</string>
+    <string name="admin_username_filter_all">Todos</string>
+    <string name="admin_username_filter_new">Nuevo</string>
+    <string name="admin_username_filter_modified">Modificado</string>
+    <string name="admin_username_notified_users">Usuarios notificados</string>
+    <string name="admin_username_mark_reviewed">Marcar como revisado</string>
+    <string name="admin_username_request_change">Solicitar cambio de nombre</string>
+    <string name="admin_username_reviewed">Revisado</string>
+    <string name="admin_username_notified">Notificado</string>
+    <string name="admin_username_registry_empty">No hay usuarios para este filtro.</string>
     <string name="admin_usernames_summary_title">Conflictos abiertos</string>
     <string name="admin_usernames_summary_body">Hay %1$d grupos de nombres duplicados pendientes de revisión manual.</string>
     <string name="admin_conflict_group_title">Conflicto: %1$s</string>
@@ -572,6 +583,7 @@
     <string name="report_no_admin_response">El administrador todavía no ha enviado una respuesta.</string>
     <string name="report_send_reply">Enviar respuesta</string>
     <string name="profile_reports_back">Volver a denuncias</string>
+    <string name="go_to_profile">Ir a perfil</string>
     <string name="chat_you">tu</string>
     <string name="chat_admin">administrador</string>
     <string name="private_profile_title">Perfil privado</string>

@@ -110,6 +110,7 @@ fun NotificationCenterScreen(
     onBack: () -> Unit,
     onOpenFriendProfile: (String) -> Unit = {},
     onOpenReportReview: (String) -> Unit = {},
+    onOpenUsernameChangeProfile: () -> Unit = {},
     onRequestsChanged: () -> Unit = {},
     onSectionSelected: (KaiSection) -> Unit
 ) {
@@ -174,6 +175,11 @@ fun NotificationCenterScreen(
             LaunchedEffect(notification.id) {
                 closeSelectedNotification()
                 onOpenReportReview(notification.reportId)
+            }
+        } else if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+            LaunchedEffect(notification.id) {
+                closeSelectedNotification()
+                onOpenUsernameChangeProfile()
             }
         } else {
             ActivityNotificationDialog(
@@ -289,6 +295,9 @@ fun NotificationCenterScreen(
                                                     if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
                                                         viewModel.markNotificationAsRead(notification.id)
                                                         onOpenReportReview(notification.reportId)
+                                                    } else if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+                                                        viewModel.markNotificationAsRead(notification.id)
+                                                        onOpenUsernameChangeProfile()
                                                     } else {
                                                         selectedNotificationId = notification.id
                                                     }
@@ -311,6 +320,9 @@ fun NotificationCenterScreen(
                                                     if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
                                                         viewModel.markNotificationAsRead(notification.id)
                                                         onOpenReportReview(notification.reportId)
+                                                    } else if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+                                                        viewModel.markNotificationAsRead(notification.id)
+                                                        onOpenUsernameChangeProfile()
                                                     } else {
                                                         selectedNotificationId = notification.id
                                                     }
@@ -555,6 +567,14 @@ private fun ActivityNotificationCard(
                     style = MaterialTheme.typography.labelMedium,
                     color = DeepWalnut.copy(alpha = 0.76f),
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+                Text(
+                    text = notification.accountBody,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DeepWalnut.copy(alpha = 0.76f),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
@@ -940,6 +960,9 @@ private fun notificationMessage(notification: ActivityNotificationItem): String 
         }
         return "Hay cambios en tu denuncia: $subject"
     }
+    if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+        return notification.accountTitle.ifBlank { "Modifica tu nombre de usuario" }
+    }
     val userName = notification.user.usuario
         .ifBlank { notification.user.email }
         .ifBlank { stringResource(R.string.unknown_username) }
@@ -949,6 +972,7 @@ private fun notificationMessage(notification: ActivityNotificationItem): String 
         ActivityNotificationType.COMMENT_LIKE -> "$userName le ha dado me gusta a tu comentario."
         ActivityNotificationType.COMMENT_REPLY -> "$userName ha respondido a tu comentario."
         ActivityNotificationType.REPORT_UPDATE -> ""
+        ActivityNotificationType.USERNAME_CHANGE_REQUEST -> ""
     }
 }
 
@@ -980,6 +1004,7 @@ private fun notificationIcon(type: ActivityNotificationType): ImageVector {
         ActivityNotificationType.COMMENT_LIKE -> Icons.Filled.ThumbUp
         ActivityNotificationType.COMMENT_REPLY -> Icons.AutoMirrored.Filled.FormatListBulleted
         ActivityNotificationType.REPORT_UPDATE -> Icons.Filled.NotificationsNone
+        ActivityNotificationType.USERNAME_CHANGE_REQUEST -> Icons.Filled.NotificationsNone
     }
 }
 
@@ -990,6 +1015,7 @@ private fun notificationIconTint(type: ActivityNotificationType): Color {
         ActivityNotificationType.COMMENT_LIKE -> Color(0xFF5B6EA6)
         ActivityNotificationType.COMMENT_REPLY -> Color(0xFF0D7C79)
         ActivityNotificationType.REPORT_UPDATE -> TarnishedGold
+        ActivityNotificationType.USERNAME_CHANGE_REQUEST -> TarnishedGold
     }
 }
 

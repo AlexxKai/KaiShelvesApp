@@ -34,6 +34,36 @@ data class UsernameConflictGroup(
     val users: List<UsernameConflictUser>
 )
 
+enum class UsernameReviewKind {
+    NEW,
+    MODIFIED
+}
+
+enum class UsernameRegistryStatus {
+    NEW,
+    REVIEWED,
+    MODIFIED,
+    NOTIFIED
+}
+
+data class UsernameRegistryUser(
+    val uid: String,
+    val username: String,
+    val email: String,
+    val photoUrl: String,
+    val status: UsernameRegistryStatus,
+    val reviewKind: UsernameReviewKind,
+    val isReviewed: Boolean = false,
+    val isChangeNotified: Boolean = false
+)
+
+data class AccountNotificationPrompt(
+    val id: String,
+    val title: String,
+    val body: String,
+    val type: String
+)
+
 data class LibraryDataSummary(
     val customLists: Int = 0,
     val organizedBooks: Int = 0,
@@ -268,6 +298,117 @@ class AuthRepository(
         }
     }
 
+    suspend fun getUsernameRegistryUsers(): Result<List<UsernameRegistryUser>> {
+        return try {
+            requireAdminAccess()
+
+            val users = firestore.collection("usuarios")
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val username = document.getString("usuario").orEmpty()
+                    if (username.isBlank()) return@mapNotNull null
+                    val reviewKind = runCatching {
+                        UsernameReviewKind.valueOf(document.getString("usernameReviewKind").orEmpty())
+                    }.getOrDefault(UsernameReviewKind.NEW)
+                    val isReviewed = document.getBoolean("usernameReviewed") == true
+                    val isChangeNotified = document.getBoolean("usernameChangeNotified") == true
+                    val status = when {
+                        isChangeNotified -> UsernameRegistryStatus.NOTIFIED
+                        isReviewed -> UsernameRegistryStatus.REVIEWED
+                        reviewKind == UsernameReviewKind.MODIFIED -> UsernameRegistryStatus.MODIFIED
+                        else -> UsernameRegistryStatus.NEW
+                    }
+
+                    UsernameRegistryUser(
+                        uid = document.id,
+                        username = username,
+                        email = document.getString("email").orEmpty(),
+                        photoUrl = document.getString("photoUrl").orEmpty(),
+                        status = status,
+                        reviewKind = reviewKind,
+                        isReviewed = isReviewed,
+                        isChangeNotified = isChangeNotified
+                    )
+                }
+                .sortedBy { it.username.lowercase() }
+
+            Result.success(users)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markUsernameReviewed(uid: String): Result<Unit> {
+        return try {
+            requireAdminAccess()
+            if (uid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el usuario"))
+            }
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .set(
+                    mapOf(
+                        "usernameReviewed" to true,
+                        "usernameChangeNotified" to false,
+                        "usernameReviewedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun requestUsernameChange(uid: String): Result<Unit> {
+        return try {
+            requireAdminAccess()
+            if (uid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el usuario"))
+            }
+
+            val userRef = firestore.collection("usuarios").document(uid)
+            val snapshot = userRef.get().await()
+            if (!snapshot.exists()) {
+                return Result.failure(Exception("No se encontro el usuario"))
+            }
+
+            val title = "Modifica tu nombre de usuario"
+            val body = "Tu nombre de usuario debe modificarse porque no respeta las normas de conducta."
+            val batch = firestore.batch()
+            batch.set(
+                userRef,
+                mapOf(
+                    "usernameChangeNotified" to true,
+                    "usernameChangeNotifiedAt" to FieldValue.serverTimestamp(),
+                    "usernameReviewed" to false
+                ),
+                SetOptions.merge()
+            )
+            batch.set(
+                userRef.collection("notifications").document(),
+                mapOf(
+                    "type" to "username_change_requested",
+                    "title" to title,
+                    "body" to body,
+                    "read" to false,
+                    "localNotified" to false,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            )
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun adminRenameUser(uid: String, newUsername: String): Result<Usuario> {
         return try {
             requireAdminAccess()
@@ -294,6 +435,7 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = existingUser.usuario
             )
+            markUsernameReviewPending(uid, UsernameReviewKind.MODIFIED, reviewed = true)
             notifyUsernameChanged(
                 targetUser = updatedUser,
                 previousUsername = existingUser.usuario,
@@ -378,6 +520,7 @@ class AuthRepository(
 
             try {
                 saveUserProfile(nuevoUsuario)
+                markUsernameReviewPending(firebaseUser.uid, UsernameReviewKind.NEW)
                 setPrimaryLoginProviderIfMissing(firebaseUser.uid, EmailAuthProvider.PROVIDER_ID)
                 sendEmailVerification(firebaseUser)
             } catch (e: Exception) {
@@ -504,6 +647,9 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = currentProfile?.usuario.orEmpty()
             )
+            if (!currentProfile?.usuario.orEmpty().equals(newUsername.trim(), ignoreCase = false)) {
+                markUsernameReviewPending(uid, UsernameReviewKind.MODIFIED)
+            }
             notifyUsernameChanged(
                 targetUser = updatedUser,
                 previousUsername = currentProfile?.usuario.orEmpty(),
@@ -754,6 +900,57 @@ class AuthRepository(
                     .set(mapOf("localNotified" to true), SetOptions.merge())
                     .await()
             }
+        }
+    }
+
+    suspend fun pendingUsernameChangeRequest(): Result<AccountNotificationPrompt?> {
+        return try {
+            val currentUid = auth.currentUser?.uid
+                ?: return Result.success(null)
+
+            val document = firestore.collection("usuarios")
+                .document(currentUid)
+                .collection("notifications")
+                .whereEqualTo("type", "username_change_requested")
+                .whereEqualTo("read", false)
+                .get()
+                .await()
+                .documents
+                .firstOrNull()
+
+            Result.success(
+                document?.let {
+                    AccountNotificationPrompt(
+                        id = it.id,
+                        title = it.getString("title").orEmpty(),
+                        body = it.getString("body").orEmpty(),
+                        type = it.getString("type").orEmpty()
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markAccountNotificationRead(notificationId: String): Result<Unit> {
+        return try {
+            val currentUid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            if (notificationId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la notificación"))
+            }
+
+            firestore.collection("usuarios")
+                .document(currentUid)
+                .collection("notifications")
+                .document(notificationId)
+                .set(mapOf("read" to true), SetOptions.merge())
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -1520,6 +1717,27 @@ class AuthRepository(
         }
     }
 
+    private suspend fun markUsernameReviewPending(
+        uid: String,
+        kind: UsernameReviewKind,
+        reviewed: Boolean = false
+    ) {
+        if (uid.isBlank()) return
+
+        firestore.collection("usuarios")
+            .document(uid)
+            .set(
+                mapOf(
+                    "usernameReviewKind" to kind.name,
+                    "usernameReviewed" to reviewed,
+                    "usernameChangeNotified" to false,
+                    "usernameReviewUpdatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            .await()
+    }
+
     private suspend fun setPrimaryLoginProviderIfMissing(uid: String, providerId: String) {
         val userRef = firestore.collection("usuarios").document(uid)
         val storedPrimaryProviderId = userRef
@@ -1575,6 +1793,7 @@ class AuthRepository(
         )
 
         saveUserProfile(newUser)
+        markUsernameReviewPending(uid, UsernameReviewKind.NEW)
 
         return syncBootstrapAdminAccess(newUser)
     }

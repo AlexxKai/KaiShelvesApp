@@ -437,10 +437,14 @@ class FriendRequestsViewModel(
             ActivityNotificationType.REPORT_UPDATE -> {
                 if (notification.reportIsAdministrativeReview) "Nueva revisión administrativa" else "Cambios en tu denuncia"
             }
+            ActivityNotificationType.USERNAME_CHANGE_REQUEST -> "Modifica tu nombre de usuario"
         }
     }
 
     private fun notificationDeviceBody(notification: ActivityNotificationItem): String {
+        if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+            return notification.accountBody.ifBlank { "Tu nombre de usuario debe modificarse." }
+        }
         if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
             val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
             if (notification.reportIsAdministrativeReview) {
@@ -463,6 +467,7 @@ class FriendRequestsViewModel(
                 "$userName ha respondido a tu comentario$text"
             }
             ActivityNotificationType.REPORT_UPDATE -> ""
+            ActivityNotificationType.USERNAME_CHANGE_REQUEST -> ""
         }
     }
 }

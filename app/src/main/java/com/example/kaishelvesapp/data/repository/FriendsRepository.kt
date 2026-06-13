@@ -25,6 +25,7 @@ import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.S
 import com.example.kaishelvesapp.data.repository.UserListsRepository.Companion.SYSTEM_LIST_WANT_TO_READ_ID
 
 private const val LAST_QUARTER_MILLIS = 90L * 24L * 60L * 60L * 1000L
+private const val ACCOUNT_NOTIFICATION_PREFIX = "account_notification_"
 const val REPORT_SENDER_ADMIN = "admin"
 const val REPORT_SENDER_REPORTER = "reporter"
 const val FRIEND_TAG_DETAIL_PREFIX = "friend_tag__"
@@ -107,7 +108,8 @@ enum class ActivityNotificationType {
     COMMENT,
     COMMENT_LIKE,
     COMMENT_REPLY,
-    REPORT_UPDATE
+    REPORT_UPDATE,
+    USERNAME_CHANGE_REQUEST
 }
 
 data class ActivityNotificationItem(
@@ -123,6 +125,9 @@ data class ActivityNotificationItem(
     val reportPublicId: String = "",
     val reportSubject: String = "",
     val reportIsAdministrativeReview: Boolean = false,
+    val accountNotificationId: String = "",
+    val accountTitle: String = "",
+    val accountBody: String = "",
     val timestampMillis: Long? = null,
     val isRead: Boolean = false
 )
@@ -2462,8 +2467,35 @@ class FriendsRepository(
                         isRead = notificationId in readNotificationIds
                     )
                 }
+            val accountNotifications = usersCollection()
+                .document(uid)
+                .collection("notifications")
+                .whereEqualTo("type", "username_change_requested")
+                .get()
+                .await()
+                .documents
+                .map { document ->
+                    val notificationId = "$ACCOUNT_NOTIFICATION_PREFIX${document.id}"
+                    ActivityNotificationItem(
+                        id = notificationId,
+                        type = ActivityNotificationType.USERNAME_CHANGE_REQUEST,
+                        activityId = notificationId,
+                        user = currentUser.visibleTo(uid),
+                        activity = FriendActivityItem(
+                            id = notificationId,
+                            type = FriendActivityType.FRIENDSHIP,
+                            user = currentUser.visibleTo(uid),
+                            timestampMillis = document.timestampMillis("createdAt")
+                        ),
+                        accountNotificationId = document.id,
+                        accountTitle = document.getString("title").orEmpty(),
+                        accountBody = document.getString("body").orEmpty(),
+                        timestampMillis = document.timestampMillis("createdAt"),
+                        isRead = document.getBoolean("read") == true
+                    )
+                }
 
-            val notifications = (activityNotifications + reportNotifications)
+            val notifications = (activityNotifications + reportNotifications + accountNotifications)
                 .distinctBy { it.id }
                 .sortedByDescending { it.timestampMillis ?: Long.MIN_VALUE }
 
@@ -2541,9 +2573,26 @@ class FriendsRepository(
                 onChange()
             }
         }
+        val accountNotificationsListener = usersCollection()
+            .document(uid)
+            .collection("notifications")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) return@addSnapshotListener
+                if (snapshot?.documentChanges?.isNotEmpty() == true) {
+                    onChange()
+                }
+            }
 
         return CompositeListenerRegistration(
-            listOf(socialListener, likesListener, commentsListener, repliesListener, readsListener, reportReviewsListener)
+            listOf(
+                socialListener,
+                likesListener,
+                commentsListener,
+                repliesListener,
+                readsListener,
+                reportReviewsListener,
+                accountNotificationsListener
+            )
         )
     }
 
@@ -2557,6 +2606,16 @@ class FriendsRepository(
                 ?: return Result.failure(Exception("No hay sesión iniciada"))
             if (notificationId.isBlank()) {
                 return Result.failure(Exception("No se pudo identificar la notificación"))
+            }
+
+            if (notificationId.startsWith(ACCOUNT_NOTIFICATION_PREFIX)) {
+                val accountNotificationId = notificationId.removePrefix(ACCOUNT_NOTIFICATION_PREFIX)
+                usersCollection()
+                    .document(uid)
+                    .collection("notifications")
+                    .document(accountNotificationId)
+                    .set(mapOf("read" to true), SetOptions.merge())
+                    .await()
             }
 
             activityNotificationReadsCollection(uid)

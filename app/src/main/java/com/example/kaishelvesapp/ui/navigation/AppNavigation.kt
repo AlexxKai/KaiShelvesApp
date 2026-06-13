@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -198,6 +200,7 @@ fun AppNavigation(
     var initialLoggedInRouteResolved by remember { mutableStateOf(false) }
     var pendingActivityNotificationToOpen by remember { mutableStateOf<String?>(null) }
     var pendingProfileReportReviewId by remember { mutableStateOf<String?>(null) }
+    var pendingOpenProfileIdentity by remember { mutableStateOf(false) }
     var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var activeDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var deviceBookShortcutLaunchActive by remember { mutableStateOf(!deviceLibraryBookToOpen.isNullOrBlank()) }
@@ -560,6 +563,36 @@ fun AppNavigation(
             val shouldShowOfflineAccessNotice =
                 shouldBlockRemoteNavigation && (currentRoute != Routes.LIBRARY || showOfflineAccessNotice)
 
+            authState.pendingUsernameChangeRequest?.let { prompt ->
+                AlertDialog(
+                    onDismissRequest = authViewModel::dismissUsernameChangeRequest,
+                    title = {
+                        Text(text = prompt.title.ifBlank { "Modifica tu nombre de usuario" })
+                    },
+                    text = {
+                        Text(text = prompt.body)
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                authViewModel.consumeUsernameChangeRequestForProfile()
+                                pendingOpenProfileIdentity = true
+                                navController.navigate(Routes.PROFILE) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        ) {
+                            Text(text = stringResource(R.string.go_to_profile))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = authViewModel::dismissUsernameChangeRequest) {
+                            Text(text = stringResource(R.string.cancel))
+                        }
+                    }
+                )
+            }
+
             NavHost(
                 navController = navController,
                 startDestination = startDestination
@@ -868,6 +901,10 @@ fun AppNavigation(
                 onInitialReportReviewHandled = {
                     pendingProfileReportReviewId = null
                 },
+                openIdentityOnLaunch = pendingOpenProfileIdentity,
+                onOpenIdentityHandled = {
+                    pendingOpenProfileIdentity = false
+                },
                 userName = authState.user?.usuario,
                 profileImageUrl = authState.user?.photoUrl,
                 searchQuery = catalogState.searchQuery,
@@ -929,7 +966,10 @@ fun AppNavigation(
             if (authState.user?.isAdmin == true) {
                 AdminUsernamesScreen(
                     viewModel = adminUsernamesViewModel,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onOpenUserProfile = { friendUid ->
+                        navController.navigate(friendProfileRoute(friendUid))
+                    }
                 )
             } else {
                 PlaceholderScreen(
@@ -1198,6 +1238,12 @@ fun AppNavigation(
                 onOpenReportReview = { reportId ->
                     pendingProfileReportReviewId = reportId
                     navController.navigate(Routes.PROFILE)
+                },
+                onOpenUsernameChangeProfile = {
+                    pendingOpenProfileIdentity = true
+                    navController.navigate(Routes.PROFILE) {
+                        launchSingleTop = true
+                    }
                 },
                 onRequestsChanged = {
                     friendRequestsViewModel.loadReceivedRequests()

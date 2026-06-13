@@ -143,6 +143,8 @@ fun ProfileScreen(
     myProfileViewModel: FriendProfileViewModel,
     initialReportReviewId: String? = null,
     onInitialReportReviewHandled: () -> Unit = {},
+    openIdentityOnLaunch: Boolean = false,
+    onOpenIdentityHandled: () -> Unit = {},
     userName: String? = null,
     profileImageUrl: String? = null,
     searchQuery: String,
@@ -193,6 +195,12 @@ fun ProfileScreen(
         selectedProfileTab = ProfileTab.Settings
         selectedSettingsPanel = ProfileSettingsPanel.ReportReview
         myProfileViewModel.observeMyReports()
+    }
+    LaunchedEffect(openIdentityOnLaunch) {
+        if (!openIdentityOnLaunch) return@LaunchedEffect
+        selectedProfileTab = ProfileTab.Identity
+        selectedSettingsPanel = ProfileSettingsPanel.Main
+        onOpenIdentityHandled()
     }
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()

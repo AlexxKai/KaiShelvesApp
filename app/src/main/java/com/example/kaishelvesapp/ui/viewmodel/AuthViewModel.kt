@@ -7,6 +7,7 @@ import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.local.AppContextProvider
 import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
+import com.example.kaishelvesapp.data.repository.AccountNotificationPrompt
 import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.repository.AuthRepository
 import com.example.kaishelvesapp.data.repository.GoodreadsCsvImportRepository
@@ -47,7 +48,8 @@ data class AuthUiState(
     val importProcessedRows: Int = 0,
     val importTotalRows: Int = 0,
     val importImportedBooks: Int = 0,
-    val importSkippedRows: Int = 0
+    val importSkippedRows: Int = 0,
+    val pendingUsernameChangeRequest: AccountNotificationPrompt? = null
 )
 
 class AuthViewModel(
@@ -144,7 +146,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { updatedUser ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
@@ -179,6 +181,26 @@ class AuthViewModel(
             successMessage = null,
             isLoading = false
         )
+    }
+
+    private suspend fun syncAndLoadAccountNotifications() {
+        repository.syncPendingAccountNotifications()
+        repository.pendingUsernameChangeRequest()
+            .onSuccess { prompt ->
+                _uiState.value = _uiState.value.copy(pendingUsernameChangeRequest = prompt)
+            }
+    }
+
+    fun dismissUsernameChangeRequest() {
+        val prompt = _uiState.value.pendingUsernameChangeRequest ?: return
+        _uiState.value = _uiState.value.copy(pendingUsernameChangeRequest = null)
+        viewModelScope.launch {
+            repository.markAccountNotificationRead(prompt.id)
+        }
+    }
+
+    fun consumeUsernameChangeRequestForProfile() {
+        dismissUsernameChangeRequest()
     }
 
     fun startEditingProfile() {
@@ -223,7 +245,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -452,7 +474,7 @@ class AuthViewModel(
         viewModelScope.launch {
             repository.resolvePendingGuestMerge(strategy)
                 .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -504,7 +526,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { updatedUser ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
@@ -949,7 +971,7 @@ class AuthViewModel(
     private suspend fun handleAuthOperationResult(result: AuthOperationResult) {
         when (result) {
             is AuthOperationResult.Success -> {
-                repository.syncPendingAccountNotifications()
+                syncAndLoadAccountNotifications()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     user = result.user,
