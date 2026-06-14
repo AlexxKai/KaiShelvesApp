@@ -1,10 +1,12 @@
 ﻿package com.example.kaishelvesapp.ui.screen.library
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.text.format.Formatter
 import android.webkit.WebView
@@ -89,6 +91,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
@@ -136,19 +140,27 @@ fun DefaultCoverScreen(
     val scope = rememberCoroutineScope()
     var selectedCoverId by remember { mutableStateOf(readDefaultCoverId(context)) }
     var backgroundTreeUriText by remember { mutableStateOf(readDefaultCoverStorageTreeUri(context)) }
-    val backgroundTreeUri = remember(backgroundTreeUriText) { backgroundTreeUriText?.let(Uri::parse) }
+    val backgroundTreeUri = remember(backgroundTreeUriText) { backgroundTreeUriText?.toUri() }
     var downloadedCovers by remember(backgroundTreeUriText) {
         mutableStateOf(loadDownloadedDefaultCovers(context, backgroundTreeUri))
     }
     var showDownloadWindow by remember { mutableStateOf(false) }
     var openDownloadAfterFolderSelection by remember { mutableStateOf(false) }
     var coverToRename by remember { mutableStateOf<DefaultCoverOption?>(null) }
+    fun closeDownloadWindow() {
+        showDownloadWindow = false
+    }
+    fun closeRenameDialog() {
+        coverToRename = null
+    }
     val displayedBackgroundPath = remember(backgroundTreeUriText) {
-        backgroundTreeUri?.let(::readableImportRootPath) ?: "/sdcard/backgrounds"
+        backgroundTreeUri?.let(::readableImportRootPath) ?: readableExternalStoragePath("backgrounds")
     }
     val backgroundFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
+        val shouldOpenDownload = openDownloadAfterFolderSelection
+        openDownloadAfterFolderSelection = false
         if (uri != null) {
             runCatching {
                 context.contentResolver.takePersistableUriPermission(
@@ -159,8 +171,7 @@ fun DefaultCoverScreen(
             backgroundTreeUriText = uri.toString()
             saveDefaultCoverStorageTreeUri(context, uri)
             downloadedCovers = loadDownloadedDefaultCovers(context, uri)
-            if (openDownloadAfterFolderSelection) {
-                openDownloadAfterFolderSelection = false
+            if (shouldOpenDownload) {
                 showDownloadWindow = true
             }
         }
@@ -313,12 +324,12 @@ fun DefaultCoverScreen(
     if (showDownloadWindow) {
         BackgroundImageSearchDialog(
             backgroundTreeUri = backgroundTreeUri,
-            onDismiss = { showDownloadWindow = false },
+            onDismiss = ::closeDownloadWindow,
             onImageSaved = { savedCover ->
                 downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
                 selectedCoverId = savedCover.id
                 saveDefaultCoverId(context, selectedCoverId)
-                showDownloadWindow = false
+                closeDownloadWindow()
             }
         )
     }
@@ -326,7 +337,7 @@ fun DefaultCoverScreen(
     coverToRename?.let { cover ->
         RenameDefaultCoverDialog(
             cover = cover,
-            onDismiss = { coverToRename = null },
+            onDismiss = ::closeRenameDialog,
             onRename = { newName ->
                 scope.launch {
                     val renamedCover = withContext(Dispatchers.IO) {
@@ -339,7 +350,7 @@ fun DefaultCoverScreen(
                         }
                         downloadedCovers = loadDownloadedDefaultCovers(context, backgroundTreeUri)
                     }
-                    coverToRename = null
+                    closeRenameDialog()
                 }
             }
         )
@@ -496,6 +507,7 @@ fun RenameDefaultCoverDialog(
 }
 
 @Composable
+@SuppressLint("SetJavaScriptEnabled")
 fun BackgroundImageSearchDialog(
     backgroundTreeUri: Uri?,
     title: String = "Imagen de fondo",
@@ -560,8 +572,13 @@ fun BackgroundImageSearchDialog(
                     factory = { viewContext ->
                         WebView(viewContext).apply {
                             webViewClient = WebViewClient()
+                            // Google Images needs JavaScript and DOM storage to render selectable results.
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            settings.javaScriptCanOpenWindowsAutomatically = false
+                            settings.setSupportMultipleWindows(false)
                             setOnLongClickListener {
                                 val hit = hitTestResult
                                 val url = hit.extra
@@ -579,7 +596,8 @@ fun BackgroundImageSearchDialog(
                             val encodedQuery = URLEncoder.encode(searchQuery, "UTF-8")
                             loadUrl("https://www.google.com/search?tbm=isch&q=$encodedQuery")
                         }
-                    }
+                    },
+                    update = { }
                 )
 
                 Row(
@@ -694,7 +712,7 @@ fun ImportBooksDialog(
     }
     var importTreeUri by remember(initialTreeUri) { mutableStateOf(initialTreeUri) }
     var folderPath by remember(initialTreeUri) {
-        mutableStateOf(initialTreeUri?.let(::readableImportRootPath) ?: "/sdcard/Ac ebooks")
+        mutableStateOf(initialTreeUri?.let(::readableImportRootPath) ?: readableExternalStoragePath("Ac ebooks"))
     }
     var showAdvancedOptions by remember { mutableStateOf(false) }
     var showFolderBrowser by remember { mutableStateOf(false) }
@@ -705,6 +723,9 @@ fun ImportBooksDialog(
     var favorite by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(categories.first()) }
     var showCategoryMenu by remember { mutableStateOf(false) }
+    fun closeFolderBrowser() {
+        showFolderBrowser = false
+    }
     val importFolderLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -907,10 +928,10 @@ fun ImportBooksDialog(
                 treeUri = treeUri,
                 initialPath = folderPath,
                 onChooseDifferentRoot = { importFolderLauncher.launch(null) },
-                onDismiss = { showFolderBrowser = false },
+                onDismiss = ::closeFolderBrowser,
                 onFolderSelected = { path ->
                     folderPath = path
-                    showFolderBrowser = false
+                    closeFolderBrowser()
                 }
             )
         }
@@ -956,8 +977,10 @@ fun ImportFolderBrowserDialog(
     val context = LocalContext.current
     val rootDocumentId = remember(treeUri) { DocumentsContract.getTreeDocumentId(treeUri) }
     var currentDocumentId by remember(treeUri) { mutableStateOf(rootDocumentId) }
-    var currentPath by remember(treeUri, initialPath) { mutableStateOf(readableImportRootPath(treeUri)) }
-    val entriesState by produceState<Result<List<ImportBrowserEntry>>>(
+    var currentPath by remember(treeUri, initialPath) {
+        mutableStateOf(initialPath.ifBlank { readableImportRootPath(treeUri) })
+    }
+    val entriesState by produceState(
         initialValue = Result.success(emptyList()),
         treeUri,
         currentDocumentId
@@ -1315,10 +1338,18 @@ fun readableImportRootPath(treeUri: Uri): String {
         .substringAfter(':', missingDelimiterValue = documentId)
         .trim('/')
     return if (relativePath.isBlank() || relativePath == "primary") {
-        "/sdcard"
+        readableExternalStoragePath()
     } else {
-        "/sdcard/$relativePath"
+        readableExternalStoragePath(relativePath)
     }
+}
+
+@Suppress("DEPRECATION")
+fun readableExternalStoragePath(relativePath: String = ""): String {
+    // SAF primary storage is still displayed to users as the conventional external storage path.
+    val externalStoragePath = Environment.getExternalStorageDirectory().path.trimEnd('/')
+    val cleanRelativePath = relativePath.trim('/')
+    return if (cleanRelativePath.isBlank()) externalStoragePath else "$externalStoragePath/$cleanRelativePath"
 }
 
 fun isImportVisibleFile(name: String): Boolean {
@@ -1378,10 +1409,9 @@ fun readDefaultCoverId(context: Context): String {
 
 fun saveDefaultCoverId(context: Context, coverId: String) {
     selectedDefaultCoverIdState = coverId
-    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(DEFAULT_COVER_KEY, coverId)
-        .apply()
+    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE).edit {
+        putString(DEFAULT_COVER_KEY, coverId)
+    }
 }
 
 fun findDefaultCoverOption(context: Context, coverId: String): DefaultCoverOption? {
@@ -1391,7 +1421,7 @@ fun findDefaultCoverOption(context: Context, coverId: String): DefaultCoverOptio
             DefaultCoverOption(id = file.absolutePath, file = file, displayName = file.name)
         }
         ?: coverId.takeIf { it.startsWith("content://") }?.let { uriText ->
-            val uri = Uri.parse(uriText)
+            val uri = uriText.toUri()
             if (canOpenContentUri(context, uri)) {
                 DefaultCoverOption(id = uriText, uri = uri)
             } else {
@@ -1592,10 +1622,9 @@ fun readDefaultCoverStorageTreeUri(context: Context): String? {
 }
 
 fun saveDefaultCoverStorageTreeUri(context: Context, treeUri: Uri) {
-    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(DEFAULT_COVER_STORAGE_TREE_KEY, treeUri.toString())
-        .apply()
+    context.getSharedPreferences(DEFAULT_COVER_PREFS, Context.MODE_PRIVATE).edit {
+        putString(DEFAULT_COVER_STORAGE_TREE_KEY, treeUri.toString())
+    }
 }
 
 fun mimeTypeForImageName(fileName: String): String {
@@ -1646,18 +1675,17 @@ fun saveDeviceBookUserMetadata(
     metadata: DeviceBookUserMetadata
 ) {
     val key = deviceBookMetadataKey(file)
-    context.getSharedPreferences(BOOK_METADATA_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString("${key}_title", metadata.title)
-        .putString("${key}_author", metadata.author)
-        .putString("${key}_description", metadata.description)
-        .putString("${key}_cover_text", metadata.coverText)
-        .putString("${key}_cover_id", metadata.coverId)
-        .putBoolean("${key}_favorite", metadata.favorite)
-        .putString("${key}_category", metadata.category)
-        .putString("${key}_series", metadata.series)
-        .putString("${key}_tags", metadata.tags)
-        .apply()
+    context.getSharedPreferences(BOOK_METADATA_PREFS, Context.MODE_PRIVATE).edit {
+        putString("${key}_title", metadata.title)
+        putString("${key}_author", metadata.author)
+        putString("${key}_description", metadata.description)
+        putString("${key}_cover_text", metadata.coverText)
+        putString("${key}_cover_id", metadata.coverId)
+        putBoolean("${key}_favorite", metadata.favorite)
+        putString("${key}_category", metadata.category)
+        putString("${key}_series", metadata.series)
+        putString("${key}_tags", metadata.tags)
+    }
 }
 
 fun deviceBookMetadataKey(file: DeviceLibraryFile): String {
@@ -1676,10 +1704,9 @@ fun readPinnedDeviceBookIds(context: Context): List<String> {
 }
 
 fun savePinnedDeviceBookIds(context: Context, pinnedBookIds: List<String>) {
-    context.getSharedPreferences(PINNED_BOOKS_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(PINNED_BOOKS_KEY, pinnedBookIds.distinct().joinToString("\n"))
-        .apply()
+    context.getSharedPreferences(PINNED_BOOKS_PREFS, Context.MODE_PRIVATE).edit {
+        putString(PINNED_BOOKS_KEY, pinnedBookIds.distinct().joinToString("\n"))
+    }
 }
 
 fun deviceBookPinId(file: DeviceLibraryFile): String {
@@ -1694,10 +1721,9 @@ fun readDeviceLibraryLayoutMode(context: Context): DeviceLibraryLayoutMode {
 }
 
 fun saveDeviceLibraryLayoutMode(context: Context, layoutMode: DeviceLibraryLayoutMode) {
-    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(LIBRARY_LAYOUT_MODE_KEY, layoutMode.name)
-        .apply()
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE).edit {
+        putString(LIBRARY_LAYOUT_MODE_KEY, layoutMode.name)
+    }
 }
 
 fun readDeviceLibrarySortOption(context: Context): DeviceLibrarySortOption {
@@ -1708,10 +1734,9 @@ fun readDeviceLibrarySortOption(context: Context): DeviceLibrarySortOption {
 }
 
 fun saveDeviceLibrarySortOption(context: Context, sortOption: DeviceLibrarySortOption) {
-    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putString(LIBRARY_SORT_OPTION_KEY, sortOption.name)
-        .apply()
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE).edit {
+        putString(LIBRARY_SORT_OPTION_KEY, sortOption.name)
+    }
 }
 
 fun readDeviceLibrarySortDescending(context: Context): Boolean {
@@ -1720,10 +1745,9 @@ fun readDeviceLibrarySortDescending(context: Context): Boolean {
 }
 
 fun saveDeviceLibrarySortDescending(context: Context, sortDescending: Boolean) {
-    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(LIBRARY_SORT_DESCENDING_KEY, sortDescending)
-        .apply()
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE).edit {
+        putBoolean(LIBRARY_SORT_DESCENDING_KEY, sortDescending)
+    }
 }
 
 fun readDeviceLibraryFileTypeFilters(context: Context): Set<DeviceLibraryFileTypeFilter> {
@@ -1739,10 +1763,9 @@ fun saveDeviceLibraryFileTypeFilters(
     context: Context,
     selectedFileTypes: Set<DeviceLibraryFileTypeFilter>
 ) {
-    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, selectedFileTypes.map { it.name }.toSet())
-        .apply()
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE).edit {
+        putStringSet(LIBRARY_FILE_TYPE_FILTERS_KEY, selectedFileTypes.map { it.name }.toSet())
+    }
 }
 
 fun readDeviceLibraryReadingStatuses(context: Context): Set<DeviceLibraryReadingStatus> {
@@ -1760,10 +1783,9 @@ fun saveDeviceLibraryReadingStatuses(
     context: Context,
     selectedReadingStatuses: Set<DeviceLibraryReadingStatus>
 ) {
-    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE)
-        .edit()
-        .putStringSet(LIBRARY_READING_STATUS_FILTERS_KEY, selectedReadingStatuses.map { it.name }.toSet())
-        .apply()
+    context.getSharedPreferences(LIBRARY_VIEW_PREFS, Context.MODE_PRIVATE).edit {
+        putStringSet(LIBRARY_READING_STATUS_FILTERS_KEY, selectedReadingStatuses.map { it.name }.toSet())
+    }
 }
 
 fun Set<String>.toggleItem(item: String, checked: Boolean): Set<String> {
