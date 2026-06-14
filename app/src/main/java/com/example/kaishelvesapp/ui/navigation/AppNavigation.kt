@@ -47,6 +47,7 @@ import androidx.navigation.navArgument
 import com.example.kaishelvesapp.BuildConfig
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.help.HelpScreenContext
+import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.GuestRestrictedAccessNotice
 import com.example.kaishelvesapp.ui.components.GuestUiRestrictions
@@ -71,9 +72,11 @@ import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
 import com.example.kaishelvesapp.ui.screen.help.HelpScreen
 import com.example.kaishelvesapp.ui.screen.help.SupportRequestScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
+import com.example.kaishelvesapp.ui.screen.library.DeviceBookReaderDialog
 import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.PdfConverterScreen
+import com.example.kaishelvesapp.ui.screen.library.externalDeviceLibraryFile
 import com.example.kaishelvesapp.ui.screen.lists.UserListDetailScreen
 import com.example.kaishelvesapp.ui.screen.lists.UserListsScreen
 import com.example.kaishelvesapp.ui.screen.login.EmailVerificationScreen
@@ -170,7 +173,9 @@ fun AppNavigation(
     activityNotificationToOpen: String? = null,
     onActivityNotificationOpenConsumed: () -> Unit = {},
     deviceLibraryBookToOpen: String? = null,
-    onDeviceLibraryBookOpenConsumed: () -> Unit = {}
+    closeAfterExternalBook: Boolean = false,
+    onDeviceLibraryBookOpenConsumed: () -> Unit = {},
+    onExternalDeviceBookClosed: () -> Unit = {}
 ) {
     val authViewModel: AuthViewModel = viewModel()
     val catalogViewModel: CatalogViewModel = viewModel()
@@ -209,7 +214,8 @@ fun AppNavigation(
     var pendingOpenProfileIdentity by remember { mutableStateOf(false) }
     var pendingDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
     var activeDeviceLibraryBookUri by remember { mutableStateOf<String?>(null) }
-    var deviceBookShortcutLaunchActive by remember { mutableStateOf(!deviceLibraryBookToOpen.isNullOrBlank()) }
+    var externalDeviceBookFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
+    var deviceBookShortcutLaunchActive by remember { mutableStateOf(false) }
     var deviceShortcutConnectivityBlocked by remember { mutableStateOf(false) }
     var deviceShortcutConnectivityCheckRequested by remember { mutableStateOf(false) }
     var deviceShortcutRemoteAccessConfirmed by remember { mutableStateOf(false) }
@@ -233,7 +239,6 @@ fun AppNavigation(
     val startDestination = when {
         authState.pendingEmailVerificationEmail != null -> Routes.EMAIL_VERIFICATION
         authState.isLoggedIn && authState.user == null -> Routes.AUTH_LOADING
-        authState.isLoggedIn && deviceBookShortcutLaunchActive -> Routes.LIBRARY
         authState.isLoggedIn -> if (authState.user?.isGuest == true) Routes.DISCOVER else Routes.HOME
         else -> Routes.LOGIN
     }
@@ -343,7 +348,6 @@ fun AppNavigation(
         authState.isLoggedIn,
         authState.user?.isGuest,
         authState.pendingEmailVerificationEmail,
-        deviceLibraryBookToOpen,
         pendingDeviceLibraryBookUri,
         deviceBookShortcutLaunchActive
     ) {
@@ -359,7 +363,7 @@ fun AppNavigation(
 
         val user = authState.user ?: return@LaunchedEffect
         if (initialLoggedInRouteResolved) return@LaunchedEffect
-        if (deviceBookShortcutLaunchActive || !deviceLibraryBookToOpen.isNullOrBlank() || !pendingDeviceLibraryBookUri.isNullOrBlank()) {
+        if (deviceBookShortcutLaunchActive || !pendingDeviceLibraryBookUri.isNullOrBlank()) {
             initialLoggedInRouteResolved = true
             return@LaunchedEffect
         }
@@ -425,16 +429,13 @@ fun AppNavigation(
 
     LaunchedEffect(deviceLibraryBookToOpen, authState.isLoggedIn) {
         val bookUri = deviceLibraryBookToOpen?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        deviceBookShortcutLaunchActive = true
         deviceShortcutConnectivityBlocked = false
         deviceShortcutConnectivityCheckRequested = false
         deviceShortcutRemoteAccessConfirmed = false
         if (!authState.isLoggedIn) return@LaunchedEffect
 
         initialLoggedInRouteResolved = true
-        activeDeviceLibraryBookUri = bookUri
-        pendingDeviceLibraryBookUri = bookUri
-        navigateToDeviceLibraryShortcut()
+        externalDeviceBookFile = externalDeviceLibraryFile(context, bookUri)
         onDeviceLibraryBookOpenConsumed()
     }
 
@@ -1506,6 +1507,19 @@ fun AppNavigation(
                     onOpenLibrary = {
                         showOfflineAccessNotice = false
                         navController.navigate(Routes.LIBRARY)
+                    }
+                )
+            }
+
+            externalDeviceBookFile?.let { file ->
+                DeviceBookReaderDialog(
+                    file = file,
+                    onProgressChanged = {},
+                    onDismiss = {
+                        externalDeviceBookFile = null
+                        if (closeAfterExternalBook) {
+                            onExternalDeviceBookClosed()
+                        }
                     }
                 )
             }

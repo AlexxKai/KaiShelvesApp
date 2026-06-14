@@ -30,11 +30,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,8 +48,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -64,6 +70,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
+import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiSection
@@ -102,6 +110,12 @@ fun PdfConverterScreen(
     var sourceName by remember { mutableStateOf("") }
     var isConverting by remember { mutableStateOf(false) }
     var activeOutputFormat by remember { mutableStateOf<ConverterOutputFormat?>(null) }
+    var selectedOutputFormat by remember { mutableStateOf(ConverterOutputFormat.Pdf) }
+    var generatedUri by remember { mutableStateOf<Uri?>(null) }
+    var generatedMimeType by remember { mutableStateOf("") }
+    var generatedName by remember { mutableStateOf("") }
+    var previewFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
+    var showAddGeneratedBookDialog by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
 
     val sourceLauncher = rememberLauncherForActivityResult(
@@ -111,6 +125,9 @@ fun PdfConverterScreen(
             sourceUri = uri
             sourceName = displayNameForUri(context, uri)
             statusMessage = null
+            generatedUri = null
+            generatedMimeType = ""
+            generatedName = ""
         }
     }
     val outputLauncher = rememberLauncherForActivityResult(
@@ -129,8 +146,14 @@ fun PdfConverterScreen(
             isConverting = false
             activeOutputFormat = null
             statusMessage = if (result.isSuccess) {
+                generatedUri = targetUri
+                generatedMimeType = ConverterOutputFormat.Pdf.mimeType
+                generatedName = displayNameForUri(context, targetUri)
                 context.getString(R.string.pdf_converter_success)
             } else {
+                generatedUri = null
+                generatedMimeType = ""
+                generatedName = ""
                 result.exceptionOrNull()?.localizedMessage ?: context.getString(R.string.pdf_converter_error)
             }
             Toast.makeText(context, statusMessage, Toast.LENGTH_SHORT).show()
@@ -152,8 +175,14 @@ fun PdfConverterScreen(
             isConverting = false
             activeOutputFormat = null
             statusMessage = if (result.isSuccess) {
+                generatedUri = targetUri
+                generatedMimeType = ConverterOutputFormat.Epub.mimeType
+                generatedName = displayNameForUri(context, targetUri)
                 context.getString(R.string.epub_converter_success)
             } else {
+                generatedUri = null
+                generatedMimeType = ""
+                generatedName = ""
                 result.exceptionOrNull()?.localizedMessage ?: context.getString(R.string.epub_converter_error)
             }
             Toast.makeText(context, statusMessage, Toast.LENGTH_SHORT).show()
@@ -194,6 +223,7 @@ fun PdfConverterScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .background(
                             Brush.verticalGradient(
                                 listOf(DeepWalnut.copy(alpha = 0.98f), Obsidian.copy(alpha = 0.96f))
@@ -303,45 +333,87 @@ fun PdfConverterScreen(
                             Text(stringResource(R.string.pdf_converter_choose_file), color = Obsidian)
                         }
 
-                        Button(
-                            enabled = sourceUri != null && !isConverting,
-                            onClick = {
-                                val outputName = sourceName.substringBeforeLast('.', missingDelimiterValue = sourceName)
-                                    .ifBlank { "kai-shelves" } + ".pdf"
-                                outputLauncher.launch(outputName)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F9FE3)),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                        Text(
+                            text = stringResource(R.string.converter_output_format),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TarnishedGold
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (activeOutputFormat == ConverterOutputFormat.Pdf) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.height(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = OldIvory
-                                )
-                            } else {
-                                Text(stringResource(R.string.pdf_converter_convert), color = OldIvory)
-                            }
+                            ConverterFormatOption(
+                                format = ConverterOutputFormat.Pdf,
+                                selected = selectedOutputFormat == ConverterOutputFormat.Pdf,
+                                enabled = !isConverting,
+                                onSelect = { selectedOutputFormat = ConverterOutputFormat.Pdf }
+                            )
+                            ConverterFormatOption(
+                                format = ConverterOutputFormat.Epub,
+                                selected = selectedOutputFormat == ConverterOutputFormat.Epub,
+                                enabled = !isConverting,
+                                onSelect = { selectedOutputFormat = ConverterOutputFormat.Epub }
+                            )
                         }
 
                         Button(
                             enabled = sourceUri != null && !isConverting,
                             onClick = {
                                 val outputName = sourceName.substringBeforeLast('.', missingDelimiterValue = sourceName)
-                                    .ifBlank { "kai-shelves" } + ".epub"
-                                epubOutputLauncher.launch(outputName)
+                                    .ifBlank { "kai-shelves" } + selectedOutputFormat.extension
+                                when (selectedOutputFormat) {
+                                    ConverterOutputFormat.Pdf -> outputLauncher.launch(outputName)
+                                    ConverterOutputFormat.Epub -> epubOutputLauncher.launch(outputName)
+                                }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = TarnishedGold.copy(alpha = 0.88f)),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedOutputFormat == ConverterOutputFormat.Pdf) {
+                                    OldIvory.copy(alpha = 0.88f)
+                                } else {
+                                    Obsidian.copy(alpha = 0.88f)
+                                }
+                            ),
                             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                         ) {
-                            if (activeOutputFormat == ConverterOutputFormat.Epub) {
+                            if (activeOutputFormat != null) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.height(18.dp),
+                                    modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = Obsidian
+                                    color = if (selectedOutputFormat == ConverterOutputFormat.Pdf) OldIvory else Obsidian
                                 )
                             } else {
-                                Text(stringResource(R.string.epub_converter_convert), color = Obsidian)
+                                Text(
+                                    text = stringResource(selectedOutputFormat.actionLabelRes),
+                                    color = if (selectedOutputFormat == ConverterOutputFormat.Pdf) TarnishedGold else TarnishedGold
+                                )
+                            }
+                        }
+
+                        generatedUri?.let { uri ->
+                            Button(
+                                onClick = {
+                                    previewFile = generatedDeviceLibraryFile(
+                                        context = context,
+                                        uri = uri,
+                                        fallbackName = generatedName,
+                                        fallbackMimeType = generatedMimeType
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DeepWalnut.copy(alpha = 0.86f)),
+                                border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.65f)),
+                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                            ) {
+                                Text(stringResource(R.string.converter_open_generated_file), color = OldIvory)
+                            }
+                            if (generatedName.isNotBlank()) {
+                                Text(
+                                    text = generatedName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OldIvory.copy(alpha = 0.78f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
 
@@ -355,9 +427,149 @@ fun PdfConverterScreen(
                         }
                     }
                 }
+
+                previewFile?.let { file ->
+                    DeviceBookReaderDialog(
+                        file = file,
+                        onProgressChanged = {},
+                        onDismiss = {
+                            previewFile = null
+                            showAddGeneratedBookDialog = true
+                        }
+                    )
+                }
+
+                if (showAddGeneratedBookDialog) {
+                    AddGeneratedBookDialog(
+                        fileName = generatedName.ifBlank {
+                            stringResource(R.string.converter_generated_file_fallback_name)
+                        },
+                        location = generatedUri?.toString().orEmpty(),
+                        onDismiss = { showAddGeneratedBookDialog = false },
+                        onConfirm = {
+                            val uri = generatedUri ?: return@AddGeneratedBookDialog
+                            DeviceLibraryRepository(context).upsertBookRecord(
+                                generatedDeviceLibraryFile(
+                                    context = context,
+                                    uri = uri,
+                                    fallbackName = generatedName,
+                                    fallbackMimeType = generatedMimeType
+                                )
+                            )
+                            showAddGeneratedBookDialog = false
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.converter_generated_file_added),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ConverterFormatOption(
+    format: ConverterOutputFormat,
+    selected: Boolean,
+    enabled: Boolean,
+    onSelect: () -> Unit
+) {
+    Row(
+        modifier = Modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onSelect,
+            enabled = enabled,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = TarnishedGold,
+                unselectedColor = OldIvory.copy(alpha = 0.72f),
+                disabledSelectedColor = TarnishedGold.copy(alpha = 0.45f),
+                disabledUnselectedColor = OldIvory.copy(alpha = 0.35f)
+            )
+        )
+        Text(
+            text = stringResource(format.labelRes),
+            modifier = Modifier.padding(start = 4.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) OldIvory else OldIvory.copy(alpha = 0.48f)
+        )
+    }
+}
+
+@Composable
+private fun AddGeneratedBookDialog(
+    fileName: String,
+    location: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = stringResource(R.string.converter_add_generated_file_title))
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(text = stringResource(R.string.converter_add_generated_file_body))
+                Text(
+                    text = location.ifBlank { fileName },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+private fun generatedDeviceLibraryFile(
+    context: Context,
+    uri: Uri,
+    fallbackName: String,
+    fallbackMimeType: String
+): DeviceLibraryFile {
+    var name = fallbackName.ifBlank { displayNameForUri(context, uri) }
+    var size: Long? = null
+    var mimeType = fallbackMimeType.ifBlank { context.contentResolver.getType(uri).orEmpty() }
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (nameIndex >= 0) name = cursor.getString(nameIndex).orEmpty().ifBlank { name }
+            if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+        }
+    }
+    if (mimeType.isBlank()) {
+        mimeType = when {
+            name.endsWith(".pdf", ignoreCase = true) -> ConverterOutputFormat.Pdf.mimeType
+            name.endsWith(".epub", ignoreCase = true) -> ConverterOutputFormat.Epub.mimeType
+            else -> ""
+        }
+    }
+    return DeviceLibraryFile(
+        name = name.ifBlank { "kai-shelves" },
+        location = context.getString(R.string.file_converter),
+        mimeType = mimeType.ifBlank { null },
+        sizeBytes = size,
+        modifiedAtMillis = System.currentTimeMillis(),
+        uri = uri
+    )
 }
 
 private fun convertDocumentToPdf(
@@ -773,7 +985,31 @@ private data class PdfTextBlock(
 
 private enum class ConverterOutputFormat {
     Pdf,
-    Epub
+    Epub;
+
+    val extension: String
+        get() = when (this) {
+            Pdf -> ".pdf"
+            Epub -> ".epub"
+        }
+
+    val mimeType: String
+        get() = when (this) {
+            Pdf -> "application/pdf"
+            Epub -> "application/epub+zip"
+        }
+
+    val labelRes: Int
+        get() = when (this) {
+            Pdf -> R.string.converter_format_pdf
+            Epub -> R.string.converter_format_epub
+        }
+
+    val actionLabelRes: Int
+        get() = when (this) {
+            Pdf -> R.string.pdf_converter_convert
+            Epub -> R.string.epub_converter_convert
+        }
 }
 
 private data class ConverterEpubBook(

@@ -2765,17 +2765,15 @@ fun PdfBookReader(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val pageCount by produceState<Int?>(initialValue = null, file.uri) {
-        value = withContext(Dispatchers.IO) { getPdfPageCount(context, file.uri) }
+    val rememberedPageCount = remember(file.uri) {
+        readDeviceBookStoredPageCount(context, file).coerceAtLeast(1)
+    }
+    val pageCount by produceState(initialValue = rememberedPageCount, file.uri) {
+        val detectedPageCount = withContext(Dispatchers.IO) { getPdfPageCount(context, file.uri) }
+        value = detectedPageCount
     }
 
     when (val pages = pageCount) {
-        null -> Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = TarnishedGold)
-        }
         0 -> ReaderMessage(
             title = stringResource(R.string.device_reader_error_title),
             body = stringResource(R.string.device_reader_pdf_error)

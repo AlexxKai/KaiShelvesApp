@@ -185,6 +185,7 @@ fun DeviceLibraryScreen(
     var showDefaultCoverScreen by remember { mutableStateOf(false) }
     var readerFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var readerStartProgress by remember { mutableStateOf(0) }
+    var readerListPromptsEnabled by remember { mutableStateOf(true) }
     var pendingFirstOpenFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var pendingFinishedFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var pendingReadReviewBook by remember { mutableStateOf<Libro?>(null) }
@@ -390,8 +391,12 @@ fun DeviceLibraryScreen(
         }
     }
 
-    fun launchReader(file: DeviceLibraryFile) {
+    fun launchReader(
+        file: DeviceLibraryFile,
+        enableListPrompts: Boolean = true
+    ) {
         readerStartProgress = readDeviceBookProgressPercent(context, file)
+        readerListPromptsEnabled = enableListPrompts
         saveLastOpenedDeviceBookUri(context, file.uri.toString())
         readerFile = file
     }
@@ -433,6 +438,10 @@ fun DeviceLibraryScreen(
             openReader(targetFile)
             onOpenBookUriConsumed()
         } else if (uiState.hasLoadedFiles && !uiState.isLoading) {
+            val externalFile = externalDeviceLibraryFile(context, requestedUri)
+            if (externalFile != null) {
+                launchReader(externalFile, enableListPrompts = false)
+            }
             onOpenBookUriConsumed()
         }
     }
@@ -672,7 +681,7 @@ fun DeviceLibraryScreen(
                             readDeviceBookProgressPercent(context, file) >= 100
                         readerFile = null
                         onReaderClosed()
-                        if (finishedNow) {
+                        if (readerListPromptsEnabled && finishedNow) {
                             when (readReaderListAutomationMode(context)) {
                                 ReaderListAutomationMode.Ask -> pendingFinishedFile = file
                                 ReaderListAutomationMode.Automatic -> {

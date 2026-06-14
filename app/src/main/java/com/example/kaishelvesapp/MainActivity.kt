@@ -19,6 +19,7 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesAppTheme
 class MainActivity : AppCompatActivity() {
     private val activityNotificationToOpen = mutableStateOf<String?>(null)
     private val deviceLibraryBookToOpen = mutableStateOf<String?>(null)
+    private val closeAfterExternalBook = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +28,7 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
         activityNotificationToOpen.value = intent.activityNotificationId()
         deviceLibraryBookToOpen.value = intent.deviceLibraryBookUri()
+        closeAfterExternalBook.value = intent.isExternalDeviceBookRequest()
         setContent {
             KaiShelvesAppTheme {
                 GothicBackground {
@@ -36,8 +38,13 @@ class MainActivity : AppCompatActivity() {
                             activityNotificationToOpen.value = null
                         },
                         deviceLibraryBookToOpen = deviceLibraryBookToOpen.value,
+                        closeAfterExternalBook = closeAfterExternalBook.value,
                         onDeviceLibraryBookOpenConsumed = {
                             deviceLibraryBookToOpen.value = null
+                        },
+                        onExternalDeviceBookClosed = {
+                            closeAfterExternalBook.value = false
+                            finish()
                         }
                     )
                 }
@@ -50,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         activityNotificationToOpen.value = intent.activityNotificationId()
         deviceLibraryBookToOpen.value = intent.deviceLibraryBookUri()
+        closeAfterExternalBook.value = intent.isExternalDeviceBookRequest()
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -77,6 +85,14 @@ class MainActivity : AppCompatActivity() {
     private fun Intent.deviceLibraryBookUri(): String? {
         return getStringExtra(EXTRA_DEVICE_BOOK_URI)
             ?.takeIf { it.isNotBlank() }
+            ?: data?.toString()
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun Intent.isExternalDeviceBookRequest(): Boolean {
+        return action == Intent.ACTION_VIEW &&
+            data != null &&
+            getStringExtra(EXTRA_DEVICE_BOOK_URI).isNullOrBlank()
     }
 
     companion object {

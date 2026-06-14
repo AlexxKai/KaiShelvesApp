@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.provider.OpenableColumns
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import org.xmlpull.v1.XmlPullParser
@@ -38,6 +39,40 @@ fun readableFileType(file: DeviceLibraryFile): String {
     return file.name.substringAfterLast('.', missingDelimiterValue = file.mimeType.orEmpty())
         .uppercase(Locale.ROOT)
         .ifBlank { file.mimeType.orEmpty() }
+}
+
+fun externalDeviceLibraryFile(
+    context: Context,
+    rawUri: String
+): DeviceLibraryFile? {
+    val uri = runCatching { Uri.parse(rawUri) }.getOrNull() ?: return null
+    var name = uri.lastPathSegment.orEmpty().substringAfterLast('/').ifBlank { "documento" }
+    var size: Long? = null
+    val mimeType = context.contentResolver.getType(uri).orEmpty()
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (nameIndex >= 0) name = cursor.getString(nameIndex).orEmpty().ifBlank { name }
+            if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+        }
+    }
+    val lowerName = name.lowercase(Locale.ROOT)
+    val lowerMime = mimeType.lowercase(Locale.ROOT)
+    val canReadInternally = lowerName.endsWith(".pdf") ||
+        lowerName.endsWith(".epub") ||
+        lowerMime == "application/pdf" ||
+        lowerMime == "application/epub+zip"
+    if (!canReadInternally) return null
+
+    return DeviceLibraryFile(
+        name = name,
+        location = context.getString(com.example.kaishelvesapp.R.string.file_converter),
+        mimeType = mimeType.ifBlank { null },
+        sizeBytes = size,
+        modifiedAtMillis = System.currentTimeMillis(),
+        uri = uri
+    )
 }
 
 data class DeviceBookDisplayMetadata(

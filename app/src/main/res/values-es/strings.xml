@@ -260,6 +260,10 @@
     <string name="epub_converter_success">EPUB creado correctamente</string>
     <string name="epub_converter_error">No se pudo crear el EPUB</string>
     <string name="converter_open_generated_file">Abrir archivo generado</string>
+    <string name="converter_generated_file_fallback_name">Libro generado</string>
+    <string name="converter_add_generated_file_title">¿Añadir este libro a tu biblioteca?</string>
+    <string name="converter_add_generated_file_body">¿Quieres guardar este archivo de libro en tu biblioteca de Kai Shelves?</string>
+    <string name="converter_generated_file_added">Libro añadido a tu biblioteca</string>
     <string name="reading_challenges">Desafíos de lectura</string>
     <string name="selected_for_you">Seleccionados para ti</string>
     <string name="for_you_subtitle">Recomendaciones basadas en los libros que guardas en tus listas.</string>
