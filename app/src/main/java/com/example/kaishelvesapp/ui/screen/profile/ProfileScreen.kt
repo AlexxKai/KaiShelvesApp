@@ -102,6 +102,7 @@ import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.AccountReportKind
 import com.example.kaishelvesapp.data.repository.AccountReportStatus
 import com.example.kaishelvesapp.data.repository.BlockedMember
 import com.example.kaishelvesapp.data.repository.LoginProviderState
@@ -1614,7 +1615,19 @@ private fun ReportReviewSettingsSection(
     onReportDetailActiveChange: (Boolean) -> Unit = {}
 ) {
     var selectedReportId by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf<ProfileReviewFilter?>(null) }
     val selectedReport = reports.firstOrNull { it.id == selectedReportId }
+    val visibleReports = reports.filter { report ->
+        when (selectedFilter) {
+            null -> true
+            ProfileReviewFilter.REPORTS -> report.kind == AccountReportKind.REPORT
+            ProfileReviewFilter.REQUESTS -> report.kind == AccountReportKind.REQUEST
+            ProfileReviewFilter.IN_PROGRESS -> report.status == AccountReportStatus.IN_PROGRESS
+            ProfileReviewFilter.NEW -> report.status == AccountReportStatus.NEW
+            ProfileReviewFilter.PROCESSED -> report.status == AccountReportStatus.PROCESSED
+            ProfileReviewFilter.CLOSED -> report.status == AccountReportStatus.CLOSED
+        }
+    }
     var replyText by remember(selectedReport?.id) {
         mutableStateOf("")
     }
@@ -1686,7 +1699,22 @@ private fun ReportReviewSettingsSection(
 
             else -> {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    reports.forEach { report ->
+                    ProfileReviewFilterBar(
+                        selectedFilter = selectedFilter,
+                        onFilterSelected = { filter ->
+                            selectedFilter = if (selectedFilter == filter) null else filter
+                        }
+                    )
+
+                    if (visibleReports.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.profile_no_reports),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    visibleReports.forEach { report ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1714,24 +1742,29 @@ private fun ReportReviewSettingsSection(
                                 ReportStatusPill(status = report.status)
                             }
                             Spacer(modifier = Modifier.height(8.dp))
+                            ReportTypePill(kind = report.kind)
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = report.subject,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = OldIvory
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
-                                modifier = Modifier
-                                    .background(
-                                        color = BloodWine.copy(alpha = 0.36f),
-                                        shape = RoundedCornerShape(999.dp)
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TarnishedGold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            if (report.kind == AccountReportKind.REPORT) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                                    modifier = Modifier
+                                        .background(
+                                            color = BloodWine.copy(alpha = 0.36f),
+                                            shape = RoundedCornerShape(999.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TarnishedGold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             Text(
                                 text = stringResource(R.string.open),
                                 style = MaterialTheme.typography.labelLarge,
@@ -1743,6 +1776,79 @@ private fun ReportReviewSettingsSection(
             }
         }
     }
+}
+
+@Composable
+private fun ProfileReviewFilterBar(
+    selectedFilter: ProfileReviewFilter?,
+    onFilterSelected: (ProfileReviewFilter) -> Unit
+) {
+    val filters = listOf(
+        ProfileReviewFilter.REPORTS to stringResource(R.string.profile_review_filter_reports),
+        ProfileReviewFilter.REQUESTS to stringResource(R.string.profile_review_filter_requests),
+        ProfileReviewFilter.IN_PROGRESS to reportStatusLabel(AccountReportStatus.IN_PROGRESS),
+        ProfileReviewFilter.NEW to reportStatusLabel(AccountReportStatus.NEW),
+        ProfileReviewFilter.PROCESSED to reportStatusLabel(AccountReportStatus.PROCESSED),
+        ProfileReviewFilter.CLOSED to reportStatusLabel(AccountReportStatus.CLOSED)
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        filters.chunked(3).forEach { rowFilters ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowFilters.forEach { (filter, label) ->
+                    val selected = selectedFilter == filter
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                color = if (selected) BloodWine.copy(alpha = 0.42f) else Obsidian.copy(alpha = 0.68f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = TarnishedGold.copy(alpha = if (selected) 0.68f else 0.22f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .clickable { onFilterSelected(filter) }
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) TarnishedGold else OldIvory.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportTypePill(kind: AccountReportKind) {
+    Text(
+        text = when (kind) {
+            AccountReportKind.REPORT -> stringResource(R.string.profile_review_type_report)
+            AccountReportKind.REQUEST -> stringResource(R.string.profile_review_type_request)
+        },
+        modifier = Modifier
+            .background(
+                color = Obsidian.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = TarnishedGold.copy(alpha = 0.26f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = OldIvory.copy(alpha = 0.86f),
+        maxLines = 1
+    )
 }
 
 @Composable
@@ -1798,6 +1904,7 @@ private fun ReportReviewDetail(
             style = MaterialTheme.typography.labelMedium,
             color = TarnishedGold
         )
+        ReportTypePill(kind = report.kind)
         if (report.isAdministrativeReview) {
             Text(
                 text = stringResource(R.string.admin_report_administrative_review),
@@ -1812,17 +1919,19 @@ private fun ReportReviewDetail(
                 color = OldIvory.copy(alpha = 0.78f)
             )
         }
-        Text(
-            text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
-            modifier = Modifier
-                .background(
-                    color = BloodWine.copy(alpha = 0.36f),
-                    shape = RoundedCornerShape(999.dp)
-                )
-                .padding(horizontal = 10.dp, vertical = 5.dp),
-            style = MaterialTheme.typography.labelMedium,
-            color = TarnishedGold
-        )
+        if (report.kind == AccountReportKind.REPORT) {
+            Text(
+                text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                modifier = Modifier
+                    .background(
+                        color = BloodWine.copy(alpha = 0.36f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+        }
 
         HorizontalDivider(color = TarnishedGold.copy(alpha = 0.18f))
 
@@ -2675,6 +2784,15 @@ private fun LanguageOptionButton(
             )
         }
     }
+}
+
+private enum class ProfileReviewFilter {
+    REPORTS,
+    REQUESTS,
+    IN_PROGRESS,
+    NEW,
+    PROCESSED,
+    CLOSED
 }
 
 @Composable

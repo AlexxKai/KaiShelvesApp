@@ -199,6 +199,11 @@ enum class AccountReportStatus {
     CLOSED
 }
 
+enum class AccountReportKind {
+    REPORT,
+    REQUEST
+}
+
 data class AccountReportChatMessage(
     val id: String = "",
     val sender: String = "",
@@ -219,6 +224,7 @@ data class AccountReport(
     val adminMessage: String = "",
     val reporterReply: String = "",
     val chatMessages: List<AccountReportChatMessage> = emptyList(),
+    val kind: AccountReportKind = AccountReportKind.REPORT,
     val isAdministrativeReview: Boolean = false,
     val createdAtMillis: Long? = null,
     val updatedAtMillis: Long? = null
@@ -511,6 +517,7 @@ class FriendsRepository(
             adminMessage = adminMessage,
             reporterReply = reporterReply,
             chatMessages = chatMessages,
+            kind = parseAccountReportKind(getString("kind").orEmpty()),
             isAdministrativeReview = getBoolean("administrativeReview") == true,
             createdAtMillis = createdAtMillis,
             updatedAtMillis = timestampMillis("updatedAt")
@@ -602,6 +609,11 @@ class FriendsRepository(
             else -> runCatching { AccountReportStatus.valueOf(value) }
                 .getOrDefault(AccountReportStatus.NEW)
         }
+    }
+
+    private fun parseAccountReportKind(value: String): AccountReportKind {
+        return runCatching { AccountReportKind.valueOf(value.uppercase(Locale.ROOT)) }
+            .getOrDefault(AccountReportKind.REPORT)
     }
 
     private fun buildAccountReportPublicId(createdAtMillis: Long, reporterUsername: String): String {
@@ -1742,6 +1754,7 @@ class FriendsRepository(
                 "adminMessage" to "",
                 "reporterReply" to "",
                 "chatMessages" to listOf(initialChatMessage),
+                "kind" to AccountReportKind.REPORT.name,
                 "reviewRecipientUid" to uid,
                 "lastUpdatedBy" to REPORT_SENDER_REPORTER,
                 "createdAt" to FieldValue.serverTimestamp(),
@@ -1808,6 +1821,7 @@ class FriendsRepository(
                 "adminMessage" to trimmedMessage,
                 "reporterReply" to "",
                 "chatMessages" to listOf(initialChatMessage),
+                "kind" to AccountReportKind.REPORT.name,
                 "administrativeReview" to true,
                 "reviewRecipientUid" to targetUid,
                 "lastUpdatedBy" to REPORT_SENDER_ADMIN,
@@ -1818,6 +1832,70 @@ class FriendsRepository(
             val batch = firestore.batch()
             batch.set(reportRef, reportData)
             batch.set(reportReviewsCollection(targetUid).document(reportRef.id), reportData)
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun submitSupportRequest(
+        subject: String,
+        message: String,
+        photoUris: List<String>
+    ): Result<Unit> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.failure(Exception("Inicia sesión para enviar solicitudes"))
+            }
+
+            val uid = currentUid()
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            val trimmedSubject = subject.trim()
+            val trimmedMessage = message.trim()
+            if (trimmedSubject.isBlank() || trimmedMessage.isBlank()) {
+                return Result.failure(Exception("Completa el asunto y el mensaje"))
+            }
+
+            val requester = getUserProfile(uid) ?: Usuario(uid = uid)
+            val createdAtMillis = System.currentTimeMillis()
+            val publicId = buildAccountReportPublicId(createdAtMillis, requester.usuario.ifBlank { uid })
+            val requestRef = accountReportsCollection().document(publicId)
+            val initialChatMessage = buildAccountReportChatMessage(
+                sender = REPORT_SENDER_REPORTER,
+                text = trimmedMessage,
+                imageUris = photoUris,
+                createdAtMillis = createdAtMillis
+            )
+            val requestData = mapOf(
+                "id" to requestRef.id,
+                "publicId" to publicId,
+                "reporterUid" to uid,
+                "reporterUsuario" to requester.usuario,
+                "reporterEmail" to requester.email,
+                "reporterPhotoUrl" to requester.photoUrl,
+                "reportedUid" to "",
+                "reportedUsuario" to "",
+                "reportedEmail" to "",
+                "reportedPhotoUrl" to "",
+                "subject" to trimmedSubject,
+                "message" to trimmedMessage,
+                "photoUris" to photoUris.filter { it.isNotBlank() },
+                "status" to AccountReportStatus.NEW.name,
+                "adminMessage" to "",
+                "reporterReply" to "",
+                "chatMessages" to listOf(initialChatMessage),
+                "kind" to AccountReportKind.REQUEST.name,
+                "reviewRecipientUid" to uid,
+                "lastUpdatedBy" to REPORT_SENDER_REPORTER,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            val batch = firestore.batch()
+            batch.set(requestRef, requestData)
+            batch.set(reportReviewsCollection(uid).document(requestRef.id), requestData)
             batch.commit().await()
 
             Result.success(Unit)

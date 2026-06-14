@@ -3,6 +3,7 @@ package com.example.kaishelvesapp.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.AccountReportKind
 import com.example.kaishelvesapp.data.repository.AccountReportStatus
 import com.example.kaishelvesapp.data.repository.FriendsRepository
 import com.example.kaishelvesapp.data.repository.REPORT_SENDER_ADMIN
@@ -24,6 +25,7 @@ enum class AdminReportFilter {
 data class AdminReportsUiState(
     val reports: List<AccountReport> = emptyList(),
     val selectedReport: AccountReport? = null,
+    val reportKind: AccountReportKind = AccountReportKind.REPORT,
     val selectedStatus: AccountReportStatus = AccountReportStatus.NEW,
     val filter: AdminReportFilter = AdminReportFilter.ALL,
     val adminReplyDraft: String = "",
@@ -74,6 +76,13 @@ class AdminReportsViewModel(
                     )
                 }
         }
+    }
+
+    fun setReportKind(kind: AccountReportKind) {
+        _uiState.value = _uiState.value.copy(
+            reportKind = kind,
+            selectedReport = _uiState.value.selectedReport?.takeIf { it.kind == kind }
+        )
     }
 
     fun loadReports(clearMessages: Boolean = true) {
@@ -202,8 +211,8 @@ class AdminReportsViewModel(
     }
 }
 
-fun AccountReport.matchesAdminFilter(filter: AdminReportFilter): Boolean {
-    return when (filter) {
+fun AccountReport.matchesAdminFilter(filter: AdminReportFilter, kind: AccountReportKind = AccountReportKind.REPORT): Boolean {
+    return this.kind == kind && when (filter) {
         AdminReportFilter.ALL -> true
         AdminReportFilter.NEW -> status == AccountReportStatus.NEW
         AdminReportFilter.IN_PROGRESS -> status == AccountReportStatus.IN_PROGRESS

@@ -81,6 +81,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.AccountReportKind
 import com.example.kaishelvesapp.data.repository.AccountReportStatus
 import com.example.kaishelvesapp.data.repository.REPORT_SENDER_ADMIN
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
@@ -105,6 +106,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AdminReportsScreen(
     viewModel: AdminReportsViewModel,
+    reportKind: AccountReportKind = AccountReportKind.REPORT,
     paddingValues: PaddingValues = PaddingValues(0.dp),
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
@@ -127,6 +129,10 @@ fun AdminReportsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.observeReports()
+    }
+
+    LaunchedEffect(reportKind) {
+        viewModel.setReportKind(reportKind)
     }
 
     LaunchedEffect(uiState.successMessage) {
@@ -221,7 +227,8 @@ fun AdminReportsScreen(
                             )
                         } else {
                             AdminReportsList(
-                                reports = uiState.reports.filter { it.matchesAdminFilter(uiState.filter) },
+                                reportKind = uiState.reportKind,
+                                reports = uiState.reports.filter { it.matchesAdminFilter(uiState.filter, uiState.reportKind) },
                                 selectedFilter = uiState.filter,
                                 isLoading = uiState.isLoading,
                                 onFilterChange = viewModel::onFilterChange,
@@ -237,6 +244,7 @@ fun AdminReportsScreen(
 
 @Composable
 private fun AdminReportsList(
+    reportKind: AccountReportKind,
     reports: List<AccountReport>,
     selectedFilter: AdminReportFilter,
     isLoading: Boolean,
@@ -244,7 +252,11 @@ private fun AdminReportsList(
     onOpenReport: (AccountReport) -> Unit
 ) {
     Text(
-        text = stringResource(R.string.admin_reports_panel_title),
+        text = if (reportKind == AccountReportKind.REQUEST) {
+            stringResource(R.string.admin_requests_panel_title)
+        } else {
+            stringResource(R.string.admin_reports_panel_title)
+        },
         style = MaterialTheme.typography.headlineSmall,
         color = TarnishedGold
     )
@@ -268,7 +280,11 @@ private fun AdminReportsList(
 
         reports.isEmpty() -> {
             Text(
-                text = stringResource(R.string.admin_reports_empty),
+                text = if (reportKind == AccountReportKind.REQUEST) {
+                    stringResource(R.string.admin_requests_empty)
+                } else {
+                    stringResource(R.string.admin_reports_empty)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = OldIvory.copy(alpha = 0.82f)
             )
@@ -449,9 +465,14 @@ private fun AdminReportInfoCard(
                 color = TarnishedGold
             )
         } else {
-            ReportLine(R.string.admin_report_reporter, report.reporterUser.usuario.ifBlank { report.reporterUser.email })
+            ReportLine(
+                if (report.kind == AccountReportKind.REQUEST) R.string.support_request_user else R.string.admin_report_reporter,
+                report.reporterUser.usuario.ifBlank { report.reporterUser.email }
+            )
         }
-        ReportLine(R.string.admin_report_reported, report.reportedUser.usuario.ifBlank { report.reportedUser.email })
+        if (report.kind == AccountReportKind.REPORT) {
+            ReportLine(R.string.admin_report_reported, report.reportedUser.usuario.ifBlank { report.reportedUser.email })
+        }
         report.createdAtMillis?.let {
             ReportLine(R.string.admin_report_created_at, formatAdminReportDate(it))
         }

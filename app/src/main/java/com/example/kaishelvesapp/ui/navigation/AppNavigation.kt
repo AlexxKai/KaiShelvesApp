@@ -69,6 +69,7 @@ import com.example.kaishelvesapp.ui.screen.friends.FriendSuggestionsScreen
 import com.example.kaishelvesapp.ui.screen.friends.FriendsScreen
 import com.example.kaishelvesapp.ui.screen.friends.NotificationCenterScreen
 import com.example.kaishelvesapp.ui.screen.help.HelpScreen
+import com.example.kaishelvesapp.ui.screen.help.SupportRequestScreen
 import com.example.kaishelvesapp.ui.screen.home.HomeScreen
 import com.example.kaishelvesapp.ui.screen.library.DeviceLibraryScreen
 import com.example.kaishelvesapp.ui.screen.library.LibraryScreen
@@ -103,10 +104,12 @@ import com.example.kaishelvesapp.ui.viewmodel.HelpChatViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
 import com.example.kaishelvesapp.ui.viewmodel.ReadingListViewModel
 import com.example.kaishelvesapp.ui.viewmodel.SearchResultsViewModel
+import com.example.kaishelvesapp.ui.viewmodel.SupportRequestViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.UserListsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.example.kaishelvesapp.data.repository.AccountReportKind
 
 object Routes {
     const val AUTH_LOADING = "auth_loading"
@@ -127,6 +130,8 @@ object Routes {
     const val ADMIN = "admin"
     const val ADMIN_USERNAMES = "admin_usernames"
     const val ADMIN_REPORTS = "admin_reports"
+    const val ADMIN_REQUESTS = "admin_requests"
+    const val SUPPORT_REQUEST = "support_request"
     const val READING_STATS = "reading_stats"
     const val LIBRARY = "library"
     const val FRIENDS = "friends"
@@ -179,6 +184,7 @@ fun AppNavigation(
     val friendRequestsViewModel: FriendRequestsViewModel = viewModel()
     val adminUsernamesViewModel: AdminUsernamesViewModel = viewModel()
     val adminReportsViewModel: AdminReportsViewModel = viewModel()
+    val supportRequestViewModel: SupportRequestViewModel = viewModel()
     val helpChatViewModel: HelpChatViewModel = viewModel()
     val homeViewModel: HomeViewModel = viewModel()
     val forYouViewModel: ForYouViewModel = viewModel()
@@ -1024,6 +1030,9 @@ fun AppNavigation(
                     onOpenReports = {
                         navController.navigate(Routes.ADMIN_REPORTS)
                     },
+                    onOpenRequests = {
+                        navController.navigate(Routes.ADMIN_REQUESTS)
+                    },
                     onSectionSelected = { navigateSection(it) }
                 )
             } else {
@@ -1057,6 +1066,58 @@ fun AppNavigation(
             if (authState.user?.isAdmin == true) {
                 AdminReportsScreen(
                     viewModel = adminReportsViewModel,
+                    reportKind = AccountReportKind.REPORT,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            } else {
+                PlaceholderScreen(
+                    title = stringResource(R.string.restricted_access_title),
+                    subtitle = stringResource(R.string.admin_restricted_access_subtitle),
+                    currentSection = KaiSection.PROFILE,
+                    searchQuery = catalogState.searchQuery,
+                    onSearchQueryChange = ::searchFromSharedTopBar,
+                    onSearch = ::openCatalogAndSearch,
+                    onScanResult = ::scanFromSharedTopBar,
+                    userName = authState.user?.usuario,
+                    profileImageUrl = authState.user?.photoUrl,
+                    onGoToProfile = {
+                        navController.navigate(Routes.PROFILE)
+                    },
+                    onGoToSettingsPrivacy = {
+                        navController.navigate(Routes.SETTINGS_PRIVACY)
+                    },
+                    onLogout = ::logoutToLogin,
+                    pendingRequestCount = friendRequestsState.pendingCount,
+                    onOpenNotifications = {
+                        navController.navigate(Routes.NOTIFICATION_CENTER)
+                    },
+                    onSectionSelected = { navigateSection(it) }
+                )
+            }
+        }
+
+        composable(Routes.ADMIN_REQUESTS) {
+            if (authState.user?.isAdmin == true) {
+                AdminReportsScreen(
+                    viewModel = adminReportsViewModel,
+                    reportKind = AccountReportKind.REQUEST,
                     searchQuery = catalogState.searchQuery,
                     onSearchQueryChange = ::searchFromSharedTopBar,
                     onSearch = ::openCatalogAndSearch,
@@ -1376,7 +1437,17 @@ fun AppNavigation(
                 onStartChat = {
                     helpChatViewModel.startChat()
                 },
+                onOpenSupportRequest = {
+                    navController.navigate(Routes.SUPPORT_REQUEST)
+                },
                 onSectionSelected = { navigateSection(it) }
+            )
+        }
+
+        composable(Routes.SUPPORT_REQUEST) {
+            SupportRequestScreen(
+                viewModel = supportRequestViewModel,
+                onBack = { navController.popBackStack() }
             )
         }
             }

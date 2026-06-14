@@ -3,6 +3,7 @@
 
     <string name="back">Volver</string>
     <string name="cancel">Cancelar</string>
+    <string name="close">Cerrar</string>
     <string name="ok">Aceptar</string>
     <string name="send">Enviar</string>
     <string name="open">Abrir</string>
@@ -11,7 +12,6 @@
     <string name="reconnecting">Reconectando&#8230;</string>
     <string name="refresh">Actualizar</string>
     <string name="save">Guardar</string>
-    <string name="close">Cerrar</string>
     <string name="go">Ir</string>
     <string name="favorite">Favorito</string>
     <string name="not_available">No disponible</string>
@@ -249,6 +249,9 @@
     <string name="pdf_converter_subtitle">Prepara archivos PDF y EPUB para tu biblioteca del dispositivo.</string>
     <string name="pdf_converter_body">Elige archivos TXT, EPUB, FB2 o PDF. Kai Shelves puede crear copias PDF para lectura, o archivos EPUB desde TXT, FB2 y PDF conservando el contenido de origen en la medida que permite cada formato.</string>
     <string name="pdf_converter_choose_file">Elegir archivo</string>
+    <string name="converter_output_format">Formato de salida</string>
+    <string name="converter_format_pdf">PDF</string>
+    <string name="converter_format_epub">EPUB</string>
     <string name="pdf_converter_convert">Crear PDF</string>
     <string name="pdf_converter_success">PDF creado correctamente</string>
     <string name="pdf_converter_error">No se pudo crear el PDF</string>
@@ -256,6 +259,7 @@
     <string name="epub_converter_convert">Crear EPUB</string>
     <string name="epub_converter_success">EPUB creado correctamente</string>
     <string name="epub_converter_error">No se pudo crear el EPUB</string>
+    <string name="converter_open_generated_file">Abrir archivo generado</string>
     <string name="reading_challenges">Desafíos de lectura</string>
     <string name="selected_for_you">Seleccionados para ti</string>
     <string name="for_you_subtitle">Recomendaciones basadas en los libros que guardas en tus listas.</string>
@@ -265,7 +269,7 @@
     <string name="for_you_empty_title">Aún no hay recomendaciones</string>
     <string name="for_you_empty_body">Añade libros a tus listas para que Kai Shelves pueda sugerir géneros, autores, épocas y temáticas similares.</string>
     <string name="for_you_error_title">No se pudo preparar tu selección</string>
-    <string name="help">Ayuda</string>
+    <string name="help">Ayuda y normas</string>
     <string name="implementation_in_progress">Esta vista está en proceso de implementarse.</string>
     <string name="reading_statistics">Estadísticas de lectura</string>
     <string name="reading_statistics_subtitle">Revisa tu ritmo, tus valoraciones y la forma que toma tu biblioteca.</string>
@@ -288,7 +292,7 @@
     <string name="admin_view_grid">Dos por fila</string>
     <string name="admin_available_status">Disponible</string>
     <string name="admin_conflicts_panel_title">Panel de conflictos</string>
-    <string name="admin_conflicts_panel_body">Revisa conflictos de nombres de usuario duplicados y resuélvelos con el flujo de moderación existente.</string>
+    <string name="admin_conflicts_panel_body">Revisa conflictos con nombres de usuario duplicados o que infrinjan las normas.</string>
     <string name="admin_reports_panel_title">Denuncias de usuarios</string>
     <string name="admin_reports_panel_body">Revisa denuncias enviadas por usuarios y prepara acciones de seguimiento.</string>
     <string name="admin_contact_panel_title">Contacto con usuarios</string>
@@ -559,9 +563,9 @@
     <string name="profile_blocked_people">Personas bloqueadas</string>
     <string name="profile_blocked_people_body">Revisa los perfiles que has bloqueado y desbloquéalos cuando quieras.</string>
     <string name="profile_no_blocked_people">No has bloqueado a nadie.</string>
-    <string name="profile_report_review">Revisión denuncias</string>
-    <string name="profile_report_review_body">Sigue el estado de las denuncias que has enviado.</string>
-    <string name="profile_no_reports">Todavía no has enviado ninguna denuncia.</string>
+    <string name="profile_report_review">Revisión denuncias y conflictos</string>
+    <string name="profile_report_review_body">Sigue el estado de las denuncias, solicitudes y conflictos que has enviado.</string>
+    <string name="profile_no_reports">Todavía no tienes denuncias ni solicitudes.</string>
     <string name="profile_reported_member">Miembro denunciado: %1$s</string>
     <string name="report_status_new">Nuevo</string>
     <string name="report_status_in_progress">En proceso</string>
@@ -583,6 +587,10 @@
     <string name="report_no_admin_response">El administrador todavía no ha enviado una respuesta.</string>
     <string name="report_send_reply">Enviar respuesta</string>
     <string name="profile_reports_back">Volver a denuncias</string>
+    <string name="profile_review_filter_reports">Denuncias</string>
+    <string name="profile_review_filter_requests">Solicitudes</string>
+    <string name="profile_review_type_report">Denuncia</string>
+    <string name="profile_review_type_request">Solicitud</string>
     <string name="go_to_profile">Ir a perfil</string>
     <string name="chat_you">tu</string>
     <string name="chat_admin">administrador</string>
@@ -705,13 +713,25 @@
     <string name="system_list_pending_description">Libros que quieres organizar para retomarlos más adelante.</string>
     <string name="system_list_unfinished_description">Libros que dejaste a medias o decidiste pausar.</string>
     <string name="system_list_owned_description">Libros detectados automáticamente en la biblioteca del dispositivo.</string>
-    <string name="help_title">Ayuda</string>
+    <string name="help_title">Ayuda y normas</string>
     <string name="help_subtitle">Asistencia guiada para usar la aplicación.</string>
-    <string name="help_intro">Inicia el chat para recibir ayuda contextual sobre la pantalla actual.</string>
+    <string name="help_intro">Encuentra ayuda guiada, revisa las normas de convivencia o envía una solicitud al equipo.</string>
+    <string name="help_search_help">Busca ayuda</string>
     <string name="help_start_chat">Iniciar chat</string>
     <string name="help_faq_title">Preguntas frecuentes</string>
     <string name="help_guided_flows_title">Flujos guiados</string>
     <string name="help_common_errors_title">Problemas frecuentes</string>
+    <string name="help_rules_title">Normas de la comunidad</string>
+    <string name="support_requests_title">Solicitudes, peticiones y consultas</string>
+    <string name="support_requests_body">Envía una solicitud al equipo de administración para resolver dudas, peticiones o consultas que no encajen en una denuncia.</string>
+    <string name="support_request_open">Crear solicitud</string>
+    <string name="support_request_title">Nueva solicitud</string>
+    <string name="support_request_body">Describe tu petición con el mayor detalle posible. El equipo podrá responderte desde el panel de administración.</string>
+    <string name="support_request_subject">Asunto</string>
+    <string name="support_request_message">Mensaje</string>
+    <string name="support_request_send">Enviar solicitud</string>
+    <string name="support_request_user">Usuario solicitante</string>
+    <string name="admin_requests_empty">Todavía no hay peticiones ni consultas de usuarios.</string>
     <string name="help_chat_title">Ayuda de Kai Shelves</string>
     <string name="help_minimize_chat">Minimizar chat</string>
     <string name="help_close_chat">Cerrar chat</string>

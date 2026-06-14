@@ -15,6 +15,9 @@ object HelpKnowledgeBase {
     val commonErrors: List<String>
         get() = localized(spanishCommonErrors, englishCommonErrors)
 
+    val communityRules: List<String>
+        get() = localized(spanishCommunityRules, englishCommunityRules)
+
     fun asPromptText(languageTag: String = LanguageManager.getCurrentLanguage()): String {
         val spanish = languageTag == "es"
         return buildString {
@@ -107,5 +110,21 @@ object HelpKnowledgeBase {
         "If a social feature is unavailable, you may be using guest mode.",
         "If the catalog is slow to respond, wait a few seconds and try again.",
         "If a cover does not load, the provider may not have an image for that book."
+    )
+
+    private val spanishCommunityRules = listOf(
+        "Trata a otros usuarios con respeto: no se permiten insultos, acoso, amenazas ni provocaciones.",
+        "Evita el spam, la publicidad repetitiva y los mensajes que no aporten a la conversación.",
+        "El nombre de usuario debe ser legible y respetuoso; no puede suplantar a otras personas ni usar términos reservados como administrador.",
+        "La imagen de perfil debe ser adecuada para una comunidad lectora y no incluir contenido ofensivo, explícito o violento.",
+        "Respeta la privacidad: no publiques datos personales de otros usuarios ni conversaciones privadas sin permiso."
+    )
+
+    private val englishCommunityRules = listOf(
+        "Treat other users with respect: insults, harassment, threats and provocation are not allowed.",
+        "Avoid spam, repetitive advertising and messages that do not contribute to the conversation.",
+        "Your username must be readable and respectful; it cannot impersonate others or use reserved terms such as administrator.",
+        "Your profile image must be appropriate for a reading community and must not include offensive, explicit or violent content.",
+        "Respect privacy: do not publish other users' personal data or private conversations without permission."
     )
 }
