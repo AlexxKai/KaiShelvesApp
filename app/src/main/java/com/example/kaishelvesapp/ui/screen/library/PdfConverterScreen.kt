@@ -1,8 +1,11 @@
 package com.example.kaishelvesapp.ui.screen.library
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.pdf.PdfRenderer
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -69,6 +72,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
 import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
@@ -91,6 +95,9 @@ import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 
+private const val IMAGE_PDF_MAX_PAGE_SIDE = 4096
+private const val PDF_EPUB_RENDER_SCALE = 2
+
 @Composable
 fun PdfConverterScreen(
     userName: String?,
@@ -108,6 +115,7 @@ fun PdfConverterScreen(
     val scope = rememberCoroutineScope()
     var sourceUri by remember { mutableStateOf<Uri?>(null) }
     var sourceName by remember { mutableStateOf("") }
+    var sourceFormat by remember { mutableStateOf<ConverterInputFormat?>(null) }
     var isConverting by remember { mutableStateOf(false) }
     var activeOutputFormat by remember { mutableStateOf<ConverterOutputFormat?>(null) }
     var selectedOutputFormat by remember { mutableStateOf(ConverterOutputFormat.Pdf) }
@@ -117,6 +125,7 @@ fun PdfConverterScreen(
     var previewFile by remember { mutableStateOf<DeviceLibraryFile?>(null) }
     var showAddGeneratedBookDialog by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var pendingOnlineOutputFormat by remember { mutableStateOf<ConverterOutputFormat?>(null) }
 
     val sourceLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -124,7 +133,9 @@ fun PdfConverterScreen(
         if (uri != null) {
             sourceUri = uri
             sourceName = displayNameForUri(context, uri)
+            sourceFormat = detectConverterInputFormat(context, uri, sourceName)
             statusMessage = null
+            pendingOnlineOutputFormat = null
             generatedUri = null
             generatedMimeType = ""
             generatedName = ""
@@ -140,8 +151,16 @@ fun PdfConverterScreen(
             isConverting = true
             activeOutputFormat = ConverterOutputFormat.Pdf
             statusMessage = null
+            val inputFormat = sourceFormat ?: detectConverterInputFormat(context, inputUri, displayNameForUri(context, inputUri))
+            if (inputFormat == null) {
+                isConverting = false
+                activeOutputFormat = null
+                statusMessage = context.getString(R.string.converter_unsupported_conversion)
+                Toast.makeText(context, statusMessage, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
-                convertDocumentToPdf(context, inputUri, targetUri)
+                convertDocumentToPdf(context, inputUri, targetUri, inputFormat)
             }
             isConverting = false
             activeOutputFormat = null
@@ -169,8 +188,16 @@ fun PdfConverterScreen(
             isConverting = true
             activeOutputFormat = ConverterOutputFormat.Epub
             statusMessage = null
+            val inputFormat = sourceFormat ?: detectConverterInputFormat(context, inputUri, displayNameForUri(context, inputUri))
+            if (inputFormat == null) {
+                isConverting = false
+                activeOutputFormat = null
+                statusMessage = context.getString(R.string.converter_unsupported_conversion)
+                Toast.makeText(context, statusMessage, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
-                convertDocumentToEpub(context, inputUri, targetUri)
+                convertDocumentToEpub(context, inputUri, targetUri, inputFormat)
             }
             isConverting = false
             activeOutputFormat = null
@@ -294,23 +321,33 @@ fun PdfConverterScreen(
                         )
 
                         if (sourceName.isNotBlank()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Description,
-                                    contentDescription = null,
-                                    tint = OldIvory
-                                )
+                            val detectedFormatName = sourceFormat
+                                ?.let { stringResource(it.labelRes) }
+                                ?: stringResource(R.string.converter_format_unknown)
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Description,
+                                        contentDescription = null,
+                                        tint = OldIvory
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.converter_selected_file, sourceName),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(start = 10.dp),
+                                        color = OldIvory,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                                 Text(
-                                    text = sourceName,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = 10.dp),
-                                    color = OldIvory,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    text = stringResource(R.string.converter_detected_type, detectedFormatName),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OldIvory.copy(alpha = 0.78f)
                                 )
                             }
                         }
@@ -320,9 +357,15 @@ fun PdfConverterScreen(
                                 sourceLauncher.launch(
                                     arrayOf(
                                         "text/plain",
+                                        "text/markdown",
+                                        "text/html",
                                         "application/pdf",
                                         "application/epub+zip",
                                         "application/xml",
+                                        "application/xhtml+xml",
+                                        "image/jpeg",
+                                        "image/png",
+                                        "image/webp",
                                         "*/*"
                                     )
                                 )
@@ -356,15 +399,38 @@ fun PdfConverterScreen(
                                 onSelect = { selectedOutputFormat = ConverterOutputFormat.Epub }
                             )
                         }
+                        Text(
+                            text = stringResource(
+                                R.string.converter_selected_output,
+                                stringResource(selectedOutputFormat.labelRes)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OldIvory.copy(alpha = 0.78f)
+                        )
+
+                        val conversionSupported = sourceFormat?.supports(selectedOutputFormat) ?: false
+                        val canConvertOrOfferOnline = sourceUri != null && !isConverting
+                        if (sourceUri != null && !conversionSupported) {
+                            Text(
+                                text = stringResource(R.string.converter_online_fallback_available),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OldIvory.copy(alpha = 0.78f)
+                            )
+                        }
 
                         Button(
-                            enabled = sourceUri != null && !isConverting,
+                            enabled = canConvertOrOfferOnline,
                             onClick = {
                                 val outputName = sourceName.substringBeforeLast('.', missingDelimiterValue = sourceName)
                                     .ifBlank { "kai-shelves" } + selectedOutputFormat.extension
-                                when (selectedOutputFormat) {
-                                    ConverterOutputFormat.Pdf -> outputLauncher.launch(outputName)
-                                    ConverterOutputFormat.Epub -> epubOutputLauncher.launch(outputName)
+                                if (conversionSupported) {
+                                    when (selectedOutputFormat) {
+                                        ConverterOutputFormat.Pdf -> outputLauncher.launch(outputName)
+                                        ConverterOutputFormat.Epub -> epubOutputLauncher.launch(outputName)
+                                    }
+                                } else {
+                                    // Unsupported formats stay local until the user explicitly confirms opening the external site.
+                                    pendingOnlineOutputFormat = selectedOutputFormat
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -384,7 +450,13 @@ fun PdfConverterScreen(
                                 )
                             } else {
                                 Text(
-                                    text = stringResource(selectedOutputFormat.actionLabelRes),
+                                    text = stringResource(
+                                        if (conversionSupported) {
+                                            selectedOutputFormat.actionLabelRes
+                                        } else {
+                                            R.string.converter_open_online_converter
+                                        }
+                                    ),
                                     color = if (selectedOutputFormat == ConverterOutputFormat.Pdf) TarnishedGold else TarnishedGold
                                 )
                             }
@@ -465,9 +537,62 @@ fun PdfConverterScreen(
                         }
                     )
                 }
+
+                pendingOnlineOutputFormat?.let { outputFormat ->
+                    OnlineConverterNoticeDialog(
+                        outputFormat = outputFormat,
+                        onDismiss = { pendingOnlineOutputFormat = null },
+                        onConfirm = {
+                            val targetUrl = onlineConverterUrl(outputFormat)
+                            pendingOnlineOutputFormat = null
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, targetUrl.toUri()))
+                            }.onFailure {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.no_app_to_open_file),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    )
+                }
+
             }
         }
     }
+}
+
+@Composable
+private fun OnlineConverterNoticeDialog(
+    outputFormat: ConverterOutputFormat,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(
+                    R.string.converter_online_notice_title,
+                    stringResource(outputFormat.labelRes)
+                )
+            )
+        },
+        text = {
+            Text(text = stringResource(R.string.converter_online_notice_body))
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(text = stringResource(R.string.converter_open_online_converter))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable
@@ -538,6 +663,14 @@ private fun AddGeneratedBookDialog(
     )
 }
 
+private fun onlineConverterUrl(outputFormat: ConverterOutputFormat): String {
+    // The app only opens the selected converter page; files are never uploaded automatically.
+    return when (outputFormat) {
+        ConverterOutputFormat.Pdf -> "https://documento.online-convert.com/es/convertir-a-pdf"
+        ConverterOutputFormat.Epub -> "https://ebook.online-convert.com/es/convertir-a-epub"
+    }
+}
+
 private fun generatedDeviceLibraryFile(
     context: Context,
     uri: Uri,
@@ -572,12 +705,44 @@ private fun generatedDeviceLibraryFile(
     )
 }
 
+private fun detectConverterInputFormat(
+    context: Context,
+    uri: Uri,
+    displayName: String
+): ConverterInputFormat? {
+    val normalizedMimeType = context.contentResolver.getType(uri)
+        ?.substringBefore(';')
+        ?.trim()
+        ?.lowercase(Locale.ROOT)
+        .orEmpty()
+    val extension = displayName
+        .substringAfterLast('.', missingDelimiterValue = "")
+        .lowercase(Locale.ROOT)
+
+    // MIME type is preferred when it is specific; extension keeps SAF files with generic MIME usable.
+    return ConverterInputFormat.entries.firstOrNull { format ->
+        normalizedMimeType in format.mimeTypes
+    } ?: ConverterInputFormat.entries.firstOrNull { format ->
+        extension in format.extensions
+    }
+}
+
 private fun convertDocumentToPdf(
     context: Context,
     sourceUri: Uri,
-    targetUri: Uri
+    targetUri: Uri,
+    sourceFormat: ConverterInputFormat
 ): Result<Unit> = runCatching {
-    val blocks = extractConvertibleBlocks(context, sourceUri)
+    if (sourceFormat == ConverterInputFormat.Pdf) {
+        copyUriContent(context, sourceUri, targetUri, R.string.pdf_converter_error)
+        return@runCatching
+    }
+    if (sourceFormat.isImage) {
+        convertImageToPdf(context, sourceUri, targetUri)
+        return@runCatching
+    }
+
+    val blocks = extractConvertibleBlocks(context, sourceUri, sourceFormat)
     require(blocks.any { it.text.isNotBlank() }) { context.getString(R.string.pdf_converter_empty_error) }
 
     context.contentResolver.openOutputStream(targetUri)?.use { output ->
@@ -591,17 +756,73 @@ private fun convertDocumentToPdf(
     } ?: error(context.getString(R.string.pdf_converter_error))
 }
 
+private fun convertImageToPdf(
+    context: Context,
+    sourceUri: Uri,
+    targetUri: Uri
+) {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(sourceUri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, bounds)
+    }
+    val bitmapOptions = BitmapFactory.Options().apply {
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+        inSampleSize = imagePdfSampleSize(bounds.outWidth, bounds.outHeight)
+    }
+    val bitmap = context.contentResolver.openInputStream(sourceUri)?.use { input ->
+        BitmapFactory.decodeStream(input, null, bitmapOptions)
+    } ?: error(context.getString(R.string.pdf_converter_error))
+    context.contentResolver.openOutputStream(targetUri)?.use { output ->
+        val document = PdfDocument()
+        try {
+            writeImageToPdf(document, bitmap)
+            document.writeTo(output)
+        } finally {
+            bitmap.recycle()
+            document.close()
+        }
+    } ?: error(context.getString(R.string.pdf_converter_error))
+}
+
+private fun imagePdfSampleSize(width: Int, height: Int): Int {
+    var sampleSize = 1
+    val largestSide = maxOf(width, height)
+    while (largestSide / sampleSize > IMAGE_PDF_MAX_PAGE_SIDE * 2) {
+        sampleSize *= 2
+    }
+    return sampleSize
+}
+
+private fun writeImageToPdf(document: PdfDocument, bitmap: Bitmap) {
+    val pageScale = minOf(
+        IMAGE_PDF_MAX_PAGE_SIDE / bitmap.width.toFloat(),
+        IMAGE_PDF_MAX_PAGE_SIDE / bitmap.height.toFloat(),
+        1f
+    )
+    val pageWidth = (bitmap.width * pageScale).toInt().coerceAtLeast(1)
+    val pageHeight = (bitmap.height * pageScale).toInt().coerceAtLeast(1)
+    val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
+        isDither = true
+    }
+    val page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create())
+    page.canvas.drawBitmap(bitmap, null, RectF(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat()), imagePaint)
+    document.finishPage(page)
+}
+
 private fun writeBlocksToPdf(
     document: PdfDocument,
     blocks: List<PdfTextBlock>
 ) {
-    val pageWidth = 595
-    val pageHeight = 842
-    val margin = 48
+    val pageWidth = 612
+    val pageHeight = 792
+    val margin = 42
     val textWidth = pageWidth - margin * 2
+    val pageBottom = pageHeight - margin
     val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.BLACK
-        textSize = 13f
+        // 18sp-like PDF units with moderate margins produce readable pages on phone and desktop viewers.
+        textSize = 18f
     }
     var pageNumber = 1
     var page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create())
@@ -619,14 +840,14 @@ private fun writeBlocksToPdf(
         val layout = StaticLayout.Builder
             .obtain(text, 0, text.length, textPaint, textWidth)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setLineSpacing(4f, 1f)
-            .setIncludePad(false)
+            .setLineSpacing(5f, 1.05f)
+            .setIncludePad(true)
             .build()
 
         var firstLine = 0
         while (firstLine < layout.lineCount) {
-            val remainingHeight = pageHeight - margin - y
-            if (remainingHeight <= textPaint.textSize && y > margin) {
+            val availableHeight = pageBottom - y
+            if (availableHeight <= textPaint.textSize * 1.4f && y > margin) {
                 finishPage()
                 continue
             }
@@ -634,7 +855,7 @@ private fun writeBlocksToPdf(
             var lastLineExclusive = firstLine
             while (
                 lastLineExclusive < layout.lineCount &&
-                layout.getLineBottom(lastLineExclusive) - layout.getLineTop(firstLine) <= remainingHeight
+                layout.getLineBottom(lastLineExclusive) - layout.getLineTop(firstLine) <= availableHeight
             ) {
                 lastLineExclusive++
             }
@@ -644,15 +865,21 @@ private fun writeBlocksToPdf(
                 continue
             }
 
-            val clipTop = layout.getLineTop(firstLine)
-            val clipBottom = layout.getLineBottom(lastLineExclusive - 1)
+            val chunkStart = layout.getLineStart(firstLine)
+            val chunkEnd = layout.getLineEnd(lastLineExclusive - 1)
+            val chunkText = text.subSequence(chunkStart, chunkEnd).trimTrailingWhitespace()
+            val chunkLayout = StaticLayout.Builder
+                .obtain(chunkText, 0, chunkText.length, textPaint, textWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setLineSpacing(5f, 1.05f)
+                .setIncludePad(true)
+                .build()
             page.canvas.save()
-            page.canvas.translate(margin.toFloat(), y.toFloat() - clipTop)
-            page.canvas.clipRect(0, clipTop, textWidth, clipBottom)
-            layout.draw(page.canvas)
+            page.canvas.translate(margin.toFloat(), y.toFloat())
+            chunkLayout.draw(page.canvas)
             page.canvas.restore()
 
-            y += clipBottom - clipTop
+            y += chunkLayout.height
             firstLine = lastLineExclusive
             if (firstLine < layout.lineCount) finishPage()
         }
@@ -666,15 +893,16 @@ private fun writeBlocksToPdf(
 private fun convertDocumentToEpub(
     context: Context,
     sourceUri: Uri,
-    targetUri: Uri
+    targetUri: Uri,
+    sourceFormat: ConverterInputFormat
 ): Result<Unit> = runCatching {
     val sourceName = displayNameForUri(context, sourceUri)
-    if (sourceName.endsWith(".epub", ignoreCase = true)) {
-        copyUriContent(context, sourceUri, targetUri)
+    if (sourceFormat == ConverterInputFormat.Epub) {
+        copyUriContent(context, sourceUri, targetUri, R.string.epub_converter_error)
         return@runCatching
     }
 
-    val book = buildEpubBook(context, sourceUri, sourceName)
+    val book = buildEpubBook(context, sourceUri, sourceName, sourceFormat)
     require(book.chapters.any { it.xhtmlBody.isNotBlank() } || book.assets.isNotEmpty()) {
         context.getString(R.string.pdf_converter_empty_error)
     }
@@ -686,23 +914,28 @@ private fun convertDocumentToEpub(
     } ?: error(context.getString(R.string.epub_converter_error))
 }
 
-private fun copyUriContent(context: Context, sourceUri: Uri, targetUri: Uri) {
+private fun copyUriContent(context: Context, sourceUri: Uri, targetUri: Uri, errorStringRes: Int) {
     val input = context.contentResolver.openInputStream(sourceUri)
-        ?: error(context.getString(R.string.epub_converter_error))
+        ?: error(context.getString(errorStringRes))
     val output = context.contentResolver.openOutputStream(targetUri)
-        ?: error(context.getString(R.string.epub_converter_error))
+        ?: error(context.getString(errorStringRes))
     input.use { source ->
         output.use { target -> source.copyTo(target) }
     }
 }
 
-private fun buildEpubBook(context: Context, uri: Uri, sourceName: String): ConverterEpubBook {
-    val lowerName = sourceName.lowercase(Locale.ROOT)
+private fun buildEpubBook(
+    context: Context,
+    uri: Uri,
+    sourceName: String,
+    sourceFormat: ConverterInputFormat
+): ConverterEpubBook {
     val title = sourceName.substringBeforeLast('.', missingDelimiterValue = sourceName)
         .ifBlank { "Kai Shelves" }
-    return when {
-        lowerName.endsWith(".pdf") -> pdfToEpubBook(context, uri, title)
-        lowerName.endsWith(".fb2") -> fb2ToEpubBook(readUriText(context, uri), title)
+    return when (sourceFormat) {
+        ConverterInputFormat.Pdf -> pdfToEpubBook(context, uri, title)
+        ConverterInputFormat.Fb2 -> fb2ToEpubBook(readUriText(context, uri), title)
+        ConverterInputFormat.Html -> htmlToEpubBook(readUriText(context, uri), title)
         else -> txtToEpubBook(readUriText(context, uri), title)
     }
 }
@@ -719,21 +952,38 @@ private fun txtToEpubBook(raw: String, title: String): ConverterEpubBook {
     )
 }
 
+private fun htmlToEpubBook(raw: String, fallbackTitle: String): ConverterEpubBook {
+    val title = Regex("(?is)<title\\b[^>]*>(.*?)</title>")
+        .find(raw)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.htmlToPlainText()
+        ?.ifBlank { null }
+        ?: fallbackTitle
+    val language = Regex("""(?is)<html\b[^>]*\blang\s*=\s*["']([^"']+)["']""")
+        .find(raw)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.takeIf { it.isNotBlank() }
+        ?: "es"
+    val bodyText = htmlToSpanned(raw).toString()
+    return txtToEpubBook(bodyText, title).copy(language = language)
+}
+
 private fun pdfToEpubBook(context: Context, uri: Uri, title: String): ConverterEpubBook {
     val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
         ?: error(context.getString(R.string.epub_converter_error))
     val assets = mutableListOf<ConverterEpubAsset>()
     val chapters = mutableListOf<ConverterEpubChapter>()
 
-    // Renderiza cada pagina como imagen para conservar maquetacion, imagenes y texto visible del PDF.
+    // PDF -> EPUB keeps each page as an image for visual fidelity and adds a tiny text layer for reader compatibility.
     descriptor.use { pfd: ParcelFileDescriptor ->
         PdfRenderer(pfd).use { renderer ->
             for (index in 0 until renderer.pageCount) {
                 renderer.openPage(index).use { page ->
-                    val scale = 2
                     val bitmap = Bitmap.createBitmap(
-                        (page.width * scale).coerceAtLeast(1),
-                        (page.height * scale).coerceAtLeast(1),
+                        (page.width * PDF_EPUB_RENDER_SCALE).coerceAtLeast(1),
+                        (page.height * PDF_EPUB_RENDER_SCALE).coerceAtLeast(1),
                         Bitmap.Config.ARGB_8888
                     )
                     bitmap.eraseColor(android.graphics.Color.WHITE)
@@ -741,11 +991,18 @@ private fun pdfToEpubBook(context: Context, uri: Uri, title: String): ConverterE
                     val imageBytes = bitmap.toPngBytes()
                     bitmap.recycle()
                     val fileName = "page-${index + 1}.png"
+                    val pageTitle = context.getString(R.string.converter_pdf_epub_page_title, index + 1)
+                    val readableText = context.getString(R.string.converter_pdf_epub_page_accessible_text, index + 1)
                     assets += ConverterEpubAsset("images/$fileName", "image/png", imageBytes)
                     chapters += ConverterEpubChapter(
                         id = "page-${index + 1}",
-                        title = "Pagina ${index + 1}",
-                        xhtmlBody = "<figure class=\"pdf-page\"><img src=\"../images/$fileName\" alt=\"Pagina ${index + 1}\" /></figure>"
+                        title = pageTitle,
+                        xhtmlBody = """
+                            <section class="pdf-page">
+                              <p class="pdf-readable-layer">${readableText.escapeXml()}</p>
+                              <figure><img src="../images/$fileName" alt="${pageTitle.escapeXml()}" /></figure>
+                            </section>
+                        """.trimIndent()
                     )
                 }
             }
@@ -786,6 +1043,8 @@ private fun fb2ToEpubBook(raw: String, fallbackTitle: String): ConverterEpubBook
     return ConverterEpubBook(
         title = metadata.title,
         author = metadata.author,
+        identifier = metadata.identifier,
+        language = metadata.language,
         chapters = listOf(ConverterEpubChapter("chapter-1", metadata.title, xhtmlBody)),
         assets = binaryAssetsById.values.toList()
     )
@@ -810,7 +1069,22 @@ private fun parseFb2Metadata(raw: String, fallbackTitle: String): ConverterEpubM
         }
         .joinToString(" ") { it.htmlToPlainText() }
         .trim()
-    return ConverterEpubMetadata(title, author)
+    val language = Regex("(?is)<lang\\b[^>]*>(.*?)</lang>")
+        .find(raw)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.htmlToPlainText()
+        ?.ifBlank { null }
+        ?: "es"
+    val identifier = Regex("(?is)<id\\b[^>]*>(.*?)</id>")
+        .find(raw)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.htmlToPlainText()
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "fb2:$it" }
+        ?: "urn:uuid:${UUID.randomUUID()}"
+    return ConverterEpubMetadata(title, author, language, identifier)
 }
 
 private fun extractFb2BinaryAssets(raw: String): Map<String, ConverterEpubAsset> {
@@ -890,12 +1164,13 @@ private fun epubStylesheet(): String = """
     figure { margin: 1em 0; text-align: center; }
     img { max-width: 100%; height: auto; }
     .pdf-page { page-break-after: always; }
+    .pdf-readable-layer { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; color: transparent; font-size: 1px; line-height: 1px; }
 """.trimIndent()
 
 private fun ConverterEpubChapter.toXhtml(book: ConverterEpubBook): String = """
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE html>
-    <html xmlns="http://www.w3.org/1999/xhtml" lang="es">
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="${book.language.escapeXml()}">
       <head>
         <title>${title.escapeXml()}</title>
         <link rel="stylesheet" type="text/css" href="../styles/kai.css" />
@@ -914,7 +1189,7 @@ private fun epubNav(book: ConverterEpubBook): String {
     return """
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE html>
-        <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="es">
+        <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${book.language.escapeXml()}">
           <head><title>${book.title.escapeXml()}</title></head>
           <body>
             <nav epub:type="toc" id="toc">
@@ -944,7 +1219,7 @@ private fun epubPackage(book: ConverterEpubBook): String {
             <dc:identifier id="book-id">${book.identifier.escapeXml()}</dc:identifier>
             <dc:title>${book.title.escapeXml()}</dc:title>
             $creator
-            <dc:language>es</dc:language>
+            <dc:language>${book.language.escapeXml()}</dc:language>
           </metadata>
           <manifest>
             <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -983,6 +1258,133 @@ private data class PdfTextBlock(
     val spacingAfter: Int = 18
 )
 
+private enum class ConverterInputFormat(
+    val labelRes: Int,
+    val pdfSupported: Boolean,
+    val epubSupported: Boolean,
+    val mimeTypes: Set<String>,
+    val extensions: Set<String>
+) {
+    Txt(
+        labelRes = R.string.converter_input_format_txt,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("text/plain"),
+        extensions = setOf("txt")
+    ),
+    Markdown(
+        labelRes = R.string.converter_input_format_markdown,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("text/markdown", "text/x-markdown"),
+        extensions = setOf("md", "markdown")
+    ),
+    Html(
+        labelRes = R.string.converter_input_format_html,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("text/html", "application/xhtml+xml"),
+        extensions = setOf("html", "htm", "xhtml")
+    ),
+    Fb2(
+        labelRes = R.string.converter_input_format_fb2,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("application/x-fictionbook+xml"),
+        extensions = setOf("fb2")
+    ),
+    Epub(
+        labelRes = R.string.converter_input_format_epub,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("application/epub+zip"),
+        extensions = setOf("epub")
+    ),
+    Pdf(
+        labelRes = R.string.converter_input_format_pdf,
+        pdfSupported = true,
+        epubSupported = true,
+        mimeTypes = setOf("application/pdf"),
+        extensions = setOf("pdf")
+    ),
+    Jpeg(
+        labelRes = R.string.converter_input_format_jpeg,
+        pdfSupported = true,
+        epubSupported = false,
+        mimeTypes = setOf("image/jpeg"),
+        extensions = setOf("jpg", "jpeg")
+    ),
+    Png(
+        labelRes = R.string.converter_input_format_png,
+        pdfSupported = true,
+        epubSupported = false,
+        mimeTypes = setOf("image/png"),
+        extensions = setOf("png")
+    ),
+    Webp(
+        labelRes = R.string.converter_input_format_webp,
+        pdfSupported = true,
+        epubSupported = false,
+        mimeTypes = setOf("image/webp"),
+        extensions = setOf("webp")
+    ),
+    Word(
+        labelRes = R.string.converter_input_format_word,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf(
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        extensions = setOf("doc", "docx")
+    ),
+    OpenDocumentText(
+        labelRes = R.string.converter_input_format_odt,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf("application/vnd.oasis.opendocument.text"),
+        extensions = setOf("odt")
+    ),
+    RichText(
+        labelRes = R.string.converter_input_format_rtf,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf("application/rtf", "text/rtf"),
+        extensions = setOf("rtf")
+    ),
+    Mobi(
+        labelRes = R.string.converter_input_format_mobi,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf("application/x-mobipocket-ebook"),
+        extensions = setOf("mobi", "azw", "azw3", "prc")
+    ),
+    ComicArchive(
+        labelRes = R.string.converter_input_format_comic,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf("application/vnd.comicbook+zip", "application/x-cbr"),
+        extensions = setOf("cbz", "cbr")
+    ),
+    Djvu(
+        labelRes = R.string.converter_input_format_djvu,
+        pdfSupported = false,
+        epubSupported = false,
+        mimeTypes = setOf("image/vnd.djvu", "image/x.djvu"),
+        extensions = setOf("djvu", "djv")
+    );
+
+    val isImage: Boolean
+        get() = this == Jpeg || this == Png || this == Webp
+
+    fun supports(outputFormat: ConverterOutputFormat): Boolean {
+        return when (outputFormat) {
+            ConverterOutputFormat.Pdf -> pdfSupported
+            ConverterOutputFormat.Epub -> epubSupported
+        }
+    }
+}
+
 private enum class ConverterOutputFormat {
     Pdf,
     Epub;
@@ -1016,6 +1418,7 @@ private data class ConverterEpubBook(
     val title: String,
     val author: String = "",
     val identifier: String = "urn:uuid:${UUID.randomUUID()}",
+    val language: String = "es",
     val chapters: List<ConverterEpubChapter>,
     val assets: List<ConverterEpubAsset> = emptyList()
 )
@@ -1034,14 +1437,20 @@ private data class ConverterEpubAsset(
 
 private data class ConverterEpubMetadata(
     val title: String,
-    val author: String
+    val author: String,
+    val language: String = "es",
+    val identifier: String = "urn:uuid:${UUID.randomUUID()}"
 )
 
-private fun extractConvertibleBlocks(context: Context, uri: Uri): List<PdfTextBlock> {
-    val name = displayNameForUri(context, uri).lowercase(Locale.ROOT)
-    return when {
-        name.endsWith(".epub") -> extractEpubBlocks(context, uri)
-        name.endsWith(".fb2") -> listOf(PdfTextBlock(fb2ToSpanned(readUriText(context, uri))))
+private fun extractConvertibleBlocks(
+    context: Context,
+    uri: Uri,
+    sourceFormat: ConverterInputFormat
+): List<PdfTextBlock> {
+    return when (sourceFormat) {
+        ConverterInputFormat.Epub -> extractEpubBlocks(context, uri)
+        ConverterInputFormat.Fb2 -> listOf(PdfTextBlock(fb2ToSpanned(readUriText(context, uri))))
+        ConverterInputFormat.Html -> listOf(PdfTextBlock(htmlToSpanned(readUriText(context, uri))))
         else -> listOf(PdfTextBlock(SpannedString(readUriText(context, uri).trim())))
     }
 }

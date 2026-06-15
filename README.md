@@ -1,272 +1,305 @@
 ﻿# Kai Shelves
 
 ![Version](https://img.shields.io/badge/version-3.0.0-blue?style=flat-square)
+![Kotlin](https://img.shields.io/badge/Kotlin_2.2.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
+![Android%20Gradle%20Plugin](https://img.shields.io/badge/AGP-8.13.0-3DDC84?style=flat-square)
+![Jetpack%20Compose](https://img.shields.io/badge/Compose%20BOM-2026.03.00-4285F4?style=flat-square)
+![Android](https://img.shields.io/badge/minSdk%2024%20%7C%20targetSdk%2036-3DDC84?style=flat-square)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green?style=flat-square)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.2.0-7F52FF?style=flat-square)
-![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.03.00-4285F4?style=flat-square)
-![Material 3](https://img.shields.io/badge/Material%203-Compose-6750A4?style=flat-square)
-![Android](https://img.shields.io/badge/Android-minSdk%2024%20%7C%20targetSdk%2036-3DDC84?style=flat-square)
+![Android](https://img.shields.io/badge/Android-3DDC84?style=flat-square&logo=android&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)
 
 <p align="center">
-  <img src="app/src/main/res/drawable/logo_kaishelves.png" alt="Logo de Kai Shelves" width="180" />
+<img src="app\src\main\res\drawable\logo_kaishelves.png" alt="Logo de la aplicación" width="300" height="200">
 </p>
 
-**Kai Shelves** es una aplicación Android de gestión lectora desarrollada en **Kotlin** con **Jetpack Compose**. Permite descubrir libros, organizar lecturas, gestionar listas personales, consultar estadísticas, usar biblioteca local del dispositivo y conectar con otros lectores mediante funcionalidades sociales.
+**Kai Shelves** es una aplicación Android de gestión lectora desarrollada en **Kotlin** y **Jetpack Compose**. Permite descubrir libros, organizar lecturas, mantener una biblioteca local del dispositivo, leer archivos compatibles, consultar estadísticas, gestionar listas y participar en funciones sociales de lectura.
 
-El proyecto está orientado a un **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)** y combina una arquitectura MVVM con Firebase, Google Books API, OpenLibrary como respaldo de catálogo, almacenamiento local para usuarios invitados y una interfaz Compose con identidad visual propia.
+La app combina catálogo remoto, datos de usuario en Firebase, modo invitado con persistencia local, lector interno, conversor de archivos y una interfaz Compose con Material 3.
 
-## Tabla de contenidos
+## Descripción general
 
-- [Capturas](#capturas)
-- [Características principales](#características-principales)
-- [Stack tecnológico](#stack-tecnológico)
-- [Arquitectura del proyecto](#arquitectura-del-proyecto)
-- [Memoria del TFG](#memoria-del-tfg)
-- [Estructura de carpetas](#estructura-de-carpetas)
-- [Requisitos previos](#requisitos-previos)
-- [Instalación](#instalación)
-- [Cómo ejecutar el proyecto](#cómo-ejecutar-el-proyecto)
-- [Cómo generar APK / build](#cómo-generar-apk--build)
-- [Testing](#testing)
-- [Variables de entorno / configuración local](#variables-de-entorno--configuración-local)
-- [Roadmap](#roadmap)
-- [Contribución](#contribución)
-- [Licencia](#licencia)
-- [Autor](#autor)
+Kai Shelves está orientada a centralizar la experiencia lectora en Android:
 
-## Capturas
-
-Las capturas todavía no están versionadas en el repositorio. Se añadirán imágenes reales de la app en las siguientes rutas:
-    
-    | Pantalla | Placeholder |
-    | --- | --- |
-    | Inicio / actividad | `docs/images/home.png` |
-    | Catálogo / descubrir | `docs/images/catalog.png` |
-    | Detalle de libro | `docs/images/detail.png` |
-    | Mis libros / listas | `docs/images/lists.png` |
-    | Biblioteca local | `docs/images/device-library.png` |
-    | Perfil y privacidad | `docs/images/profile.png` |
+- **Gestión lectora**: libros leídos, estados de lectura, reseñas, puntuaciones, listas, etiquetas y estadísticas.
+- **Descubrimiento de libros**: búsqueda por título, autor, editorial o ISBN usando Google Books, OpenLibrary e Inventaire según el caso.
+- **Biblioteca local**: selección de carpetas mediante Storage Access Framework, filtros, ordenación, portadas y registro local de progreso.
+- **Lector interno**: lectura de PDF, EPUB, TXT y FB2 según el formato y el contenido disponible.
+- **Conversor PDF/EPUB**: conversiones locales para formatos sencillos y derivación manual a conversor externo cuando el formato no se puede transformar de forma fiable dentro de la app.
+- **Social**: amistades, solicitudes, perfiles, actividad, comentarios, reacciones y privacidad.
+- **Ayuda integrada**: FAQ, contexto de pantalla y chat asistido por Groq cuando se configura una clave local.
 
 ## Características principales
 
-- Autenticación con Firebase mediante email y contraseña.
-- Inicio de sesión con Google usando Credential Manager y Google ID.
-- Verificación de correo electrónico.
-- Recuperación de contraseña.
-- Modo invitado con datos locales en el dispositivo.
-- Migración y fusión de biblioteca local de invitado con cuenta registrada.
-- Catálogo de libros con Google Books API, respaldo de búsqueda en OpenLibrary, caché local persistida en “Descubre” y modos de descubrimiento para libros especiales, actuales, mejor valorados o de autores conocidos.
+### Autenticación y cuentas
+
+- Registro e inicio de sesión con Firebase Authentication mediante email y contraseña.
+- Inicio de sesión con Google usando AndroidX Credentials y Google ID.
+- Verificación de correo electrónico y recuperación de contraseña.
+- Modo invitado con datos locales.
+- Migración y fusión de datos locales de invitado al crear o usar una cuenta.
+- Perfil de usuario con foto, nombre, email, proveedores de acceso y ajustes de privacidad.
+
+### Catálogo y descubrimiento
+
+- Consulta de libros mediante Google Books API.
+- Respaldo de búsqueda con OpenLibrary.
+- Consulta por ISBN con Inventaire cuando está disponible.
 - Búsqueda por título, autor, editorial o ISBN.
-- Escaneo de ISBN/códigos mediante ZXing.
-- Filtros por género y ordenación de resultados.
-- Ficha de libro con portada, metadatos, estado de lectura, valoración y reseña.
-- Marcado de libros como leídos.
-- Listas personales y estanterías predefinidas, incluida la lista automática “Tengo” con los libros detectados en la biblioteca del dispositivo.
-- Etiquetas personalizadas para organizar libros.
-- Estadísticas de lectura con caché local, actualización al arrastrar hacia abajo, recuento de libros leídos, valoración media, páginas leídas y género más repetido en la lista de leídos.
-- Recomendaciones personalizadas en la sección “Para ti”.
-- Biblioteca local del dispositivo mediante Storage Access Framework, con disposición, ordenación, dirección y filtros persistentes, además de sincronización visual con la estantería automática “Tengo”.
-- Lector interno con motores para PDF, EPUB, TXT y FB2 textual; PDF mantiene renderizado nativo, EPUB usa WebView con paginación horizontal por columnas CSS y TXT/FB2 usan paginación reflow.
-- Registro local persistente de libros importados, progreso de lectura y modelo común para marcadores, subrayados y notas.
-- Lector EPUB con portada/sinopsis/imágenes iniciales, capítulos detectados, paso de página por laterales, gesto o scroll horizontal, selección vía JS Bridge, marcadores, subrayados y notas editables desde el panel lateral de Marcadores.
-- Lector reflow para TXT y FB2 con desplazamiento continuo, selección táctil por pulsación prolongada, rangos reales persistentes, marcadores, subrayados y notas editables desde el panel lateral.
-- Vista PDF visual con zoom, desplazamiento manual y lectura continua en modo vertical, manteniendo marcadores y notas sin remaquetado del contenido.
-- Conversor de archivos con salida a PDF para TXT, EPUB y FB2, y salida a EPUB para TXT, FB2 y PDF; en PDF a EPUB se conserva la maquetación visual renderizando cada página como imagen dentro del libro.
-- Perfil de usuario con edición de datos, foto y métodos de inicio de sesión.
-- Ajustes de privacidad y visibilidad social.
-- Amigos, sugerencias, solicitudes, perfiles públicos/privados y listas compartidas.
-- Feed social con actividad, likes, comentarios, respuestas a comentarios y aviso guiado para añadir amigos cuando el círculo lector está vacío.
-- Aviso offline bloqueante para cuentas registradas, con reintento de carga, refresco automático del destino solicitado al volver la conexión y acceso único a la biblioteca local del dispositivo.
-- Centro de notificaciones y notificaciones locales.
-- Ayuda integrada con FAQ, contexto de pantalla y chat asistido por Groq si hay API key configurada.
-- Internacionalización preparada con recursos en `values` y `values-es`.
+- Búsqueda específica por ISBN desde texto introducido o escaneado.
+- Escáner de códigos con CameraX y ML Kit Barcode Scanning.
+- Historial local de escaneos ISBN.
+- Caché local de la sección de descubrimiento.
+- Localización básica de metadatos de libros para el idioma activo.
+
+### Organización lectora
+
+- Listas del usuario y estanterías del sistema.
+- Etiquetas personalizadas para libros.
+- Estados de lectura como pendiente, leyendo, leído, sin terminar, quiero leer o tengo.
+- Sincronización de libros locales con la lista automática de posesión cuando procede.
+- Puntuación y reseña de libros leídos.
+- Importación de CSV de Goodreads mediante repositorio específico.
+
+### Estadísticas y recomendaciones
+
+- Estadísticas calculadas a partir de listas y lecturas.
+- Caché local de estadísticas.
+- Sección **Para ti** con recomendaciones basadas en libros guardados, géneros, autores y épocas detectadas.
+- Opción de privacidad para activar o desactivar sugerencias personalizadas.
+
+### Biblioteca local y lector interno
+
+- Selección de carpeta local con Storage Access Framework.
+- Exploración de archivos compatibles del dispositivo.
+- Filtros por tipo, lectura y búsqueda local.
+- Ordenación, dirección, diseño y preferencias persistentes.
+- Portadas locales y portadas predeterminadas.
+- Lector PDF con `PdfRenderer`, zoom, desplazamiento, modo vertical/horizontal, brillo, filtro de luz azul, marcadores y notas.
+- Lector EPUB con WebView, recursos internos, capítulos, imágenes, portada/sinopsis cuando existen, selección de texto, subrayados, notas y marcadores.
+- Lector TXT y FB2 textual en modo reflow.
+- Persistencia local de progreso, página actual, ajustes de lectura y anotaciones.
+
+### Conversor de archivos
+
+El conversor permite crear archivos PDF o EPUB desde la app sin modificar la biblioteca local original.
+
+Conversiones locales a **PDF**:
+
+- TXT
+- Markdown
+- HTML/XHTML
+- FB2
+- EPUB
+- PDF a PDF mediante copia
+- JPG/JPEG, PNG y WEBP
+
+Conversiones locales a **EPUB**:
+
+- TXT
+- Markdown
+- HTML/XHTML
+- FB2
+- PDF a EPUB visual, renderizando las páginas como imágenes y añadiendo texto mínimo de compatibilidad para el lector interno
+- EPUB a EPUB mediante copia
+
+Formatos derivados a conversión online manual:
+
+- DOC/DOCX
+- ODT
+- RTF
+- MOBI/AZW/AZW3/PRC
+- CBZ/CBR
+- DJVU/DJV
+- Imágenes cuando la salida elegida es EPUB
+- Formatos desconocidos
+
+La app no sube archivos automáticamente. Cuando se usa el fallback online, se abre una web externa mediante `Intent.ACTION_VIEW` y el usuario decide manualmente si sube el archivo.
+
+### Funciones sociales y ayuda
+
+- Lista de amigos y búsqueda de usuarios.
+- Solicitudes de amistad.
+- Perfiles públicos o privados según ajustes de privacidad.
+- Actividad social con publicaciones derivadas de lectura y listas.
+- Likes, comentarios y respuestas.
+- Centro de notificaciones para solicitudes y actividad social disponible.
+- Reportes y revisión administrativa desde las pantallas de administración.
+- Ayuda integrada con base local de conocimiento, FAQ y chat Groq opcional.
+<!-- - **Grupos** aparece como sección preparada con pantalla placeholder.
+- **Desafíos de lectura** aparece como sección preparada con pantalla placeholder.
+- Algunas áreas de notificaciones pueden mostrar estados vacíos cuando no hay actividad disponible. -->
 
 ## Stack tecnológico
 
-    | Área | Tecnología |
-    | --- | --- |
-    | Lenguaje | Kotlin 2.2.0 |
-    | UI | Jetpack Compose, Material 3 |
-    | Navegación | Navigation Compose |
-    | Arquitectura | MVVM, Repository Pattern, StateFlow |
-    | Asincronía | Kotlin Coroutines |
-    | Backend / datos remotos | Firebase Authentication, Firebase Firestore |
-    | APIs externas | Google Books API, OpenLibrary, Groq API |
-    | Red | Retrofit 3, Gson Converter, OkHttp, Logging Interceptor |
-    | Imágenes | Coil 3 |
-    | Login Google | AndroidX Credentials, Google ID |
-    | Biblioteca local | Storage Access Framework, `DocumentsContract` |
-    | Lectura local | `PdfDocument`, `PdfRenderer`, WebView para EPUB, TXT nativo y adaptador textual FB2 |
-    | ML / idioma | ML Kit Language ID, ML Kit Translate |
-    | Escaneo | ZXing Android Embedded |
-    | Testing declarado | JUnit, AndroidX Test, Espresso, Compose UI Test |
+| Área | Tecnología |
+| --- | --- |
+| Lenguaje | Kotlin 2.2.0 |
+| UI | Jetpack Compose, Material 3 |
+| Navegación | Navigation Compose |
+| Arquitectura | MVVM, Repository Pattern, StateFlow |
+| Asincronía | Kotlin Coroutines |
+| Backend | Firebase Authentication, Cloud Firestore |
+| Google Sign-In | AndroidX Credentials, Google ID |
+| APIs externas | Google Books, OpenLibrary, Inventaire, Groq |
+| Red | Retrofit, OkHttp, Gson Converter, Logging Interceptor |
+| Imágenes | Coil 3 |
+| Cámara y escaneo | CameraX, ML Kit Barcode Scanning |
+| ML Kit | Language ID, Translate |
+| Biblioteca local | Storage Access Framework, DocumentsContract |
+| Lectura y conversión | PdfRenderer, PdfDocument, WebView, ZipInputStream, ZipOutputStream |
+| Persistencia local | SharedPreferences y stores locales del proyecto |
+| Testing | JUnit, AndroidX Test, Espresso, Compose UI Test |
 
-## Arquitectura del proyecto
+## Arquitectura
 
-La app sigue una organización basada en **MVVM**:
+El proyecto sigue una arquitectura basada en MVVM y separación por capas:
 
-- **UI Compose**: pantallas y componentes reutilizables bajo `ui/screen` y `ui/components`.
-- **ViewModels**: gestionan estado de pantalla, eventos de usuario y llamadas a repositorios.
-- **Repositories**: encapsulan Firebase, APIs externas, almacenamiento local, biblioteca del dispositivo y lógica de transformación.
-- **Models / DTOs / Mappers**: definen los modelos de dominio y las estructuras remotas de Google Books, OpenLibrary y Groq.
-- **Navigation Compose**: centraliza rutas, flujo de autenticación, restricciones de usuario invitado y navegación principal en `AppNavigation.kt`.
+- **UI Compose**: pantallas y componentes reutilizables en `ui/screen` y `ui/components`.
+- **ViewModels**: exponen estado reactivo, coordinan eventos de pantalla y llaman a repositorios.
+- **Repositories**: encapsulan Firebase, APIs externas, almacenamiento local, biblioteca del dispositivo, estadísticas y ayuda.
+- **Models, DTOs y mappers**: representan dominio local y respuestas remotas.
+- **Navigation Compose**: centraliza rutas, restricciones de invitado, flujos de autenticación y navegación principal.
 
-No se detecta un framework de inyección de dependencias como Hilt. Los ViewModels se obtienen con `viewModel()` y los repositorios se instancian de forma directa o con dependencias por defecto.
-
-### Flujo general
+Flujo simplificado:
 
 ```text
 Composables
-   ↓ eventos / estado
-ViewModels
-   ↓ operaciones de dominio
-Repositories
-   ↓
-Firebase / Google Books / OpenLibrary / Groq / almacenamiento local / archivos del dispositivo
+  -> ViewModels
+  -> Repositories
+  -> Firebase / APIs externas / almacenamiento local / archivos del dispositivo
 ```
 
-### Capas relevantes
+Repositorios relevantes:
 
-- `AuthRepository`: autenticación, perfiles, proveedores de login, usuarios invitados, migración de datos y privacidad.
-- `BookRepository`: catálogo, caché persistida de “Descubre”, modos de descubrimiento, búsquedas, ISBN, Google Books, OpenLibrary, lecturas, reseñas y valoración.
-- `UserListsRepository`: listas, estanterías, etiquetas y organización de libros.
-- `FriendsRepository`: amigos, solicitudes, privacidad social, actividad, likes, comentarios, bloqueos y reportes.
+- `AuthRepository`: autenticación, perfil, proveedores, modo invitado, migración y privacidad.
+- `BookRepository`: catálogo, búsquedas, ISBN, Google Books, OpenLibrary, Inventaire, reseñas y lecturas.
+- `UserListsRepository`: listas, estanterías del sistema, etiquetas y organización.
+- `FriendsRepository`: amistades, actividad social, comentarios, reportes, privacidad y notificaciones.
 - `ForYouRepository`: recomendaciones basadas en libros guardados.
-- `HelpChatRepository`: ayuda contextual con fallback local y soporte opcional de Groq.
-- `DeviceFileRepository`: lectura de carpetas del dispositivo y detección de archivos compatibles.
-- `DeviceLibraryRepository`: registro local de libros del dispositivo, progreso, ajustes de lectura y anotaciones.
+- `DeviceFileRepository`: lectura de carpetas y archivos locales.
+- `DeviceLibraryRepository`: biblioteca local, progreso, ajustes y anotaciones.
+- `GoodreadsCsvImportRepository`: importación de CSV exportado desde Goodreads.
+- `HelpChatRepository`: ayuda contextual con fallback local y Groq opcional.
 
 ## Estructura de carpetas
 
 ```text
-KaiShelvesApp/
-├── app/
-│   ├── build.gradle.kts
-│   ├── google-services.json
-│   └── src/
-│       └── main/
-│           ├── AndroidManifest.xml
-│           ├── java/com/example/kaishelvesapp/
-│           │   ├── MainActivity.kt
-│           │   ├── data/
-│           │   │   ├── help/
-│           │   │   ├── local/
-│           │   │   ├── localization/
-│           │   │   ├── model/
-│           │   │   ├── notifications/
-│           │   │   ├── remote/
-│           │   │   │   ├── googlebooks/
-│           │   │   │   └── groq/
-│           │   │   ├── repository/
-│           │   │   └── security/
-│           │   └── ui/
-│           │       ├── components/
-│           │       ├── language/
-│           │       ├── navigation/
-│           │       ├── screen/
-│           │       ├── theme/
-│           │       ├── util/
-│           │       └── viewmodel/
-│           └── res/
-│               ├── drawable/
-│               ├── drawable-nodpi/
-│               ├── values/
-│               ├── values-es/
-│               └── xml/
-├── gradle/
-│   └── libs.versions.toml
-├── build.gradle.kts
-├── settings.gradle.kts
-├── gradle.properties
-├── gradlew
-├── gradlew.bat
-├── LICENSE
-└── README.md
+
+|-- app/                                      
+     └── src/
+         |-- main/                             
+         |   |-- java/com/example/kaishelvesapp/
+         |   |   |-- MainActivity.kt           
+         |   |   |-- data/                     # Capa de datos, modelos, repositorios y clientes externos
+         |   |   |   |-- help/                 # Base local de ayuda y modelos del asistente
+         |   |   |   |-- local/                # Stores locales para invitado, cachés y estadísticas
+         |   |   |   |-- localization/         # Adaptación/localización de metadatos de libros
+         |   |   |   |-- model/                # Modelos de dominio: usuarios, libros, listas y lector local
+         |   |   |   |-- notifications/        # Gestión de notificaciones locales del dispositivo
+         |   |   |   |-- remote/               # Integraciones HTTP con servicios externos
+         |   |   |   |   |-- googlebooks/       # Cliente, DTOs y mappers de Google Books
+         |   |   |   |   |-- groq/              # Cliente y DTOs del chat de ayuda con Groq
+         |   |   |   |   |-- inventaire/        # Consulta y mapeo de datos de Inventaire
+         |   |   |   |   `-- openlibrary/      # Consulta y mapeo de datos de OpenLibrary
+         |   |   |   |-- repository/          # Repositorios de autenticación, catálogo, listas, social y biblioteca local
+         |   |   |   |-- security/            # Utilidades de codificación y tratamiento seguro de imágenes de perfil
+         |   |   |   `-- statistics/          # Cálculo de estadísticas lectoras
+         |   |   `-- ui/                       # Capa de presentación basada en Jetpack Compose
+         |   |       |-- components/           # Componentes reutilizables, chrome, barras, diálogos y tarjetas
+         |   |       |-- language/             # Utilidades de idioma y contexto localizado
+         |   |       |-- navigation/           # Rutas y grafo de navegación Compose
+         |   |       |-- screen/               # Pantallas por área funcional de la app
+         |   |       |   |-- catalog/            # Catálogo, resultados y escáner ISBN
+         |   |       |   |-- detail/             # Detalle de libro
+         |   |       |   |-- foryou/             # Recomendaciones personalizadas
+         |   |       |   |-- friends/            # Amigos, perfiles sociales y notificaciones
+         |   |       |   |-- help/               # Ayuda, FAQ y solicitudes de soporte
+         |   |       |   |-- home/               # Inicio y actividad reciente
+         |   |       |   |-- library/            # Biblioteca local, lector interno y conversor
+         |   |       |   |-- lists/              # Listas, estanterías y etiquetas
+         |   |       |   |-- login/              # Inicio de sesión y verificación de email
+         |   |       |   |-- placeholder/        # Pantallas preparadas para secciones aún no completadas
+         |   |       |   |-- profile/            # Perfil de usuario
+         |   |       |   |-- readinglist/        # Lecturas registradas
+         |   |       |   |-- register/           # Registro de cuenta
+         |   |       |   |-- settings/           # Privacidad y pantallas administrativas
+         |   |       |   `-- stats/             # Estadísticas de lectura
+         |   |       |-- util/                 # Utilidades de UI y formato
+         |   |       `-- viewmodel/            # ViewModels y estados de pantalla
+         |   `-- res/                          # Recursos visuales y strings con idiomas
+         `--  
 ```
 
 ## Requisitos previos
 
-- Android Studio compatible con Android Gradle Plugin `8.13.0`.
-- JDK 11.
-- Android SDK con:
-  - `compileSdk 36`
-  - `minSdk 24`
-  - `targetSdk 36`
-- Cuenta/proyecto de Firebase configurado para Authentication y Firestore.
-- Archivo `app/google-services.json` correspondiente al proyecto Firebase.
-- Conexión a internet para sincronizar Gradle y consumir APIs remotas.
+- Android Studio compatible con Android Gradle Plugin 8.13.0.
+- JDK 11, de acuerdo con `sourceCompatibility`, `targetCompatibility` y `kotlinOptions.jvmTarget`.
+- Android SDK con `compileSdk 36`.
+- Dispositivo o emulador con Android 7.0 o superior (`minSdk 24`).
+- Proyecto Firebase configurado para Authentication y Firestore.
+- Archivo local `app/google-services.json`.
+- Archivo local `local.properties` cuando se usen claves opcionales.
 
-## Instalación
+## Instalación y ejecución
 
 1. Clona el repositorio:
 
-    ```bash
-    git clone <URL_DEL_REPOSITORIO>
-    cd KaiShelvesApp
-    ```
+   ```bash
+   git clone https://github.com/AlexxKai/KaiShelvesApp.git
+   cd KaiShelvesApp
+   ```
 
 2. Abre el proyecto en Android Studio.
 
-3. Sincroniza Gradle desde Android Studio.
+3. Sincroniza Gradle.
 
-4. Comprueba que existe el archivo de configuración de Firebase:
+4. Configura los archivos locales necesarios:
 
-    ```text
-    app/google-services.json
-    ```
+   ```text
+   app/google-services.json
+   local.properties
+   ```
 
-5. Configura las claves locales en `local.properties` si vas a usar Google Books con API key o el chat con Groq.
+5. Ejecuta el módulo `app` en un emulador o dispositivo físico.
 
-## Cómo ejecutar el proyecto
-
-Desde Android Studio:
-
-1. Selecciona el módulo `app`.
-2. Elige un emulador o dispositivo físico con Android 7.0 o superior.
-3. Ejecuta la configuración de lanzamiento de la app.
-
-Desde terminal en Windows:
-
-```powershell
-.\gradlew.bat installDebug
-```
-
-Para compilar sin instalar:
+Para compilar desde terminal en Windows:
 
 ```powershell
 .\gradlew.bat compileDebugKotlin
 ```
 
-## Cómo generar APK / build
-
-Generar APK debug:
+Para generar un APK debug:
 
 ```powershell
 .\gradlew.bat assembleDebug
 ```
 
-El APK se genera en:
+## Configuración local
 
-```text
-app/build/outputs/apk/debug/
+La app lee claves opcionales desde `local.properties` y las expone mediante `BuildConfig`.
+
+Ejemplo sin secretos reales:
+
+```properties
+googleBooksApiKey=TU_API_KEY
+groqApiKey=TU_API_KEY
+groqModel=llama-3.1-8b-instant
 ```
 
-Generar build release:
+| Propiedad | Uso |
+| --- | --- |
+| `googleBooksApiKey` | Clave opcional para Google Books API. |
+| `groqApiKey` | Clave opcional para activar el chat asistido por Groq. |
+| `groqModel` | Modelo usado por Groq. Si no se define, el valor por defecto es `llama-3.1-8b-instant`. |
+
+También existe configuración de Google Sign-In en recursos del proyecto. No deben versionarse claves privadas, tokens personales ni credenciales locales.
+
+## Comandos útiles
 
 ```powershell
-.\gradlew.bat assembleRelease
+.\gradlew.bat compileDebugKotlin
 ```
-
-El proyecto no versiona archivos de firma (`*.jks`, `*.keystore`) y `.gitignore` excluye artefactos APK/AAB. Para publicar una build release firmada es necesario configurar la firma localmente.
-
-## Testing
-
-El proyecto incluye una primera base de pruebas automatizadas:
-
-- Pruebas unitarias JUnit en `app/src/test` para lógica pura de estadísticas lectoras.
-- Pruebas instrumentadas Compose UI en `app/src/androidTest` para flujos críticos de interfaz, como restricciones de usuario invitado y renderizado básico de portadas.
-
-Comandos útiles:
 
 ```powershell
 .\gradlew.bat testDebugUnitTest
@@ -276,79 +309,38 @@ Comandos útiles:
 .\gradlew.bat connectedDebugAndroidTest
 ```
 
-Verificación mínima recomendada antes de entregar cambios:
-
 ```powershell
-.\gradlew.bat compileDebugKotlin
+.\gradlew.bat assembleDebug
 ```
 
-## Variables de entorno / configuración local
+## Pruebas existentes
 
-La app lee valores desde `local.properties` en tiempo de build y los expone mediante `BuildConfig`.
+El proyecto incluye pruebas automatizadas en:
 
-Ejemplo seguro:
+- `app/src/test/java/com/example/kaishelvesapp/data/statistics/ReadingStatsCalculatorTest.kt`
+- `app/src/androidTest/java/com/example/kaishelvesapp/ui/CriticalComposeFlowsTest.kt`
 
-```properties
-googleBooksApiKey=TU_API_KEY
-groqApiKey=TU_API_KEY
-groqModel=llama-3.1-8b-instant
-```
+`ReadingStatsCalculatorTest` cubre lógica pura de estadísticas lectoras. `CriticalComposeFlowsTest` cubre flujos críticos de interfaz Compose.
 
-    | Propiedad | Uso |
-    | --- | --- |
-    | `googleBooksApiKey` | Clave opcional para Google Books API. Si falta o falla por cuota/permisos, el cliente puede usar la API pública sin clave en determinados casos. |
-    | `groqApiKey` | Clave opcional para activar el chat asistido por Groq. Si no existe, la ayuda usa un fallback local. |
-    | `groqModel` | Modelo usado por Groq. Valor por defecto: `llama-3.1-8b-instant`. |
+## Permisos declarados
 
-También existe configuración para Google Sign-In en:
+El manifiesto declara permisos para:
 
-```text
-app/src/main/res/values/google_auth.xml
-```
+- Internet.
+- Estado de red.
+- Cámara.
+- Notificaciones en Android compatible.
 
-No incluyas claves privadas, tokens ni credenciales personales en el repositorio.
-
-## Roadmap
-
-Mejoras futuras inferidas por pantallas, textos y rutas existentes:
-
-- Completar la sección de grupos de lectura.
-- Completar los desafíos de lectura.
-- Ampliar notificaciones y mensajes dentro del centro de notificaciones.
-- Añadir capturas reales en `docs/images`.
-- Preparar firma release y documentación de publicación si se decide distribuir la app.
-
-## Contribución
-
-1. Crea una rama descriptiva:
-
-    ```bash
-    git checkout -b feature/nombre-del-cambio
-    ```
-
-2. Mantén los cambios acotados y coherentes con la arquitectura existente.
-
-3. Evita subir secretos, APKs, AABs o archivos de firma.
-
-4. Ejecuta al menos:
-
-    ```powershell
-    .\gradlew.bat compileDebugKotlin
-    ```
-
-5. Abre una pull request con:
-   - resumen del cambio,
-   - pantallas o flujos afectados,
-   - pruebas realizadas,
-   - riesgos conocidos si existen.
+La cámara está declarada como característica no obligatoria, por lo que la app puede instalarse en dispositivos sin cámara.
 
 ## Licencia
 
-Este proyecto está distribuido bajo licencia **Apache License 2.0**. Consulta el archivo [LICENSE](LICENSE) para más información.
+Kai Shelves se distribuye bajo **Apache License 2.0**. Consulta el archivo [LICENSE](LICENSE) para más información.
 
 ## Autor
 
-Proyecto académico desarrollado como **Trabajo de Fin de Grado de Desarrollo de Aplicaciones Multiplataforma (DAM)**.
+**Alex Urueña**  
+Proyecto TFG DAM  
+Kai Shelves
 
-Autor: **Alex Urueña**
-
+Repositorio: [https://github.com/AlexxKai/KaiShelvesApp.git](https://github.com/AlexxKai/KaiShelvesApp.git)

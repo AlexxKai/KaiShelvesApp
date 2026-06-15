@@ -1346,8 +1346,9 @@ fun readableImportRootPath(treeUri: Uri): String {
 
 @Suppress("DEPRECATION")
 fun readableExternalStoragePath(relativePath: String = ""): String {
-    // SAF primary storage is still displayed to users as the conventional external storage path.
-    val externalStoragePath = Environment.getExternalStorageDirectory().path.trimEnd('/')
+    // SAF primary storage is shown with the same public path users already saw in this flow.
+    val externalStoragePath = (System.getenv("EXTERNAL_STORAGE")
+        ?: Environment.getExternalStorageDirectory().path).trimEnd('/')
     val cleanRelativePath = relativePath.trim('/')
     return if (cleanRelativePath.isBlank()) externalStoragePath else "$externalStoragePath/$cleanRelativePath"
 }
