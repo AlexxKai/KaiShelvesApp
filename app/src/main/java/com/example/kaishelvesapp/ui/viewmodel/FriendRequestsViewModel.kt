@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.viewmodel
+﻿package com.example.kaishelvesapp.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 data class FriendRequestsUiState(
     val isLoading: Boolean = false,
     val isLoadingNotifications: Boolean = false,
+    val hasLoadedReceivedRequests: Boolean = false,
+    val hasLoadedActivityNotifications: Boolean = false,
     val receivedRequests: List<Usuario> = emptyList(),
     val notifications: List<ActivityNotificationItem> = emptyList(),
     val commentsByActivityId: Map<String, List<ActivityComment>> = emptyMap(),
@@ -64,9 +66,24 @@ class FriendRequestsViewModel(
         )
     }
 
+    fun ensureReceivedRequestsLoaded() {
+        if (_uiState.value.hasLoadedReceivedRequests) return
+        loadReceivedRequests()
+    }
+
+    fun ensureActivityNotificationsLoaded() {
+        if (_uiState.value.hasLoadedActivityNotifications) return
+        loadActivityNotifications()
+    }
+
     fun loadReceivedRequests() {
+        hydrateCachedReceivedRequests()
+        val currentState = _uiState.value
+        if (currentState.isLoading) return
+
+        val shouldShowLoading = !currentState.hasLoadedReceivedRequests
         _uiState.value = _uiState.value.copy(
-            isLoading = true,
+            isLoading = shouldShowLoading,
             errorMessage = null
         )
 
@@ -75,6 +92,7 @@ class FriendRequestsViewModel(
                 .onSuccess { data ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        hasLoadedReceivedRequests = true,
                         receivedRequests = data.receivedRequests,
                         errorMessage = null,
                         successMessage = null
@@ -83,6 +101,7 @@ class FriendRequestsViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        hasLoadedReceivedRequests = true,
                         errorMessage = error.message ?: "No se pudieron cargar las solicitudes"
                     )
                 }
@@ -90,8 +109,13 @@ class FriendRequestsViewModel(
     }
 
     fun loadActivityNotifications() {
+        hydrateCachedActivityNotifications()
+        val currentState = _uiState.value
+        if (currentState.isLoadingNotifications) return
+
+        val shouldShowLoading = !currentState.hasLoadedActivityNotifications
         _uiState.value = _uiState.value.copy(
-            isLoadingNotifications = true,
+            isLoadingNotifications = shouldShowLoading,
             errorMessage = null
         )
 
@@ -101,6 +125,7 @@ class FriendRequestsViewModel(
                     notifyNewActivityNotifications(notifications)
                     _uiState.value = _uiState.value.copy(
                         isLoadingNotifications = false,
+                        hasLoadedActivityNotifications = true,
                         notifications = notifications,
                         errorMessage = null
                     )
@@ -108,10 +133,37 @@ class FriendRequestsViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isLoadingNotifications = false,
+                        hasLoadedActivityNotifications = true,
                         errorMessage = error.message ?: "No se pudieron cargar las notificaciones"
                     )
                 }
         }
+    }
+
+    private fun hydrateCachedReceivedRequests() {
+        if (_uiState.value.receivedRequests.isNotEmpty() || _uiState.value.hasLoadedReceivedRequests) return
+        val cachedRequests = repository.cachedReceivedRequests()
+        if (cachedRequests.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            hasLoadedReceivedRequests = true,
+            receivedRequests = cachedRequests,
+            isLoading = false,
+            errorMessage = null
+        )
+    }
+
+    private fun hydrateCachedActivityNotifications() {
+        if (_uiState.value.notifications.isNotEmpty() || _uiState.value.hasLoadedActivityNotifications) return
+        val cachedNotifications = repository.cachedActivityNotifications()
+        if (cachedNotifications.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            hasLoadedActivityNotifications = true,
+            notifications = cachedNotifications,
+            isLoadingNotifications = false,
+            errorMessage = null
+        )
     }
 
     fun observeActivityNotificationChanges() {
@@ -125,8 +177,10 @@ class FriendRequestsViewModel(
         viewModelScope.launch {
             repository.acceptFriendRequest(user)
                 .onSuccess {
+                    val updatedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid }
+                    repository.cacheReceivedRequests(updatedRequests)
                     _uiState.value = _uiState.value.copy(
-                        receivedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid },
+                        receivedRequests = updatedRequests,
                         successMessage = "Solicitud aceptada",
                         errorMessage = null
                     )
@@ -145,8 +199,10 @@ class FriendRequestsViewModel(
         viewModelScope.launch {
             repository.rejectFriendRequest(user)
                 .onSuccess {
+                    val updatedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid }
+                    repository.cacheReceivedRequests(updatedRequests)
                     _uiState.value = _uiState.value.copy(
-                        receivedRequests = _uiState.value.receivedRequests.filterNot { it.uid == user.uid },
+                        receivedRequests = updatedRequests,
                         successMessage = "Solicitud rechazada",
                         errorMessage = null
                     )
@@ -239,6 +295,66 @@ class FriendRequestsViewModel(
         }
     }
 
+    fun toggleCommentLike(activityId: String, commentId: String) {
+        val actionId = "$activityId:$commentId:comment_like"
+        if (activityId.isBlank() || commentId.isBlank() || actionId in _uiState.value.socialActionIds) return
+
+        _uiState.value = _uiState.value.copy(
+            socialActionIds = _uiState.value.socialActionIds + actionId,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.toggleActivityCommentLike(activityId, commentId)
+                .onSuccess { comments ->
+                    _uiState.value = _uiState.value.copy(
+                        commentsByActivityId = _uiState.value.commentsByActivityId + (activityId to comments)
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo actualizar el me gusta del comentario"
+                    )
+                }
+
+            _uiState.value = _uiState.value.copy(
+                socialActionIds = _uiState.value.socialActionIds - actionId
+            )
+        }
+    }
+
+    fun replyToComment(activityId: String, commentId: String, text: String) {
+        val actionId = "$activityId:$commentId:comment_reply"
+        if (activityId.isBlank() || commentId.isBlank() || text.isBlank() || actionId in _uiState.value.socialActionIds) return
+
+        _uiState.value = _uiState.value.copy(
+            socialActionIds = _uiState.value.socialActionIds + actionId,
+            errorMessage = null
+        )
+
+        viewModelScope.launch {
+            repository.addActivityCommentReply(activityId, commentId, text)
+                .onSuccess { comments ->
+                    _uiState.value = _uiState.value.copy(
+                        commentsByActivityId = _uiState.value.commentsByActivityId + (activityId to comments),
+                        successMessage = "Respuesta publicada",
+                        errorMessage = null
+                    )
+                    loadActivityNotifications()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = error.message ?: "No se pudo publicar la respuesta",
+                        successMessage = null
+                    )
+                }
+
+            _uiState.value = _uiState.value.copy(
+                socialActionIds = _uiState.value.socialActionIds - actionId
+            )
+        }
+    }
+
     fun markNotificationAsRead(notificationId: String) {
         if (notificationId.isBlank()) return
         val currentNotifications = _uiState.value.notifications
@@ -250,6 +366,7 @@ class FriendRequestsViewModel(
                 if (it.id == notificationId) it.copy(isRead = true) else it
             }
         )
+        repository.cacheActivityNotifications(_uiState.value.notifications)
 
         viewModelScope.launch {
             repository.markActivityNotificationRead(notificationId)
@@ -264,8 +381,9 @@ class FriendRequestsViewModel(
                         notifications = _uiState.value.notifications.map {
                             if (it.id == notificationId) it.copy(isRead = false) else it
                         },
-                        errorMessage = error.message ?: "No se pudo marcar la notificacion como leida"
+                        errorMessage = error.message ?: "No se pudo marcar la notificación como leída"
                     )
+                    repository.cacheActivityNotifications(_uiState.value.notifications)
                 }
         }
     }
@@ -282,6 +400,7 @@ class FriendRequestsViewModel(
                 }
             }
         )
+        repository.cacheActivityNotifications(_uiState.value.notifications)
     }
 
     private fun notifyNewActivityNotifications(notifications: List<ActivityNotificationItem>) {
@@ -313,19 +432,42 @@ class FriendRequestsViewModel(
         return when (notification.type) {
             ActivityNotificationType.LIKE -> "Nuevo me gusta"
             ActivityNotificationType.COMMENT -> "Nuevo comentario"
+            ActivityNotificationType.COMMENT_LIKE -> "Nuevo me gusta en tu comentario"
+            ActivityNotificationType.COMMENT_REPLY -> "Nueva respuesta"
+            ActivityNotificationType.REPORT_UPDATE -> {
+                if (notification.reportIsAdministrativeReview) "Nueva revisión administrativa" else "Cambios en tu denuncia"
+            }
+            ActivityNotificationType.USERNAME_CHANGE_REQUEST -> "Modifica tu nombre de usuario"
         }
     }
 
     private fun notificationDeviceBody(notification: ActivityNotificationItem): String {
+        if (notification.type == ActivityNotificationType.USERNAME_CHANGE_REQUEST) {
+            return notification.accountBody.ifBlank { "Tu nombre de usuario debe modificarse." }
+        }
+        if (notification.type == ActivityNotificationType.REPORT_UPDATE) {
+            val subject = notification.reportSubject.ifBlank { notification.reportPublicId }
+            if (notification.reportIsAdministrativeReview) {
+                return "Administración ha abierto una revisión${subject.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
+            }
+            return "Hay cambios en la revisión de tu denuncia${subject.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
+        }
         val userName = notification.user.usuario
             .ifBlank { notification.user.email }
             .ifBlank { "Alguien" }
         return when (notification.type) {
-            ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicacion"
+            ActivityNotificationType.LIKE -> "$userName le ha dado me gusta a tu publicación"
             ActivityNotificationType.COMMENT -> {
                 val text = notification.text.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
-                "$userName ha comentado en tu publicacion$text"
+                "$userName ha comentado en tu publicación$text"
             }
+            ActivityNotificationType.COMMENT_LIKE -> "$userName le ha dado me gusta a tu comentario"
+            ActivityNotificationType.COMMENT_REPLY -> {
+                val text = notification.text.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                "$userName ha respondido a tu comentario$text"
+            }
+            ActivityNotificationType.REPORT_UPDATE -> ""
+            ActivityNotificationType.USERNAME_CHANGE_REQUEST -> ""
         }
     }
 }

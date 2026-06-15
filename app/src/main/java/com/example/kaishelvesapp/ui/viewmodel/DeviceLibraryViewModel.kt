@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.kaishelvesapp.data.repository.DeviceFileRepository
 import com.example.kaishelvesapp.data.repository.DeviceLibraryFile
+import com.example.kaishelvesapp.data.repository.DeviceLibraryRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +21,7 @@ data class DeviceLibraryUiState(
     val searchQuery: String = "",
     val recentSearches: List<String> = emptyList(),
     val isLoading: Boolean = false,
+    val hasLoadedFiles: Boolean = false,
     val errorMessage: String? = null
 ) {
     val filteredFiles: List<DeviceLibraryFile>
@@ -38,6 +40,7 @@ class DeviceLibraryViewModel(
     application: Application
 ) : AndroidViewModel(application) {
     private val repository = DeviceFileRepository(application.applicationContext)
+    private val libraryRepository = DeviceLibraryRepository(application.applicationContext)
     private val preferences = application.getSharedPreferences("device_library", Application.MODE_PRIVATE)
     private val _uiState = MutableStateFlow(loadInitialState())
     val uiState: StateFlow<DeviceLibraryUiState> = _uiState.asStateFlow()
@@ -78,6 +81,7 @@ class DeviceLibraryViewModel(
         }
         preferences.edit()
             .putString(KEY_FOLDER_URI, uri.toString())
+            .remove(KEY_HIDDEN_FILE_URIS)
             .apply()
         _uiState.update {
             it.copy(
@@ -88,6 +92,14 @@ class DeviceLibraryViewModel(
         refresh()
     }
 
+    fun removeFromLibrary(file: DeviceLibraryFile) {
+        val hiddenUris = loadHiddenFileUris() + file.uri.toString()
+        persistHiddenFileUris(hiddenUris)
+        _uiState.update { state ->
+            state.copy(files = state.files.filterNot { it.uri == file.uri })
+        }
+    }
+
     fun refresh() {
         viewModelScope.launch {
             val state = _uiState.value
@@ -95,12 +107,16 @@ class DeviceLibraryViewModel(
             runCatching {
                 val folderUri = state.selectedFolderUri?.let(Uri::parse)
                     ?: return@runCatching emptyList()
-                repository.listFolderFiles(folderUri)
+                repository.listFolderFiles(folderUri).also { files ->
+                    // Registra los libros escaneados para que progreso y anotaciones tengan un origen comun.
+                    libraryRepository.registerScannedBooks(files)
+                }.filterNot { file -> file.uri.toString() in loadHiddenFileUris() }
             }.onSuccess { files ->
                 _uiState.update {
                     it.copy(
                         files = files,
                         isLoading = false,
+                        hasLoadedFiles = true,
                         errorMessage = null
                     )
                 }
@@ -109,6 +125,7 @@ class DeviceLibraryViewModel(
                     it.copy(
                         files = emptyList(),
                         isLoading = false,
+                        hasLoadedFiles = true,
                         errorMessage = throwable.localizedMessage ?: "No se pudieron cargar los archivos."
                     )
                 }
@@ -145,9 +162,30 @@ class DeviceLibraryViewModel(
             .apply()
     }
 
+    private fun loadHiddenFileUris(): Set<String> {
+        val rawUris = preferences.getString(KEY_HIDDEN_FILE_URIS, null) ?: return emptySet()
+        return runCatching {
+            val jsonArray = JSONArray(rawUris)
+            buildSet {
+                for (index in 0 until jsonArray.length()) {
+                    jsonArray.optString(index).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }.getOrDefault(emptySet())
+    }
+
+    private fun persistHiddenFileUris(hiddenUris: Set<String>) {
+        val jsonArray = JSONArray()
+        hiddenUris.forEach { jsonArray.put(it) }
+        preferences.edit()
+            .putString(KEY_HIDDEN_FILE_URIS, jsonArray.toString())
+            .apply()
+    }
+
     private companion object {
         const val KEY_FOLDER_URI = "folder_uri"
         const val KEY_RECENT_SEARCHES = "recent_searches"
+        const val KEY_HIDDEN_FILE_URIS = "hidden_file_uris"
         const val MAX_RECENT_SEARCHES = 8
     }
 }

@@ -1,5 +1,7 @@
 package com.example.kaishelvesapp.data.help
 
+import com.example.kaishelvesapp.ui.language.LanguageManager
+
 enum class HelpMessageAuthor {
     USER,
     ASSISTANT
@@ -19,12 +21,13 @@ data class HelpScreenContext(
     val description: String,
     val availableActions: List<String>
 ) {
-    fun asPromptText(): String {
+    fun asPromptText(languageTag: String = LanguageManager.getCurrentLanguage()): String {
+        val spanish = languageTag == "es"
         return buildString {
-            appendLine("Pantalla actual: $screenName")
-            appendLine("Ruta: $route")
-            appendLine("Contexto: $description")
-            appendLine("Acciones visibles o relevantes:")
+            appendLine("${if (spanish) "Pantalla actual" else "Current screen"}: $screenName")
+            appendLine("${if (spanish) "Ruta" else "Route"}: $route")
+            appendLine("${if (spanish) "Contexto" else "Context"}: $description")
+            appendLine(if (spanish) "Acciones visibles o relevantes:" else "Visible or relevant actions:")
             availableActions.forEach { appendLine("- $it") }
         }
     }

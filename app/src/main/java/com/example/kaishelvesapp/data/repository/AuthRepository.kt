@@ -1,7 +1,9 @@
-package com.example.kaishelvesapp.data.repository
+﻿package com.example.kaishelvesapp.data.repository
 
 import android.net.Uri
+import androidx.core.net.toUri
 import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.model.AdminAccess
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.UserBookList
@@ -30,6 +32,36 @@ data class UsernameConflictUser(
 data class UsernameConflictGroup(
     val normalizedUsername: String,
     val users: List<UsernameConflictUser>
+)
+
+enum class UsernameReviewKind {
+    NEW,
+    MODIFIED
+}
+
+enum class UsernameRegistryStatus {
+    NEW,
+    REVIEWED,
+    MODIFIED,
+    NOTIFIED
+}
+
+data class UsernameRegistryUser(
+    val uid: String,
+    val username: String,
+    val email: String,
+    val photoUrl: String,
+    val status: UsernameRegistryStatus,
+    val reviewKind: UsernameReviewKind,
+    val isReviewed: Boolean = false,
+    val isChangeNotified: Boolean = false
+)
+
+data class AccountNotificationPrompt(
+    val id: String,
+    val title: String,
+    val body: String,
+    val type: String
 )
 
 data class LibraryDataSummary(
@@ -66,11 +98,6 @@ data class LoginProviderState(
     val isPrimary: Boolean
 )
 
-private data class BootstrapAdminAccount(
-    val uid: String,
-    val email: String
-)
-
 private data class CloudLibrarySnapshot(
     val lists: List<UserBookList>,
     val listBooks: Map<String, List<Libro>>,
@@ -90,13 +117,6 @@ class AuthRepository(
 ) {
     private var pendingGuestMergeState: PendingGuestMergeState? = null
 
-    private val bootstrapAdminAccounts = listOf(
-        BootstrapAdminAccount(
-            uid = "npVZkecTBzLHU9r9Tof4FRLdn0k2",
-            email = "admin@admin.com"
-        )
-    )
-
     fun isAuthenticated(): Boolean {
         return auth.currentUser != null || GuestLocalStore.isSessionActive()
     }
@@ -114,10 +134,6 @@ class AuthRepository(
         if (hasPendingEmailVerification()) {
             auth.signOut()
         }
-    }
-
-    fun getCurrentUid(): String? {
-        return auth.currentUser?.uid ?: GuestLocalStore.getActiveProfile()?.uid
     }
 
     fun hasPasswordLogin(): Boolean {
@@ -282,6 +298,117 @@ class AuthRepository(
         }
     }
 
+    suspend fun getUsernameRegistryUsers(): Result<List<UsernameRegistryUser>> {
+        return try {
+            requireAdminAccess()
+
+            val users = firestore.collection("usuarios")
+                .get()
+                .await()
+                .documents
+                .mapNotNull { document ->
+                    val username = document.getString("usuario").orEmpty()
+                    if (username.isBlank()) return@mapNotNull null
+                    val reviewKind = runCatching {
+                        UsernameReviewKind.valueOf(document.getString("usernameReviewKind").orEmpty())
+                    }.getOrDefault(UsernameReviewKind.NEW)
+                    val isReviewed = document.getBoolean("usernameReviewed") == true
+                    val isChangeNotified = document.getBoolean("usernameChangeNotified") == true
+                    val status = when {
+                        isChangeNotified -> UsernameRegistryStatus.NOTIFIED
+                        isReviewed -> UsernameRegistryStatus.REVIEWED
+                        reviewKind == UsernameReviewKind.MODIFIED -> UsernameRegistryStatus.MODIFIED
+                        else -> UsernameRegistryStatus.NEW
+                    }
+
+                    UsernameRegistryUser(
+                        uid = document.id,
+                        username = username,
+                        email = document.getString("email").orEmpty(),
+                        photoUrl = document.getString("photoUrl").orEmpty(),
+                        status = status,
+                        reviewKind = reviewKind,
+                        isReviewed = isReviewed,
+                        isChangeNotified = isChangeNotified
+                    )
+                }
+                .sortedBy { it.username.lowercase() }
+
+            Result.success(users)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markUsernameReviewed(uid: String): Result<Unit> {
+        return try {
+            requireAdminAccess()
+            if (uid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el usuario"))
+            }
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .set(
+                    mapOf(
+                        "usernameReviewed" to true,
+                        "usernameChangeNotified" to false,
+                        "usernameReviewedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun requestUsernameChange(uid: String): Result<Unit> {
+        return try {
+            requireAdminAccess()
+            if (uid.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar el usuario"))
+            }
+
+            val userRef = firestore.collection("usuarios").document(uid)
+            val snapshot = userRef.get().await()
+            if (!snapshot.exists()) {
+                return Result.failure(Exception("No se encontro el usuario"))
+            }
+
+            val title = "Modifica tu nombre de usuario"
+            val body = "Tu nombre de usuario debe modificarse porque no respeta las normas de conducta."
+            val batch = firestore.batch()
+            batch.set(
+                userRef,
+                mapOf(
+                    "usernameChangeNotified" to true,
+                    "usernameChangeNotifiedAt" to FieldValue.serverTimestamp(),
+                    "usernameReviewed" to false
+                ),
+                SetOptions.merge()
+            )
+            batch.set(
+                userRef.collection("notifications").document(),
+                mapOf(
+                    "type" to "username_change_requested",
+                    "title" to title,
+                    "body" to body,
+                    "read" to false,
+                    "localNotified" to false,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            )
+            batch.commit().await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun adminRenameUser(uid: String, newUsername: String): Result<Usuario> {
         return try {
             requireAdminAccess()
@@ -308,6 +435,7 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = existingUser.usuario
             )
+            markUsernameReviewPending(uid, UsernameReviewKind.MODIFIED, reviewed = true)
             notifyUsernameChanged(
                 targetUser = updatedUser,
                 previousUsername = existingUser.usuario,
@@ -325,12 +453,11 @@ class AuthRepository(
             val firebaseUser = auth.currentUser
             if (firebaseUser == null) {
                 val guestProfile = GuestLocalStore.getActiveProfile()
-                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                    ?: return Result.failure(Exception("No hay sesión iniciada"))
                 return Result.success(guestProfile)
             }
 
-            val uid = firebaseUser?.uid
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+            val uid = firebaseUser.uid
 
             val snapshot = firestore.collection("usuarios")
                 .document(uid)
@@ -341,11 +468,11 @@ class AuthRepository(
             val usuario = Usuario(
                 uid = uid,
                 usuario = storedUser?.usuario?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.displayName.orEmpty(),
+                    ?: firebaseUser.displayName.orEmpty(),
                 email = storedUser?.email?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.email.orEmpty(),
+                    ?: firebaseUser.email.orEmpty(),
                 photoUrl = storedUser?.photoUrl?.takeIf { it.isNotBlank() }
-                    ?: firebaseUser?.photoUrl?.toString().orEmpty(),
+                    ?: firebaseUser.photoUrl?.toString().orEmpty(),
                 isAdmin = storedUser?.isAdmin ?: false,
                 privacySettings = storedUser?.privacySettings ?: UserPrivacySettings()
             )
@@ -393,6 +520,7 @@ class AuthRepository(
 
             try {
                 saveUserProfile(nuevoUsuario)
+                markUsernameReviewPending(firebaseUser.uid, UsernameReviewKind.NEW)
                 setPrimaryLoginProviderIfMissing(firebaseUser.uid, EmailAuthProvider.PROVIDER_ID)
                 sendEmailVerification(firebaseUser)
             } catch (e: Exception) {
@@ -409,11 +537,11 @@ class AuthRepository(
     suspend fun checkEmailVerification(): Result<AuthOperationResult> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             currentUser.reload().await()
             val reloadedUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val usuario = getOrCreateUserProfile(reloadedUser)
 
             if (requiresEmailVerification(reloadedUser)) {
@@ -470,12 +598,11 @@ class AuthRepository(
             val currentUser = auth.currentUser
             if (currentUser == null) {
                 val currentProfile = GuestLocalStore.getActiveProfile()
-                    ?: return Result.failure(Exception("No hay sesion iniciada"))
+                    ?: return Result.failure(Exception("No hay sesión iniciada"))
                 val resolvedPhotoUrl = when {
                     selectedPhotoUri.isBlank() -> currentProfile.photoUrl
                     selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(
-                        GuestLocalStore.GUEST_UID,
-                        Uri.parse(selectedPhotoUri)
+                        selectedPhotoUri.toUri()
                     )
                     else -> selectedPhotoUri
                 }
@@ -498,12 +625,12 @@ class AuthRepository(
             }
 
             if (!currentUser.email.equals(resolvedEmail, ignoreCase = true)) {
-                currentUser.updateEmail(resolvedEmail).await()
+                currentUser.updateEmailAddress(resolvedEmail)
             }
 
             val resolvedPhotoUrl = when {
                 selectedPhotoUri.isBlank() -> currentProfile?.photoUrl.orEmpty()
-                selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(uid, Uri.parse(selectedPhotoUri))
+                selectedPhotoUri.startsWith("content://") -> uploadProfilePhoto(selectedPhotoUri.toUri())
                 else -> selectedPhotoUri
             }
 
@@ -520,6 +647,9 @@ class AuthRepository(
                 user = updatedUser,
                 previousUsername = currentProfile?.usuario.orEmpty()
             )
+            if (!currentProfile?.usuario.orEmpty().equals(newUsername.trim(), ignoreCase = false)) {
+                markUsernameReviewPending(uid, UsernameReviewKind.MODIFIED)
+            }
             notifyUsernameChanged(
                 targetUser = updatedUser,
                 previousUsername = currentProfile?.usuario.orEmpty(),
@@ -540,7 +670,7 @@ class AuthRepository(
             }
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val updatedUser = currentProfile.copy(privacySettings = privacySettings)
 
             firestore.collection("usuarios")
@@ -560,7 +690,7 @@ class AuthRepository(
     suspend fun savePasswordLogin(email: String, password: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val credentialEmail = email.trim()
 
             if (credentialEmail.isBlank()) {
@@ -572,11 +702,11 @@ class AuthRepository(
             }
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             if (hasPasswordLogin()) {
                 if (!currentUser.email.equals(credentialEmail, ignoreCase = true)) {
-                    currentUser.updateEmail(credentialEmail).await()
+                    currentUser.updateEmailAddress(credentialEmail)
                 }
                 currentUser.updatePassword(password).await()
             } else {
@@ -614,7 +744,7 @@ class AuthRepository(
     ): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val credentialEmail = email.trim()
 
             if (credentialEmail.isBlank()) {
@@ -622,11 +752,11 @@ class AuthRepository(
             }
 
             if (currentPassword.isBlank()) {
-                return Result.failure(Exception("La contrasena actual no puede estar vacia"))
+                return Result.failure(Exception("La contraseña actual no puede estar vacía"))
             }
 
             if (newPassword.length < 6) {
-                return Result.failure(Exception("La contrasena debe tener al menos 6 caracteres"))
+                return Result.failure(Exception("La contraseña debe tener al menos 6 caracteres"))
             }
 
             val credential = EmailAuthProvider.getCredential(credentialEmail, currentPassword)
@@ -634,7 +764,7 @@ class AuthRepository(
             currentUser.updatePassword(newPassword).await()
 
             val currentProfile = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
 
             firestore.collection("usuarios")
                 .document(currentUser.uid)
@@ -656,7 +786,7 @@ class AuthRepository(
     suspend fun unlinkLoginProvider(providerId: String): Result<Usuario> {
         return try {
             val currentUser = auth.currentUser
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             val providerStates = getLoginProviders()
             val targetProvider = providerStates.firstOrNull { it.providerId == providerId }
                 ?: return Result.failure(Exception("Proveedor no disponible"))
@@ -685,7 +815,7 @@ class AuthRepository(
             }
 
             val updatedUser = getCurrentUserProfile().getOrNull()
-                ?: return Result.failure(Exception("No hay sesion iniciada"))
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
             Result.success(updatedUser)
         } catch (e: Exception) {
             Result.failure(e)
@@ -773,6 +903,57 @@ class AuthRepository(
         }
     }
 
+    suspend fun pendingUsernameChangeRequest(): Result<AccountNotificationPrompt?> {
+        return try {
+            val currentUid = auth.currentUser?.uid
+                ?: return Result.success(null)
+
+            val document = firestore.collection("usuarios")
+                .document(currentUid)
+                .collection("notifications")
+                .whereEqualTo("type", "username_change_requested")
+                .whereEqualTo("read", false)
+                .get()
+                .await()
+                .documents
+                .firstOrNull()
+
+            Result.success(
+                document?.let {
+                    AccountNotificationPrompt(
+                        id = it.id,
+                        title = it.getString("title").orEmpty(),
+                        body = it.getString("body").orEmpty(),
+                        type = it.getString("type").orEmpty()
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markAccountNotificationRead(notificationId: String): Result<Unit> {
+        return try {
+            val currentUid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("No hay sesión iniciada"))
+            if (notificationId.isBlank()) {
+                return Result.failure(Exception("No se pudo identificar la notificación"))
+            }
+
+            firestore.collection("usuarios")
+                .document(currentUid)
+                .collection("notifications")
+                .document(notificationId)
+                .set(mapOf("read" to true), SetOptions.merge())
+                .await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun logout() {
         auth.signOut()
         GuestLocalStore.deactivateSession()
@@ -792,7 +973,7 @@ class AuthRepository(
             .documents
 
         if (usernameMatches.size > 1) {
-            return Result.failure(Exception("Hay varios usuarios con ese nombre. Inicia sesion con tu correo"))
+            return Result.failure(Exception("Hay varios usuarios con ese nombre. Inicia sesión con tu correo"))
         }
 
         val matchedEmail = usernameMatches
@@ -831,7 +1012,12 @@ class AuthRepository(
         }
     }
 
-    private suspend fun uploadProfilePhoto(uid: String, uri: Uri): String {
+    @Suppress("DEPRECATION")
+    private suspend fun FirebaseUser.updateEmailAddress(email: String) {
+        updateEmail(email).await()
+    }
+
+    private fun uploadProfilePhoto(uri: Uri): String {
         return ProfileImageCodec.encodeImageAsDataUri(
             context = FirebaseApp.getInstance().applicationContext,
             uri = uri
@@ -1420,7 +1606,7 @@ class AuthRepository(
     private suspend fun requireAdminAccess() {
         val firebaseUser = auth.currentUser
         val currentUid = firebaseUser?.uid
-            ?: throw Exception("No hay sesion iniciada")
+            ?: throw Exception("No hay sesión iniciada")
         val currentUserSnapshot = firestore.collection("usuarios")
             .document(currentUid)
             .get()
@@ -1428,10 +1614,8 @@ class AuthRepository(
 
         val currentUserEmail = currentUserSnapshot.getString("email")
             ?.takeIf { it.isNotBlank() }
-            ?: firebaseUser?.email.orEmpty()
-        val isBootstrapAdmin = bootstrapAdminAccounts.any { admin ->
-            admin.uid == currentUid || admin.email.equals(currentUserEmail, ignoreCase = true)
-        }
+            ?: firebaseUser.email.orEmpty()
+        val isBootstrapAdmin = isBootstrapAdminAccount(currentUid, currentUserEmail)
         val hasFirestoreAdminFlag = currentUserSnapshot.getBoolean("isAdmin") == true
 
         if (isBootstrapAdmin && !hasFirestoreAdminFlag) {
@@ -1441,7 +1625,12 @@ class AuthRepository(
             return
         }
 
-        if (!hasFirestoreAdminFlag) {
+        if (!isBootstrapAdmin) {
+            if (hasFirestoreAdminFlag) {
+                currentUserSnapshot.reference
+                    .set(mapOf("isAdmin" to false), SetOptions.merge())
+                    .await()
+            }
             throw Exception("No tienes permisos para acceder al panel de administracion")
         }
     }
@@ -1454,6 +1643,7 @@ class AuthRepository(
         if (normalizedUsername.isBlank()) {
             throw Exception("El nombre de usuario no puede estar vacio")
         }
+        ensureUsernameIsNotReserved(normalizedUsername)
 
         val previousNormalizedUsername = normalizeUsername(previousUsername)
         val userRef = firestore.collection("usuarios").document(user.uid)
@@ -1464,7 +1654,7 @@ class AuthRepository(
             val reservedUid = usernameSnapshot.getString("uid").orEmpty()
 
             if (usernameSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != user.uid) {
-                throw IllegalStateException("El nombre de usuario ya esta en uso")
+                throw IllegalStateException("El nombre de usuario ya está en uso")
             }
 
             transaction.set(userRef, user, SetOptions.merge())
@@ -1491,6 +1681,7 @@ class AuthRepository(
         if (normalizedUsername.isBlank()) {
             throw Exception("El nombre de usuario no puede estar vacio")
         }
+        ensureUsernameIsNotReserved(normalizedUsername)
 
         val reservedSnapshot = firestore.collection("usernames")
             .document(normalizedUsername)
@@ -1499,7 +1690,7 @@ class AuthRepository(
 
         val reservedUid = reservedSnapshot.getString("uid").orEmpty()
         if (reservedSnapshot.exists() && reservedUid.isNotBlank() && reservedUid != currentUid) {
-            throw Exception("El nombre de usuario ya esta en uso")
+            throw Exception("El nombre de usuario ya está en uso")
         }
 
         val legacyConflict = firestore.collection("usuarios")
@@ -1512,12 +1703,39 @@ class AuthRepository(
             }
 
         if (legacyConflict != null) {
-            throw Exception("El nombre de usuario ya esta en uso")
+            throw Exception("El nombre de usuario ya está en uso")
         }
     }
 
     private fun normalizeUsername(username: String): String {
         return username.trim().lowercase()
+    }
+
+    private fun ensureUsernameIsNotReserved(normalizedUsername: String) {
+        if (normalizedUsername == "administrador") {
+            throw Exception("Ese nombre de usuario está reservado")
+        }
+    }
+
+    private suspend fun markUsernameReviewPending(
+        uid: String,
+        kind: UsernameReviewKind,
+        reviewed: Boolean = false
+    ) {
+        if (uid.isBlank()) return
+
+        firestore.collection("usuarios")
+            .document(uid)
+            .set(
+                mapOf(
+                    "usernameReviewKind" to kind.name,
+                    "usernameReviewed" to reviewed,
+                    "usernameChangeNotified" to false,
+                    "usernameReviewUpdatedAt" to FieldValue.serverTimestamp()
+                ),
+                SetOptions.merge()
+            )
+            .await()
     }
 
     private suspend fun setPrimaryLoginProviderIfMissing(uid: String, providerId: String) {
@@ -1575,6 +1793,7 @@ class AuthRepository(
         )
 
         saveUserProfile(newUser)
+        markUsernameReviewPending(uid, UsernameReviewKind.NEW)
 
         return syncBootstrapAdminAccess(newUser)
     }
@@ -1607,20 +1826,22 @@ class AuthRepository(
     }
 
     private suspend fun syncBootstrapAdminAccess(user: Usuario): Usuario {
-        val shouldBeAdmin = bootstrapAdminAccounts.any { admin ->
-            admin.uid == user.uid || admin.email.equals(user.email, ignoreCase = true)
-        }
+        val shouldBeAdmin = isBootstrapAdminAccount(user.uid, user.email)
 
-        if (!shouldBeAdmin || user.isAdmin) {
+        if (user.isAdmin == shouldBeAdmin) {
             return user
         }
 
-        val updatedUser = user.copy(isAdmin = true)
+        val updatedUser = user.copy(isAdmin = shouldBeAdmin)
         saveUserProfile(
             user = updatedUser,
             previousUsername = user.usuario
         )
         return updatedUser
+    }
+
+    private fun isBootstrapAdminAccount(uid: String, email: String): Boolean {
+        return AdminAccess.isBootstrapAdminAccount(uid, email)
     }
 
     private companion object {
@@ -1633,3 +1854,5 @@ class AuthRepository(
         )
     }
 }
+
+

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
@@ -30,7 +31,6 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
-import androidx.compose.ui.unit.dp
 
 @Composable
 fun GuestMergeDecisionDialog(

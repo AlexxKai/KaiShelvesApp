@@ -1,11 +1,16 @@
-package com.example.kaishelvesapp.ui.viewmodel
+﻿package com.example.kaishelvesapp.ui.viewmodel
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
+import com.example.kaishelvesapp.data.local.AppContextProvider
+import com.example.kaishelvesapp.data.notifications.DeviceNotificationManager
+import com.example.kaishelvesapp.data.repository.AccountNotificationPrompt
+import com.example.kaishelvesapp.data.repository.AuthOperationResult
 import com.example.kaishelvesapp.data.repository.AuthRepository
+import com.example.kaishelvesapp.data.repository.GoodreadsCsvImportRepository
 import com.example.kaishelvesapp.data.repository.GuestMergeDecision
 import com.example.kaishelvesapp.data.repository.GuestMergeStrategy
 import com.example.kaishelvesapp.data.repository.LoginProviderState
@@ -38,11 +43,18 @@ data class AuthUiState(
     val hasGoogleLogin: Boolean = false,
     val loginProviders: List<LoginProviderState> = emptyList(),
     val pendingGuestMergeDecision: GuestMergeDecision? = null,
-    val pendingEmailVerificationEmail: String? = null
+    val pendingEmailVerificationEmail: String? = null,
+    val isImportingLibraryData: Boolean = false,
+    val importProcessedRows: Int = 0,
+    val importTotalRows: Int = 0,
+    val importImportedBooks: Int = 0,
+    val importSkippedRows: Int = 0,
+    val pendingUsernameChangeRequest: AccountNotificationPrompt? = null
 )
 
 class AuthViewModel(
-    private val repository: AuthRepository = AuthRepository()
+    private val repository: AuthRepository = AuthRepository(),
+    private val goodreadsCsvImportRepository: GoodreadsCsvImportRepository = GoodreadsCsvImportRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -134,7 +146,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { updatedUser ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
@@ -169,6 +181,26 @@ class AuthViewModel(
             successMessage = null,
             isLoading = false
         )
+    }
+
+    private suspend fun syncAndLoadAccountNotifications() {
+        repository.syncPendingAccountNotifications()
+        repository.pendingUsernameChangeRequest()
+            .onSuccess { prompt ->
+                _uiState.value = _uiState.value.copy(pendingUsernameChangeRequest = prompt)
+            }
+    }
+
+    fun dismissUsernameChangeRequest() {
+        val prompt = _uiState.value.pendingUsernameChangeRequest ?: return
+        _uiState.value = _uiState.value.copy(pendingUsernameChangeRequest = null)
+        viewModelScope.launch {
+            repository.markAccountNotificationRead(prompt.id)
+        }
+    }
+
+    fun consumeUsernameChangeRequestForProfile() {
+        dismissUsernameChangeRequest()
     }
 
     fun startEditingProfile() {
@@ -213,7 +245,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -442,7 +474,7 @@ class AuthViewModel(
         viewModelScope.launch {
             repository.resolvePendingGuestMerge(strategy)
                 .onSuccess { usuario ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = usuario,
@@ -494,7 +526,7 @@ class AuthViewModel(
 
             result
                 .onSuccess { updatedUser ->
-                    repository.syncPendingAccountNotifications()
+                    syncAndLoadAccountNotifications()
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         user = updatedUser,
@@ -739,6 +771,60 @@ class AuthViewModel(
         }
     }
 
+    fun importGoodreadsCsv(uriString: String) {
+        if (uriString.isBlank()) return
+
+        _uiState.value = _uiState.value.copy(
+            isImportingLibraryData = true,
+            importProcessedRows = 0,
+            importTotalRows = 0,
+            importImportedBooks = 0,
+            importSkippedRows = 0,
+            errorMessage = null,
+            successMessage = null
+        )
+
+        viewModelScope.launch {
+            val context = AppContextProvider.requireContext()
+            goodreadsCsvImportRepository.importFromUri(Uri.parse(uriString)) { progress ->
+                _uiState.value = _uiState.value.copy(
+                    importProcessedRows = progress.processedRows,
+                    importTotalRows = progress.totalRows,
+                    importImportedBooks = progress.importedBooks,
+                    importSkippedRows = progress.skippedRows
+                )
+                DeviceNotificationManager.showLibraryImportProgress(
+                    context = context,
+                    processedBooks = progress.processedRows,
+                    totalBooks = progress.totalRows
+                )
+            }
+                .onSuccess { result ->
+                    DeviceNotificationManager.showLibraryImportCompleted(
+                        context = context,
+                        importedBooks = result.importedBooks,
+                        skippedRows = result.skippedRows
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        isImportingLibraryData = false,
+                        importProcessedRows = _uiState.value.importTotalRows,
+                        successMessage = authText(
+                            AuthMessage.GoodreadsImportSuccess,
+                            result.importedBooks,
+                            result.skippedRows
+                        )
+                    )
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isImportingLibraryData = false,
+                        errorMessage = error.message?.takeIf { it.isNotBlank() }
+                            ?: authText(AuthMessage.GoodreadsImportFailed)
+                    )
+                }
+        }
+    }
+
     fun logout() {
         repository.logout()
         _uiState.value = AuthUiState(isLoggedIn = false)
@@ -838,7 +924,7 @@ class AuthViewModel(
                 AuthMessage.EmailAlreadyInUse
             }
 
-            message.contains("nombre de usuario ya esta en uso", ignoreCase = true) ||
+            message.contains("nombre de usuario ya está en uso", ignoreCase = true) ||
                 message.contains("nombre de usuario ya está en uso", ignoreCase = true) ||
                 message.contains("username is already in use", ignoreCase = true) -> {
                 AuthMessage.UsernameAlreadyInUse
@@ -878,10 +964,14 @@ class AuthViewModel(
         }
     }
 
+    private fun authText(message: AuthMessage, vararg formatArgs: Any): String {
+        return authText(message).format(*formatArgs)
+    }
+
     private suspend fun handleAuthOperationResult(result: AuthOperationResult) {
         when (result) {
             is AuthOperationResult.Success -> {
-                repository.syncPendingAccountNotifications()
+                syncAndLoadAccountNotifications()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     user = result.user,
@@ -986,7 +1076,7 @@ private enum class AuthMessage(
         english = "User registration failed"
     ),
     EmailNotVerified(
-        spanish = "El email todavia no esta verificado",
+        spanish = "El email todavía no está verificado",
         english = "The email is not verified yet"
     ),
     EmailVerificationSent(
@@ -1113,8 +1203,17 @@ private enum class AuthMessage(
         spanish = "No se pudo actualizar la privacidad",
         english = "Privacy settings could not be updated"
     ),
+    GoodreadsImportSuccess(
+        spanish = "Importación completada: %1\$d libros añadidos, %2\$d filas omitidas",
+        english = "Import complete: %1\$d books added, %2\$d rows skipped"
+    ),
+    GoodreadsImportFailed(
+        spanish = "No se pudo importar el archivo CSV",
+        english = "The CSV file could not be imported"
+    ),
     NetworkError(
         spanish = "Revisa tu conexión e inténtalo de nuevo",
         english = "Check your connection and try again"
     )
 }
+

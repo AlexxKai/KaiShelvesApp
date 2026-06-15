@@ -17,8 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.NightBlack
 import com.example.kaishelvesapp.ui.theme.OldIvory
@@ -34,7 +36,7 @@ fun BookCover(
     showFrame: Boolean = true,
     placeholderContent: @Composable BoxScope.() -> Unit = {
         Text(
-            text = "Tomo",
+            text = stringResource(R.string.book_cover_placeholder),
             color = OldIvory,
             style = MaterialTheme.typography.labelLarge
         )
@@ -64,7 +66,7 @@ fun BookCover(
             if (hasImage) {
                 AsyncImage(
                     model = imageUrl,
-                    contentDescription = "Portada de $title",
+                    contentDescription = stringResource(R.string.book_cover_content_description, title),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )

@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.data.local
+﻿package com.example.kaishelvesapp.data.local
 
 import android.content.Context
 import com.example.kaishelvesapp.data.model.Libro
@@ -16,6 +16,7 @@ data class GuestLibraryState(
     val lists: List<UserBookList> = emptyList(),
     val listBooks: Map<String, List<Libro>> = emptyMap(),
     val readBooks: List<LibroLeido> = emptyList(),
+    val scanHistory: List<Libro> = emptyList(),
     val tags: List<UserBookTag> = emptyList(),
     val bookTagIds: Map<String, List<String>> = emptyMap()
 )
@@ -30,12 +31,14 @@ object GuestLocalStore {
     const val SYSTEM_LIST_READ_ID = "system_read"
     const val SYSTEM_LIST_UNFINISHED_ID = "system_unfinished"
     const val SYSTEM_LIST_PENDING_ID = "system_pending"
+    const val SYSTEM_LIST_OWNED_ID = "system_owned"
 
     const val SYSTEM_LIST_WANT_TO_READ_KEY = "want_to_read"
     const val SYSTEM_LIST_READING_KEY = "reading"
     const val SYSTEM_LIST_READ_KEY = "read"
     const val SYSTEM_LIST_UNFINISHED_KEY = "unfinished"
     const val SYSTEM_LIST_PENDING_KEY = "pending"
+    const val SYSTEM_LIST_OWNED_KEY = "owned"
 
     private val gson: Gson = GsonBuilder().create()
 
@@ -47,43 +50,51 @@ object GuestLocalStore {
     private fun defaultSystemLists() = listOf(
         UserBookList(
             id = SYSTEM_LIST_WANT_TO_READ_ID,
-            name = "Quiero leer",
-            description = "Libros que quieres empezar pronto.",
+            name = "Want to read",
+            description = "Books you want to start soon.",
             position = 0,
             isSystem = true,
             systemKey = SYSTEM_LIST_WANT_TO_READ_KEY
         ),
         UserBookList(
             id = SYSTEM_LIST_READING_ID,
-            name = "Leyendo",
-            description = "Libros que tienes ahora mismo entre manos.",
+            name = "Reading",
+            description = "Books you are currently reading.",
             position = 1,
             isSystem = true,
             systemKey = SYSTEM_LIST_READING_KEY
         ),
         UserBookList(
             id = SYSTEM_LIST_READ_ID,
-            name = "Leido",
-            description = "Libros que ya forman parte de tu historial de lectura.",
+            name = "Read",
+            description = "Books that are already part of your reading history.",
             position = 2,
             isSystem = true,
             systemKey = SYSTEM_LIST_READ_KEY
         ),
         UserBookList(
             id = SYSTEM_LIST_PENDING_ID,
-            name = "Pendientes",
-            description = "Libros que quieres ordenar a tu manera para retomarlos despues.",
+            name = "Pending",
+            description = "Books you want to organize and return to later.",
             position = 3,
             isSystem = true,
             systemKey = SYSTEM_LIST_PENDING_KEY
         ),
         UserBookList(
             id = SYSTEM_LIST_UNFINISHED_ID,
-            name = "No terminado",
-            description = "Libros que dejaste a medias o prefieres pausar.",
+            name = "Unfinished",
+            description = "Books you stopped reading or chose to pause.",
             position = 4,
             isSystem = true,
             systemKey = SYSTEM_LIST_UNFINISHED_KEY
+        ),
+        UserBookList(
+            id = SYSTEM_LIST_OWNED_ID,
+            name = "Owned",
+            description = "Books detected automatically in your device library.",
+            position = 5,
+            isSystem = true,
+            systemKey = SYSTEM_LIST_OWNED_KEY
         )
     )
 
@@ -160,6 +171,9 @@ object GuestLocalStore {
         require(trimmedUsername.isNotBlank()) {
             "El nombre de usuario no puede estar vacio"
         }
+        require(!trimmedUsername.equals("administrador", ignoreCase = true)) {
+            "Ese nombre de usuario está reservado"
+        }
 
         val updatedState = updateState { currentState ->
             val existingProfile = currentState.profile
@@ -190,10 +204,13 @@ object GuestLocalStore {
         require(trimmedUsername.isNotBlank()) {
             "El nombre de usuario no puede estar vacio"
         }
+        require(!trimmedUsername.equals("administrador", ignoreCase = true)) {
+            "Ese nombre de usuario está reservado"
+        }
 
         val updatedState = updateState { currentState ->
             val profile = currentState.profile
-                ?: throw IllegalStateException("No hay sesion invitada iniciada")
+                ?: throw IllegalStateException("No hay sesión invitada iniciada")
 
             currentState.copy(
                 profile = profile.copy(
@@ -211,7 +228,7 @@ object GuestLocalStore {
     fun updatePrivacySettings(privacySettings: UserPrivacySettings): Usuario {
         val updatedState = updateState { currentState ->
             val profile = currentState.profile
-                ?: throw IllegalStateException("No hay sesion invitada iniciada")
+                ?: throw IllegalStateException("No hay sesión invitada iniciada")
 
             currentState.copy(
                 profile = profile.copy(
@@ -244,3 +261,4 @@ object GuestLocalStore {
         writeState(GuestLibraryState())
     }
 }
+

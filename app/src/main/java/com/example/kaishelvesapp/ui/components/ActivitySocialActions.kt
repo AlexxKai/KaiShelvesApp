@@ -76,6 +76,8 @@ fun ActivitySocialActions(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit = { _, _ -> },
+    onReplyToComment: (String, String, String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val canShowSocialActions = item.user.privacySettings.readingActivityVisible &&
@@ -97,7 +99,9 @@ fun ActivitySocialActions(
             onDismiss = { showComments = false },
             onLoadComments = onLoadComments,
             onToggleLike = onToggleLike,
-            onAddComment = onAddComment
+            onAddComment = onAddComment,
+            onToggleCommentLike = onToggleCommentLike,
+            onReplyToComment = onReplyToComment
         )
     }
 
@@ -176,7 +180,9 @@ private fun ActivityCommentsDialog(
     onDismiss: () -> Unit,
     onLoadComments: (String) -> Unit,
     onToggleLike: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit
 ) {
     var commentText by rememberSaveable(item.id) { mutableStateOf("") }
 
@@ -284,7 +290,13 @@ private fun ActivityCommentsDialog(
                                 verticalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 items(comments, key = { it.id }) { comment ->
-                                    ActivityCommentRow(comment = comment)
+                                    ActivityCommentRow(
+                                        activityId = item.id,
+                                        comment = comment,
+                                        isSaving = isSaving,
+                                        onToggleCommentLike = onToggleCommentLike,
+                                        onReplyToComment = onReplyToComment
+                                    )
                                 }
                             }
                         }
@@ -490,7 +502,26 @@ private fun com.example.kaishelvesapp.data.model.LibroLeido.toLibro(): Libro {
 }
 
 @Composable
-private fun ActivityCommentRow(comment: ActivityComment) {
+private fun ActivityCommentRow(
+    activityId: String,
+    comment: ActivityComment,
+    isSaving: Boolean,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit
+) {
+    var showReplyDialog by rememberSaveable(activityId, comment.id) { mutableStateOf(false) }
+
+    if (showReplyDialog) {
+        CommentReplyDialog(
+            enabled = !isSaving && comment.id.isNotBlank(),
+            onDismiss = { showReplyDialog = false },
+            onSend = { text ->
+                onReplyToComment(activityId, comment.id, text)
+                showReplyDialog = false
+            }
+        )
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
@@ -520,6 +551,139 @@ private fun ActivityCommentRow(comment: ActivityComment) {
                 style = MaterialTheme.typography.bodySmall,
                 color = OldIvory.copy(alpha = 0.6f)
             )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.clickable(enabled = !isSaving && comment.id.isNotBlank()) {
+                        onToggleCommentLike(activityId, comment.id)
+                    },
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ThumbUp,
+                        contentDescription = if (comment.likedByCurrentUser) {
+                            stringResource(R.string.comment_unlike)
+                        } else {
+                            stringResource(R.string.comment_like)
+                        },
+                        tint = if (comment.likedByCurrentUser) Color(0xFF66D6D6) else OldIvory.copy(alpha = 0.68f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = if (comment.likeCount > 0) comment.likeCount.toString() else stringResource(R.string.home_feed_like),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF66D6D6)
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.comment_reply_action),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF66D6D6),
+                    modifier = Modifier.clickable(enabled = !isSaving && comment.id.isNotBlank()) {
+                        showReplyDialog = true
+                    }
+                )
+            }
+
+            if (comment.replies.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.padding(start = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.comment_replies_title),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TarnishedGold,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    comment.replies.forEach { reply ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = reply.user.usuario.ifBlank { reply.user.email }
+                                    .ifBlank { stringResource(R.string.unknown_username) },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color(0xFF66D6D6),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = reply.text,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = OldIvory
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentReplyDialog(
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onSend: (String) -> Unit
+) {
+    var replyText by rememberSaveable { mutableStateOf("") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnClickOutside = true)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = Obsidian.copy(alpha = 0.98f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = replyText,
+                    onValueChange = { replyText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.comment_reply_hint)) },
+                    singleLine = true,
+                    enabled = enabled,
+                    shape = RoundedCornerShape(20.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(
+                        onSend = {
+                            val text = replyText.trim()
+                            if (text.isNotBlank()) {
+                                onSend(text)
+                                replyText = ""
+                            }
+                        }
+                    ),
+                    colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+                )
+                IconButton(
+                    onClick = {
+                        val text = replyText.trim()
+                        if (text.isNotBlank()) {
+                            onSend(text)
+                            replyText = ""
+                        }
+                    },
+                    enabled = enabled && replyText.isNotBlank()
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = stringResource(R.string.send_reply),
+                        tint = if (replyText.isBlank()) OldIvory.copy(alpha = 0.45f) else OldIvory
+                    )
+                }
+            }
         }
     }
 }

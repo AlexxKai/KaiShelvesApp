@@ -2,6 +2,8 @@ package com.example.kaishelvesapp.ui.screen.profile
 
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -9,6 +11,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,15 +23,22 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,13 +46,17 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -50,7 +65,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,14 +95,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.UserPrivacySettings
 import com.example.kaishelvesapp.data.repository.AccountReport
+import com.example.kaishelvesapp.data.repository.AccountReportKind
 import com.example.kaishelvesapp.data.repository.AccountReportStatus
 import com.example.kaishelvesapp.data.repository.BlockedMember
 import com.example.kaishelvesapp.data.repository.LoginProviderState
+import com.example.kaishelvesapp.data.repository.REPORT_SENDER_ADMIN
 import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
@@ -99,6 +120,9 @@ import com.example.kaishelvesapp.ui.components.PasswordOutlinedTextField
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.example.kaishelvesapp.ui.language.findActivity
 import com.example.kaishelvesapp.ui.screen.friends.FriendProfileContent
+import com.example.kaishelvesapp.ui.screen.library.ReaderListAutomationMode
+import com.example.kaishelvesapp.ui.screen.library.readReaderListAutomationMode
+import com.example.kaishelvesapp.ui.screen.library.saveReaderListAutomationMode
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
@@ -106,14 +130,22 @@ import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
 import com.example.kaishelvesapp.ui.viewmodel.AuthViewModel
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     paddingValues: PaddingValues = PaddingValues(0.dp),
     viewModel: AuthViewModel,
     myProfileViewModel: FriendProfileViewModel,
+    initialReportReviewId: String? = null,
+    onInitialReportReviewHandled: () -> Unit = {},
+    openIdentityOnLaunch: Boolean = false,
+    onOpenIdentityHandled: () -> Unit = {},
     userName: String? = null,
     profileImageUrl: String? = null,
     searchQuery: String,
@@ -143,19 +175,59 @@ fun ProfileScreen(
     val activity = context.findActivity()
     var selectedProfileTab by remember { mutableStateOf(ProfileTab.MyProfile) }
     var selectedSettingsPanel by remember { mutableStateOf(ProfileSettingsPanel.Main) }
+    var readerListAutomationMode by remember {
+        mutableStateOf(readReaderListAutomationMode(context))
+    }
     var pendingProfilePhotoUri by remember { mutableStateOf<String?>(null) }
+    var showProfilePhotoPreview by remember { mutableStateOf(false) }
     var showLoginOptionsDialog by remember { mutableStateOf(false) }
     var passwordLoginDialogMessage by remember { mutableStateOf<String?>(null) }
     val privacySettings = uiState.user?.privacySettings ?: UserPrivacySettings()
     val isGuest = uiState.user?.isGuest == true
     val guestUiRestrictions = LocalGuestUiRestrictions.current
     val drawerState = androidx.compose.material3.rememberDrawerState(initialValue = DrawerValue.Closed)
+    var pendingInitialReportReviewId by remember { mutableStateOf<String?>(null) }
+    var reportReviewDetailActive by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialReportReviewId) {
+        val reportId = initialReportReviewId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (isGuest) return@LaunchedEffect
+        pendingInitialReportReviewId = reportId
+        selectedProfileTab = ProfileTab.Settings
+        selectedSettingsPanel = ProfileSettingsPanel.ReportReview
+        myProfileViewModel.observeMyReports()
+    }
+    LaunchedEffect(openIdentityOnLaunch) {
+        if (!openIdentityOnLaunch) return@LaunchedEffect
+        selectedProfileTab = ProfileTab.Identity
+        selectedSettingsPanel = ProfileSettingsPanel.Main
+        onOpenIdentityHandled()
+    }
     val drawerExpanded = drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
     val scope = rememberCoroutineScope()
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         pendingProfilePhotoUri = uri?.toString()
+    }
+    val csvImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importGoodreadsCsv(it.toString()) }
+    }
+    val profilePhotoDisplayName = uiState.username.ifBlank {
+        userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
+    }
+    val profilePhotoImageUrl = uiState.profilePhotoUri.ifBlank {
+        profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
+    }
+
+    if (showProfilePhotoPreview) {
+        ProfilePhotoPreviewDialog(
+            displayName = profilePhotoDisplayName,
+            imageUrl = profilePhotoImageUrl,
+            onDismiss = { showProfilePhotoPreview = false }
+        )
     }
 
     pendingProfilePhotoUri?.let { selectedPhotoUri ->
@@ -210,13 +282,21 @@ fun ProfileScreen(
         }
         if (!isGuest && selectedProfileTab == ProfileTab.Settings) {
             myProfileViewModel.loadBlockedMembers()
-            myProfileViewModel.loadMyReports()
+            myProfileViewModel.observeMyReports()
         }
     }
 
     LaunchedEffect(isGuest, selectedProfileTab) {
         if (isGuest && selectedProfileTab.isGuestRestricted) {
             selectedProfileTab = ProfileTab.Identity
+        }
+    }
+
+    DisposableEffect(selectedProfileTab) {
+        onDispose {
+            if (selectedProfileTab == ProfileTab.Identity) {
+                viewModel.cancelEditingProfile()
+            }
         }
     }
 
@@ -268,7 +348,10 @@ fun ProfileScreen(
         Scaffold(
             containerColor = Color.Transparent,
             snackbarHost = {
-                SnackbarHost(hostState = snackbarHostState)
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.imePadding()
+                )
             },
             topBar = {
                 KaiPrimaryTopBar(
@@ -295,12 +378,25 @@ fun ProfileScreen(
                     .padding(paddingValues)
                     .padding(innerPadding)
             ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
+                PullToRefreshBox(
+                    modifier = Modifier.fillMaxSize(),
+                    isRefreshing = selectedProfileTab == ProfileTab.Settings &&
+                        selectedSettingsPanel == ProfileSettingsPanel.ReportReview &&
+                        myProfileState.isLoadingReports,
+                    onRefresh = {
+                        if (selectedProfileTab == ProfileTab.Settings &&
+                            selectedSettingsPanel == ProfileSettingsPanel.ReportReview
+                        ) {
+                            myProfileViewModel.loadMyReports()
+                        }
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                 when {
                     uiState.isLoading && uiState.user == null -> {
                         Column(
@@ -319,7 +415,7 @@ fun ProfileScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 51.dp),
+                                    .padding(top = if (reportReviewDetailActive) 0.dp else 51.dp),
                                 shape = RoundedCornerShape(28.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
@@ -388,6 +484,8 @@ fun ProfileScreen(
                                                         onToggleLike = myProfileViewModel::toggleLike,
                                                         onLoadComments = myProfileViewModel::loadComments,
                                                         onAddComment = myProfileViewModel::addComment,
+                                                        onToggleCommentLike = myProfileViewModel::toggleCommentLike,
+                                                        onReplyToComment = myProfileViewModel::replyToComment,
                                                         deletingActivityIds = myProfileState.deletingActivityIds,
                                                         onDeleteActivityUpdate = myProfileViewModel::hideActivityUpdate,
                                                         showFriendActions = false,
@@ -415,13 +513,10 @@ fun ProfileScreen(
 
                                         ProfileTab.Identity -> {
                                             ProfileAvatarSection(
-                                                displayName = uiState.username.ifBlank {
-                                                    userName ?: uiState.user?.usuario ?: stringResource(R.string.app_name)
-                                                },
-                                                imageUrl = uiState.profilePhotoUri.ifBlank {
-                                                    profileImageUrl ?: uiState.user?.photoUrl.orEmpty()
-                                                },
+                                                displayName = profilePhotoDisplayName,
+                                                imageUrl = profilePhotoImageUrl,
                                                 isAdmin = uiState.user?.isAdmin == true,
+                                                onOpenPhoto = { showProfilePhotoPreview = true },
                                                 onChangePhoto = { photoPickerLauncher.launch("image/*") }
                                             )
 
@@ -491,6 +586,25 @@ fun ProfileScreen(
                                                     onGoogleError = viewModel::showError
                                                 )
                                             }
+
+                                            Spacer(modifier = Modifier.height(20.dp))
+
+                                            DataImportSection(
+                                                isImporting = uiState.isImportingLibraryData,
+                                                processedRows = uiState.importProcessedRows,
+                                                totalRows = uiState.importTotalRows,
+                                                importedBooks = uiState.importImportedBooks,
+                                                onImportCsv = {
+                                                    csvImportLauncher.launch(
+                                                        arrayOf(
+                                                            "text/csv",
+                                                            "text/comma-separated-values",
+                                                            "text/*",
+                                                            "application/vnd.ms-excel"
+                                                        )
+                                                    )
+                                                }
+                                            )
                                         }
 
                                         ProfileTab.Settings -> {
@@ -502,6 +616,11 @@ fun ProfileScreen(
                                                         LanguageManager.setLanguage(it, language)
                                                     }
                                                 },
+                                                readerListAutomationMode = readerListAutomationMode,
+                                                onReaderListAutomationModeChange = { mode ->
+                                                    readerListAutomationMode = mode
+                                                    saveReaderListAutomationMode(context, mode)
+                                                },
                                                 searchIntroAnimationEnabled = privacySettings.searchIntroAnimationEnabled != false,
                                                 onSearchIntroAnimationEnabledChange = {
                                                     viewModel.updatePrivacySettings(
@@ -512,7 +631,15 @@ fun ProfileScreen(
                                                 reports = myProfileState.accountReports,
                                                 isLoadingBlockedMembers = myProfileState.isLoadingBlockedMembers,
                                                 isLoadingReports = myProfileState.isLoadingReports,
+                                                isSavingReportReply = myProfileState.isSavingReportReply,
                                                 onUnblockMember = myProfileViewModel::unblockMember,
+                                                onReplyToReport = myProfileViewModel::replyToReportReview,
+                                                initialReportReviewId = pendingInitialReportReviewId,
+                                                onInitialReportReviewConsumed = {
+                                                    pendingInitialReportReviewId = null
+                                                    onInitialReportReviewHandled()
+                                                },
+                                                onReportDetailActiveChange = { reportReviewDetailActive = it },
                                                 onLogout = onLogout
                                             )
                                         }
@@ -527,49 +654,126 @@ fun ProfileScreen(
                                 }
                             }
 
-                            Canvas(
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .padding(top = 51.dp)
-                                    .height(18.dp)
-                            ) {
-                                val cornerRadius = 18.dp.toPx()
-                                val strokeWidth = 1.dp.toPx()
-                                val topBorderPath = Path().apply {
-                                    moveTo(0f, cornerRadius)
-                                    quadraticTo(0f, 0f, cornerRadius, 0f)
-                                    lineTo(size.width - cornerRadius, 0f)
-                                    quadraticTo(size.width, 0f, size.width, cornerRadius)
+                            if (!reportReviewDetailActive) {
+                                Canvas(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .fillMaxWidth()
+                                        .padding(top = 51.dp)
+                                        .height(18.dp)
+                                ) {
+                                    val cornerRadius = 18.dp.toPx()
+                                    val strokeWidth = 1.dp.toPx()
+                                    val topBorderPath = Path().apply {
+                                        moveTo(0f, cornerRadius)
+                                        quadraticTo(0f, 0f, cornerRadius, 0f)
+                                        lineTo(size.width - cornerRadius, 0f)
+                                        quadraticTo(size.width, 0f, size.width, cornerRadius)
+                                    }
+
+                                    drawPath(
+                                        path = topBorderPath,
+                                        color = TarnishedGold.copy(alpha = 0.86f),
+                                        style = Stroke(width = strokeWidth)
+                                    )
                                 }
 
-                                drawPath(
-                                    path = topBorderPath,
-                                    color = TarnishedGold.copy(alpha = 0.86f),
-                                    style = Stroke(width = strokeWidth)
+                                ProfileTabSelector(
+                                    selectedTab = selectedProfileTab,
+                                    guestRestricted = isGuest,
+                                    onSelectTab = { tab ->
+                                        if (isGuest && tab.isGuestRestricted) {
+                                            guestUiRestrictions.onBlockedSectionClick?.invoke(KaiSection.PROFILE)
+                                        } else {
+                                            selectedProfileTab = tab
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(horizontal = 26.dp)
+                                        .zIndex(1f)
                                 )
                             }
-
-                            ProfileTabSelector(
-                                selectedTab = selectedProfileTab,
-                                guestRestricted = isGuest,
-                                onSelectTab = { tab ->
-                                    if (isGuest && tab.isGuestRestricted) {
-                                        guestUiRestrictions.onBlockedSectionClick?.invoke(KaiSection.PROFILE)
-                                    } else {
-                                        selectedProfileTab = tab
-                                    }
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(horizontal = 26.dp)
-                                    .zIndex(1f)
-                            )
                         }
                     }
                 }
             }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun DataImportSection(
+    isImporting: Boolean,
+    processedRows: Int,
+    totalRows: Int,
+    importedBooks: Int,
+    onImportCsv: () -> Unit
+) {
+    ProfileSectionBlock(title = stringResource(R.string.profile_data_import_section_title)) {
+        Text(
+            text = stringResource(R.string.profile_data_import_section_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory.copy(alpha = 0.76f)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (isImporting) {
+            val progress = if (totalRows > 0) {
+                processedRows.toFloat() / totalRows.toFloat()
+            } else {
+                0f
+            }
+            Text(
+                text = stringResource(
+                    R.string.profile_import_progress,
+                    processedRows,
+                    totalRows,
+                    importedBooks
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+                color = TarnishedGold,
+                trackColor = TarnishedGold.copy(alpha = 0.18f)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        OutlinedButton(
+            onClick = onImportCsv,
+            enabled = !isImporting,
+            modifier = Modifier.fillMaxWidth(),
+            border = BorderStroke(1.dp, TarnishedGold)
+        ) {
+            if (isImporting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = TarnishedGold,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.UploadFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = TarnishedGold
+                )
+            }
+
+            Spacer(modifier = Modifier.size(8.dp))
+
+            Text(
+                text = stringResource(R.string.profile_import_csv_action),
+                color = TarnishedGold
+            )
         }
     }
 }
@@ -1098,15 +1302,28 @@ private fun ProfileSettingsContent(
     selectedPanel: ProfileSettingsPanel,
     onSelectedPanelChange: (ProfileSettingsPanel) -> Unit,
     onSelectLanguage: (String) -> Unit,
+    readerListAutomationMode: ReaderListAutomationMode,
+    onReaderListAutomationModeChange: (ReaderListAutomationMode) -> Unit,
     searchIntroAnimationEnabled: Boolean,
     onSearchIntroAnimationEnabledChange: (Boolean) -> Unit,
     blockedMembers: List<BlockedMember>,
     reports: List<AccountReport>,
     isLoadingBlockedMembers: Boolean,
     isLoadingReports: Boolean,
+    isSavingReportReply: Boolean,
     onUnblockMember: (String) -> Unit,
+    onReplyToReport: (String, String, List<String>) -> Unit,
+    initialReportReviewId: String? = null,
+    onInitialReportReviewConsumed: () -> Unit = {},
+    onReportDetailActiveChange: (Boolean) -> Unit = {},
     onLogout: () -> Unit
 ) {
+    LaunchedEffect(selectedPanel) {
+        if (selectedPanel != ProfileSettingsPanel.ReportReview) {
+            onReportDetailActiveChange(false)
+        }
+    }
+
     when (selectedPanel) {
         ProfileSettingsPanel.BlockedMembers -> {
             ProfileSettingsBackButton(
@@ -1122,13 +1339,15 @@ private fun ProfileSettingsContent(
         }
 
         ProfileSettingsPanel.ReportReview -> {
-            ProfileSettingsBackButton(
-                text = stringResource(R.string.profile_settings_back),
-                onClick = { onSelectedPanelChange(ProfileSettingsPanel.Main) }
-            )
             ReportReviewSettingsSection(
                 reports = reports,
-                isLoading = isLoadingReports
+                isLoading = isLoadingReports,
+                isSavingReply = isSavingReportReply,
+                onBackToSettings = { onSelectedPanelChange(ProfileSettingsPanel.Main) },
+                onReplyToReport = onReplyToReport,
+                initialReportReviewId = initialReportReviewId,
+                onInitialReportReviewConsumed = onInitialReportReviewConsumed,
+                onReportDetailActiveChange = onReportDetailActiveChange
             )
             return
         }
@@ -1148,6 +1367,16 @@ private fun ProfileSettingsContent(
             body = stringResource(R.string.profile_search_intro_animation_body),
             checked = searchIntroAnimationEnabled,
             onCheckedChange = onSearchIntroAnimationEnabledChange
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp),
+            color = TarnishedGold.copy(alpha = 0.18f)
+        )
+
+        ReaderListAutomationSettings(
+            selectedMode = readerListAutomationMode,
+            onSelectedModeChange = onReaderListAutomationModeChange
         )
     }
 
@@ -1176,6 +1405,83 @@ private fun ProfileSettingsContent(
         colors = KaiShelvesThemeDefaults.primaryButtonColors()
     ) {
         Text(stringResource(R.string.logout))
+    }
+}
+
+@Composable
+private fun ReaderListAutomationSettings(
+    selectedMode: ReaderListAutomationMode,
+    onSelectedModeChange: (ReaderListAutomationMode) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.profile_reader_list_automation),
+            style = MaterialTheme.typography.bodyLarge,
+            color = OldIvory
+        )
+        Text(
+            text = stringResource(R.string.profile_reader_list_automation_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = OldIvory.copy(alpha = 0.74f)
+        )
+
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_ask),
+            body = stringResource(R.string.reader_list_automation_ask_body),
+            selected = selectedMode == ReaderListAutomationMode.Ask,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Ask) }
+        )
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_automatic),
+            body = stringResource(R.string.reader_list_automation_automatic_body),
+            selected = selectedMode == ReaderListAutomationMode.Automatic,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Automatic) }
+        )
+        ReaderListAutomationOption(
+            title = stringResource(R.string.reader_list_automation_disabled),
+            body = stringResource(R.string.reader_list_automation_disabled_body),
+            selected = selectedMode == ReaderListAutomationMode.Disabled,
+            onClick = { onSelectedModeChange(ReaderListAutomationMode.Disabled) }
+        )
+    }
+}
+
+@Composable
+private fun ReaderListAutomationOption(
+    title: String,
+    body: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = TarnishedGold,
+                unselectedColor = OldIvory.copy(alpha = 0.64f)
+            )
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = OldIvory.copy(alpha = 0.68f)
+            )
+        }
     }
 }
 
@@ -1300,9 +1606,77 @@ private fun BlockedMembersSettingsSection(
 @Composable
 private fun ReportReviewSettingsSection(
     reports: List<AccountReport>,
-    isLoading: Boolean
+    isLoading: Boolean,
+    isSavingReply: Boolean,
+    onBackToSettings: () -> Unit,
+    onReplyToReport: (String, String, List<String>) -> Unit,
+    initialReportReviewId: String? = null,
+    onInitialReportReviewConsumed: () -> Unit = {},
+    onReportDetailActiveChange: (Boolean) -> Unit = {}
 ) {
+    var selectedReportId by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf<ProfileReviewFilter?>(null) }
+    val selectedReport = reports.firstOrNull { it.id == selectedReportId }
+    val visibleReports = reports.filter { report ->
+        when (selectedFilter) {
+            null -> true
+            ProfileReviewFilter.REPORTS -> report.kind == AccountReportKind.REPORT
+            ProfileReviewFilter.REQUESTS -> report.kind == AccountReportKind.REQUEST
+            ProfileReviewFilter.IN_PROGRESS -> report.status == AccountReportStatus.IN_PROGRESS
+            ProfileReviewFilter.NEW -> report.status == AccountReportStatus.NEW
+            ProfileReviewFilter.PROCESSED -> report.status == AccountReportStatus.PROCESSED
+            ProfileReviewFilter.CLOSED -> report.status == AccountReportStatus.CLOSED
+        }
+    }
+    var replyText by remember(selectedReport?.id) {
+        mutableStateOf("")
+    }
+    val backToReports = { selectedReportId = null }
+
+    BackHandler(enabled = selectedReport != null) {
+        backToReports()
+    }
+
+    LaunchedEffect(selectedReport?.id) {
+        onReportDetailActiveChange(selectedReport != null)
+    }
+
+    LaunchedEffect(initialReportReviewId, reports) {
+        val reportId = initialReportReviewId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (reports.any { it.id == reportId }) {
+            selectedReportId = reportId
+            onInitialReportReviewConsumed()
+        }
+    }
+
+    if (selectedReport != null) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ProfileSettingsBackButton(
+                text = stringResource(R.string.profile_reports_back),
+                onClick = backToReports
+            )
+            ReportReviewDetail(
+                report = selectedReport,
+                replyText = replyText,
+                isSavingReply = isSavingReply,
+                onReplyTextChange = { replyText = it },
+                onReplyToReport = { text, imageUris ->
+                    onReplyToReport(selectedReport.id, text, imageUris)
+                }
+            )
+        }
+        return
+    }
+
     ProfileSectionBlock(title = stringResource(R.string.profile_report_review)) {
+        ProfileSettingsBackButton(
+            text = stringResource(R.string.profile_settings_back),
+            onClick = onBackToSettings
+        )
+
         when {
             isLoading -> {
                 Box(
@@ -1325,10 +1699,26 @@ private fun ReportReviewSettingsSection(
 
             else -> {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    reports.forEach { report ->
+                    ProfileReviewFilterBar(
+                        selectedFilter = selectedFilter,
+                        onFilterSelected = { filter ->
+                            selectedFilter = if (selectedFilter == filter) null else filter
+                        }
+                    )
+
+                    if (visibleReports.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.profile_no_reports),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OldIvory.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    visibleReports.forEach { report ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable { selectedReportId = report.id }
                                 .border(
                                     width = 1.dp,
                                     color = TarnishedGold.copy(alpha = 0.22f),
@@ -1336,34 +1726,50 @@ private fun ReportReviewSettingsSection(
                                 )
                                 .padding(12.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${stringResource(R.string.report_identifier)}: ${report.publicId.ifBlank { report.id }}",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TarnishedGold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                ReportStatusPill(status = report.status)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ReportTypePill(kind = report.kind)
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = report.subject,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = OldIvory
                             )
                             Spacer(modifier = Modifier.height(4.dp))
+                            if (report.kind == AccountReportKind.REPORT) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                                    modifier = Modifier
+                                        .background(
+                                            color = BloodWine.copy(alpha = 0.36f),
+                                            shape = RoundedCornerShape(999.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TarnishedGold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             Text(
-                                text = stringResource(
-                                    R.string.profile_reported_member,
-                                    report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) }
-                                ),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = OldIvory.copy(alpha = 0.76f)
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = reportStatusLabel(report.status),
+                                text = stringResource(R.string.open),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = TarnishedGold
                             )
-                            if (report.adminMessage.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = report.adminMessage,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = OldIvory.copy(alpha = 0.84f)
-                                )
-                            }
                         }
                     }
                 }
@@ -1373,14 +1779,513 @@ private fun ReportReviewSettingsSection(
 }
 
 @Composable
+private fun ProfileReviewFilterBar(
+    selectedFilter: ProfileReviewFilter?,
+    onFilterSelected: (ProfileReviewFilter) -> Unit
+) {
+    val filters = listOf(
+        ProfileReviewFilter.REPORTS to stringResource(R.string.profile_review_filter_reports),
+        ProfileReviewFilter.REQUESTS to stringResource(R.string.profile_review_filter_requests),
+        ProfileReviewFilter.IN_PROGRESS to reportStatusLabel(AccountReportStatus.IN_PROGRESS),
+        ProfileReviewFilter.NEW to reportStatusLabel(AccountReportStatus.NEW),
+        ProfileReviewFilter.PROCESSED to reportStatusLabel(AccountReportStatus.PROCESSED),
+        ProfileReviewFilter.CLOSED to reportStatusLabel(AccountReportStatus.CLOSED)
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        filters.chunked(3).forEach { rowFilters ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowFilters.forEach { (filter, label) ->
+                    val selected = selectedFilter == filter
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                color = if (selected) BloodWine.copy(alpha = 0.42f) else Obsidian.copy(alpha = 0.68f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = TarnishedGold.copy(alpha = if (selected) 0.68f else 0.22f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
+                            .clickable { onFilterSelected(filter) }
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) TarnishedGold else OldIvory.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReportTypePill(kind: AccountReportKind) {
+    Text(
+        text = when (kind) {
+            AccountReportKind.REPORT -> stringResource(R.string.profile_review_type_report)
+            AccountReportKind.REQUEST -> stringResource(R.string.profile_review_type_request)
+        },
+        modifier = Modifier
+            .background(
+                color = Obsidian.copy(alpha = 0.72f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = TarnishedGold.copy(alpha = 0.26f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = OldIvory.copy(alpha = 0.86f),
+        maxLines = 1
+    )
+}
+
+@Composable
+private fun ReportStatusPill(status: AccountReportStatus) {
+    Text(
+        text = reportStatusLabel(status),
+        modifier = Modifier
+            .background(
+                color = BloodWine.copy(alpha = 0.36f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = TarnishedGold,
+        maxLines = 1
+    )
+}
+
+@Composable
+private fun ReportReviewDetail(
+    report: AccountReport,
+    replyText: String,
+    isSavingReply: Boolean,
+    onReplyTextChange: (String) -> Unit,
+    onReplyToReport: (String, List<String>) -> Unit
+) {
+    var expandedImageSource by remember { mutableStateOf<String?>(null) }
+    val chatScrollState = rememberScrollState()
+
+    expandedImageSource?.let { imageSource ->
+        UserReportImagePreviewDialog(
+            imageSource = imageSource,
+            onDismiss = { expandedImageSource = null }
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = report.subject,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                color = OldIvory
+            )
+            ReportStatusPill(status = report.status)
+        }
+        Text(
+            text = "${stringResource(R.string.report_identifier)}: ${report.publicId.ifBlank { report.id }}",
+            style = MaterialTheme.typography.labelMedium,
+            color = TarnishedGold
+        )
+        ReportTypePill(kind = report.kind)
+        if (report.isAdministrativeReview) {
+            Text(
+                text = stringResource(R.string.admin_report_administrative_review),
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+        }
+        report.createdAtMillis?.let { createdAt ->
+            Text(
+                text = "${stringResource(R.string.admin_report_created_at)}: ${formatReportReviewDate(createdAt)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = OldIvory.copy(alpha = 0.78f)
+            )
+        }
+        if (report.kind == AccountReportKind.REPORT) {
+            Text(
+                text = report.reportedUser.usuario.ifBlank { stringResource(R.string.unknown_username) },
+                modifier = Modifier
+                    .background(
+                        color = BloodWine.copy(alpha = 0.36f),
+                        shape = RoundedCornerShape(999.dp)
+                    )
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+        }
+
+        HorizontalDivider(color = TarnishedGold.copy(alpha = 0.18f))
+
+        UserReportConversationBox(
+            report = report,
+            replyText = replyText,
+            isSavingReply = isSavingReply,
+            scrollState = chatScrollState,
+            onReplyTextChange = onReplyTextChange,
+            onReplyToReport = onReplyToReport,
+            onOpenImage = { expandedImageSource = it }
+        )
+    }
+}
+
+@Composable
+private fun UserReportConversationBox(
+    report: AccountReport,
+    replyText: String,
+    isSavingReply: Boolean,
+    scrollState: androidx.compose.foundation.ScrollState,
+    onReplyTextChange: (String) -> Unit,
+    onReplyToReport: (String, List<String>) -> Unit,
+    onOpenImage: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val chatScope = rememberCoroutineScope()
+    var pendingImages by remember { mutableStateOf<List<String>>(emptyList()) }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        pendingImages = pendingImages + uris.mapNotNull { uri ->
+            runCatching {
+                ProfileImageCodec.encodeImageAsDataUri(context, Uri.parse(uri.toString()))
+            }.getOrNull()
+        }
+    }
+    LaunchedEffect(report.chatMessages.size, report.chatMessages.sumOf { it.imageUris.size }) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(440.dp)
+            .border(
+                width = 1.dp,
+                color = TarnishedGold.copy(alpha = 0.28f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = 8.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                report.chatMessages.forEach { message ->
+                    val isAdminMessage = message.sender == REPORT_SENDER_ADMIN
+                    val alignEnd = !isAdminMessage
+                    val title = stringResource(
+                        if (isAdminMessage) R.string.chat_admin else R.string.chat_you
+                    )
+                    if (message.text.isNotBlank()) {
+                        UserReportChatBubble(
+                            title = title,
+                            body = message.text,
+                            alignEnd = alignEnd
+                        )
+                    }
+                    message.imageUris.forEach { uri ->
+                        UserReportImageBubble(
+                            title = title,
+                            imageSource = uri,
+                            alignEnd = alignEnd,
+                            onOpenImage = { onOpenImage(uri) }
+                        )
+                    }
+                }
+            }
+
+            if (scrollState.maxValue > 0) {
+                val thumbHeight = (maxHeight * 0.35f).coerceAtLeast(36.dp)
+                val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue.toFloat()
+                val trackRangePx = with(density) { (maxHeight - thumbHeight).toPx() }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .width(3.dp)
+                        .background(TarnishedGold.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(y = (maxHeight - thumbHeight) * scrollFraction)
+                        .width(3.dp)
+                        .height(thumbHeight)
+                        .background(TarnishedGold.copy(alpha = 0.65f), RoundedCornerShape(999.dp))
+                        .pointerInput(scrollState.maxValue, thumbHeight) {
+                            detectDragGestures { _, dragAmount ->
+                                if (trackRangePx > 0f) {
+                                    val nextValue = (
+                                        scrollState.value + (dragAmount.y / trackRangePx) * scrollState.maxValue
+                                        ).toInt().coerceIn(0, scrollState.maxValue)
+                                    chatScope.launch {
+                                        scrollState.scrollTo(nextValue)
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+        }
+
+        if (pendingImages.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.report_photos_selected, pendingImages.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = replyText,
+                onValueChange = onReplyTextChange,
+                modifier = Modifier.weight(1f),
+                minLines = 1,
+                maxLines = 3,
+                colors = KaiShelvesThemeDefaults.outlinedTextFieldColors()
+            )
+            IconButton(
+                onClick = { imagePickerLauncher.launch("image/*") },
+                enabled = !isSavingReply
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AddPhotoAlternate,
+                    contentDescription = stringResource(R.string.report_add_photos),
+                    tint = TarnishedGold
+                )
+            }
+            IconButton(
+                onClick = {
+                    val textToSend = replyText
+                    onReplyTextChange("")
+                    onReplyToReport(textToSend, pendingImages)
+                    pendingImages = emptyList()
+                },
+                enabled = (replyText.isNotBlank() || pendingImages.isNotEmpty()) && !isSavingReply
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = stringResource(R.string.send),
+                    tint = TarnishedGold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserReportChatBubble(
+    title: String,
+    body: String,
+    alignEnd: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.86f)
+                .background(
+                    color = if (alignEnd) BloodWine.copy(alpha = 0.38f) else Obsidian.copy(alpha = 0.82f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = TarnishedGold.copy(alpha = 0.22f),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                .padding(10.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                color = TarnishedGold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = OldIvory.copy(alpha = 0.9f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun UserReportImageBubble(
+    title: String,
+    imageSource: String,
+    alignEnd: Boolean,
+    onOpenImage: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(0.86f),
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.2f))
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = title,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TarnishedGold
+                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    UserReportImage(
+                        imageSource = imageSource,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clickable(onClick = onOpenImage)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserReportImagePreviewDialog(
+    imageSource: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember(imageSource) { mutableStateOf(1f) }
+    var rotation by remember(imageSource) { mutableStateOf(0f) }
+    var offset by remember(imageSource) { mutableStateOf(Offset.Zero) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.88f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp)
+                    .clickable { }
+                    .pointerInput(imageSource) {
+                        detectTransformGestures { _, pan, zoom, gestureRotation ->
+                            scale = (scale * zoom).coerceIn(0.75f, 5f)
+                            rotation += gestureRotation
+                            offset += pan
+                        }
+                    }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationZ = rotation
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                UserReportImage(
+                    imageSource = imageSource,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(560.dp),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserReportImage(
+    imageSource: String,
+    modifier: Modifier = Modifier,
+    contentScale: androidx.compose.ui.layout.ContentScale = androidx.compose.ui.layout.ContentScale.Crop
+) {
+    val bitmap = remember(imageSource) {
+        runCatching {
+            val base64Payload = imageSource.substringAfter("base64,", "")
+            if (!imageSource.startsWith("data:image") || base64Payload.isBlank()) {
+                null
+            } else {
+                val bytes = Base64.decode(base64Payload, Base64.DEFAULT)
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        }.getOrNull()
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = stringResource(R.string.admin_report_image),
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    } else {
+        AsyncImage(
+            model = imageSource,
+            contentDescription = stringResource(R.string.admin_report_image),
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    }
+}
+
+@Composable
 private fun reportStatusLabel(status: AccountReportStatus): String {
     return stringResource(
         when (status) {
-            AccountReportStatus.PENDING -> R.string.report_status_pending
-            AccountReportStatus.NEEDS_INFO -> R.string.report_status_needs_info
-            AccountReportStatus.RESOLVED -> R.string.report_status_resolved
+            AccountReportStatus.NEW -> R.string.report_status_new
+            AccountReportStatus.IN_PROGRESS -> R.string.report_status_in_progress
+            AccountReportStatus.PROCESSED -> R.string.report_status_processed
+            AccountReportStatus.CLOSED -> R.string.report_status_closed
         }
     )
+}
+
+private fun formatReportReviewDate(timestampMillis: Long): String {
+    return SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        .format(Date(timestampMillis))
 }
 
 @Composable
@@ -1569,6 +2474,7 @@ private fun ProfileAvatarSection(
     displayName: String,
     imageUrl: String,
     isAdmin: Boolean,
+    onOpenPhoto: () -> Unit,
     onChangePhoto: () -> Unit
 ) {
     Column(
@@ -1578,7 +2484,10 @@ private fun ProfileAvatarSection(
         KaiUserAvatar(
             displayName = displayName,
             imageUrl = imageUrl,
-            modifier = Modifier.size(132.dp),
+            modifier = Modifier
+                .size(132.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .clickable(onClick = onOpenPhoto),
             size = 104.dp
         )
 
@@ -1609,6 +2518,35 @@ private fun ProfileAvatarSection(
                 text = stringResource(R.string.change_profile_photo),
                 color = TarnishedGold
             )
+        }
+    }
+}
+
+@Composable
+private fun ProfilePhotoPreviewDialog(
+    displayName: String,
+    imageUrl: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Obsidian),
+            border = BorderStroke(1.dp, TarnishedGold.copy(alpha = 0.72f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .padding(18.dp)
+                    .size(292.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                KaiUserAvatar(
+                    displayName = displayName,
+                    imageUrl = imageUrl,
+                    modifier = Modifier.size(292.dp),
+                    size = 260.dp
+                )
+            }
         }
     }
 }
@@ -1846,6 +2784,15 @@ private fun LanguageOptionButton(
             )
         }
     }
+}
+
+private enum class ProfileReviewFilter {
+    REPORTS,
+    REQUESTS,
+    IN_PROGRESS,
+    NEW,
+    PROCESSED,
+    CLOSED
 }
 
 @Composable

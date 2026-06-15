@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +55,8 @@ import com.example.kaishelvesapp.ui.theme.DeepWalnut
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
+import com.example.kaishelvesapp.ui.util.localizedDescription
 import com.example.kaishelvesapp.ui.util.formatReadDateForDisplay
 import com.example.kaishelvesapp.ui.viewmodel.FriendListDetailViewModel
 
@@ -229,7 +230,7 @@ private fun FriendListDetailHeaderCard(
                 }
 
                 Text(
-                    text = userList?.name ?: stringResource(R.string.list_detail_title),
+                    text = userList?.localizedName() ?: stringResource(R.string.list_detail_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = TarnishedGold,
                     fontWeight = FontWeight.SemiBold,
@@ -251,7 +252,7 @@ private fun FriendListDetailHeaderCard(
                 }
             }
 
-            userList?.description?.takeIf { it.isNotBlank() }?.let { description ->
+            userList?.localizedDescription()?.takeIf { it.isNotBlank() }?.let { description ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = description,

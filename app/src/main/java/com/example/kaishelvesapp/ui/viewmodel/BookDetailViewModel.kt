@@ -37,11 +37,15 @@ class BookDetailViewModel(
     private val _uiState = MutableStateFlow(BookDetailUiState())
     val uiState: StateFlow<BookDetailUiState> = _uiState.asStateFlow()
 
+    private fun assignableLists(lists: List<UserBookList>): List<UserBookList> {
+        return lists.filterNot { it.id == UserListsRepository.SYSTEM_LIST_OWNED_ID }
+    }
+
     init {
         viewModelScope.launch {
             userListsRepository.observeCachedUserLists().collect { lists ->
                 if (lists.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(availableLists = lists)
+                    _uiState.value = _uiState.value.copy(availableLists = assignableLists(lists))
                 }
             }
         }
@@ -84,7 +88,7 @@ class BookDetailViewModel(
             _uiState.value.copy(
                 isListsLoading = cachedLists.isEmpty(),
                 isBookSelectionLoading = bookId.isNotBlank(),
-                availableLists = cachedLists,
+                availableLists = assignableLists(cachedLists),
                 availableTags = cachedTags,
                 selectedListIds = emptySet(),
                 selectedTagIds = emptySet(),
@@ -116,7 +120,7 @@ class BookDetailViewModel(
                 _uiState.value = _uiState.value.copy(
                     isListsLoading = false,
                     isBookSelectionLoading = false,
-                    availableLists = listsResult.getOrDefault(emptyList()),
+                    availableLists = assignableLists(listsResult.getOrDefault(emptyList())),
                     selectedListIds = selectedResult.getOrDefault(emptySet()),
                     availableTags = tagsResult.getOrDefault(emptyList()),
                     selectedTagIds = selectedTagsResult.getOrDefault(emptySet()),

@@ -42,10 +42,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.help.HelpChatMessage
 import com.example.kaishelvesapp.data.help.HelpMessageAuthor
 import com.example.kaishelvesapp.ui.theme.BloodWine
@@ -97,7 +98,7 @@ fun HelpChatOverlay(
                     )
                 },
                 text = {
-                    Text("Ayuda")
+                    Text(stringResource(R.string.help_title))
                 },
                 containerColor = BloodWine,
                 contentColor = TarnishedGold
@@ -150,7 +151,7 @@ fun HelpChatPanel(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Ayuda KaiShelves",
+                        text = stringResource(R.string.help_chat_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = TarnishedGold
                     )
@@ -166,7 +167,7 @@ fun HelpChatPanel(
                 IconButton(onClick = onMinimize) {
                     Icon(
                         imageVector = Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Minimizar chat",
+                        contentDescription = stringResource(R.string.help_minimize_chat),
                         tint = TarnishedGold
                     )
                 }
@@ -174,7 +175,7 @@ fun HelpChatPanel(
                 IconButton(onClick = onClose) {
                     Icon(
                         imageVector = Icons.Filled.Close,
-                        contentDescription = "Cerrar chat",
+                        contentDescription = stringResource(R.string.help_close_chat),
                         tint = TarnishedGold
                     )
                 }
@@ -204,7 +205,7 @@ fun HelpChatPanel(
                                 color = TarnishedGold
                             )
                             Text(
-                                text = "Preparando guia...",
+                                text = stringResource(R.string.help_preparing_guidance),
                                 modifier = Modifier.padding(start = 8.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = OldIvory.copy(alpha = 0.82f)
@@ -231,7 +232,7 @@ fun HelpChatPanel(
                     value = state.input,
                     onValueChange = onInputChange,
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Pregunta sobre la app") },
+                    placeholder = { Text(stringResource(R.string.help_question_placeholder)) },
                     singleLine = true,
                     enabled = !state.isLoading,
                     shape = RoundedCornerShape(18.dp),
@@ -246,7 +247,7 @@ fun HelpChatPanel(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Enviar pregunta",
+                        contentDescription = stringResource(R.string.help_send_question),
                         tint = if (state.input.isNotBlank() && !state.isLoading) TarnishedGold else OldIvory.copy(alpha = 0.45f)
                     )
                 }
@@ -285,7 +286,7 @@ private fun HelpChatBubble(
                 if (!message.suggestedAction.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Sugerencia: ${message.suggestedAction}",
+                        text = stringResource(R.string.help_suggestion, message.suggestedAction.orEmpty()),
                         style = MaterialTheme.typography.labelMedium,
                         color = TarnishedGold
                     )
@@ -293,7 +294,7 @@ private fun HelpChatBubble(
 
                 if (message.confidence != null) {
                     Text(
-                        text = "Confianza ${(message.confidence * 100).toInt()}%",
+                        text = stringResource(R.string.help_confidence, (message.confidence * 100).toInt()),
                         modifier = Modifier.padding(top = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = OldIvory.copy(alpha = 0.6f)

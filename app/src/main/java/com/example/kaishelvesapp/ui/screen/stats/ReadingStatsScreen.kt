@@ -3,6 +3,7 @@ package com.example.kaishelvesapp.ui.screen.stats
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,11 +24,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -33,7 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
+import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
+import com.example.kaishelvesapp.data.model.ReadingStatsSnapshot
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -122,45 +129,61 @@ fun ReadingStatsScreen(
                 )
             }
         ) { innerPadding ->
-            BoxWithConstraints(
+            PullToRefreshBox(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(innerPadding)
-                    .padding(16.dp)
+                    .padding(top = innerPadding.calculateTopPadding()),
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = viewModel::refrescarLecturas
             ) {
-                when {
-                    uiState.isLoading -> {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            CircularProgressIndicator(color = TarnishedGold)
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 16.dp, top = 16.dp, end = 16.dp)
+                ) {
+                    when {
+                        uiState.isLoading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = TarnishedGold)
+                            }
                         }
-                    }
 
-                    else -> {
-                        val stats = rememberReadingStats(uiState.libros)
-                        val stacked = maxWidth < 700.dp
+                        else -> {
+                            val stats = rememberReadingStats(
+                                snapshot = uiState.statsSnapshot,
+                                books = uiState.libros,
+                                readListBooks = uiState.readListBooks,
+                                totalUniqueBooksInLists = uiState.totalUniqueBooksInLists
+                            )
+                            val stacked = maxWidth < 700.dp
 
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            StatsHero(totalBooks = stats.totalBooks)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(bottom = innerPadding.calculateBottomPadding() + 24.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                StatsHero(totalBooks = stats.totalBooksInLists)
 
-                            if (stacked) {
-                                StatsCard(stringResource(R.string.total_books_read), stats.totalBooks.toString())
-                                StatsCard(stringResource(R.string.average_rating), stats.averageRating)
-                                StatsCard(stringResource(R.string.favorite_genre), stats.favoriteGenre)
-                                StatsCard(stringResource(R.string.total_pages_read), stats.totalPages.toString())
-                            } else {
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    StatsCard(stringResource(R.string.total_books_read), stats.totalBooks.toString(), Modifier.weight(1f))
-                                    StatsCard(stringResource(R.string.average_rating), stats.averageRating, Modifier.weight(1f))
-                                }
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    StatsCard(stringResource(R.string.favorite_genre), stats.favoriteGenre, Modifier.weight(1f))
-                                    StatsCard(stringResource(R.string.total_pages_read), stats.totalPages.toString(), Modifier.weight(1f))
+                                if (stacked) {
+                                    StatsCard(stringResource(R.string.total_books_read), stats.totalReadBooks.toString())
+                                    StatsCard(stringResource(R.string.average_rating), stats.averageRating)
+                                    StatsCard(stringResource(R.string.favorite_genre), stats.favoriteGenre)
+                                    StatsCard(stringResource(R.string.total_pages_read), stats.totalPages.toString())
+                                } else {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        StatsCard(stringResource(R.string.total_books_read), stats.totalReadBooks.toString(), Modifier.weight(1f))
+                                        StatsCard(stringResource(R.string.average_rating), stats.averageRating, Modifier.weight(1f))
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        StatsCard(stringResource(R.string.favorite_genre), stats.favoriteGenre, Modifier.weight(1f))
+                                        StatsCard(stringResource(R.string.total_pages_read), stats.totalPages.toString(), Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -172,34 +195,88 @@ fun ReadingStatsScreen(
 }
 
 private data class ReadingStats(
-    val totalBooks: Int,
+    val totalBooksInLists: Int,
+    val totalReadBooks: Int,
     val averageRating: String,
     val favoriteGenre: String,
     val totalPages: Int
 )
 
 @Composable
-private fun rememberReadingStats(books: List<LibroLeido>): ReadingStats {
+private fun rememberReadingStats(
+    snapshot: ReadingStatsSnapshot?,
+    books: List<LibroLeido>,
+    readListBooks: List<Libro>,
+    totalUniqueBooksInLists: Int
+): ReadingStats {
+    if (snapshot != null) {
+        return ReadingStats(
+            totalBooksInLists = snapshot.totalBooksInLists,
+            totalReadBooks = snapshot.totalReadBooks,
+            averageRating = snapshot.averageRating?.let { String.format("%.1f/5", it) }
+                ?: stringResource(R.string.not_rated_yet),
+            favoriteGenre = snapshot.favoriteGenre.ifBlank {
+                if (snapshot.totalReadBooks > 0) {
+                    stringResource(R.string.unknown_genre)
+                } else {
+                    stringResource(R.string.no_books_found)
+                }
+            },
+            totalPages = snapshot.totalPages
+        )
+    }
+
+    val booksInReadList = readListBooks.ifEmpty { books.map(LibroLeido::toLibro) }
     val ratedBooks = books.filter { it.puntuacion > 0 }
     val averageRating = if (ratedBooks.isNotEmpty()) {
         String.format("%.1f/5", ratedBooks.map { it.puntuacion }.average())
     } else {
         stringResource(R.string.not_rated_yet)
     }
-    val favoriteGenre = books
-        .map { it.genero.ifBlank { stringResource(R.string.unknown_genre) } }
+    val favoriteGenre = booksInReadList
+        .map { it.genero.trim() }
+        .filter { it.isNotBlank() }
         .groupingBy { it }
         .eachCount()
         .maxByOrNull { it.value }
         ?.key
-        ?: stringResource(R.string.no_books_found)
+        ?: if (booksInReadList.isNotEmpty()) {
+            stringResource(R.string.unknown_genre)
+        } else {
+            stringResource(R.string.no_books_found)
+        }
 
     return ReadingStats(
-        totalBooks = books.size,
+        totalBooksInLists = totalUniqueBooksInLists,
+        // Cuenta solo los libros que estan en la lista de leidos.
+        totalReadBooks = booksInReadList.distinctBy(::bookIdentityKey).size,
         averageRating = averageRating,
         favoriteGenre = favoriteGenre,
         totalPages = books.sumOf { it.paginas }
     )
+}
+
+private fun LibroLeido.toLibro(): Libro {
+    return Libro(
+        id = id,
+        isbn = isbn,
+        titulo = titulo,
+        autor = autor,
+        editorial = editorial,
+        genero = genero,
+        fechaPublicacion = fechaPublicacion,
+        paginas = paginas,
+        imagen = imagen,
+        pdf = pdf
+    )
+}
+
+private fun bookIdentityKey(book: Libro): String {
+    return when {
+        book.isbn.isNotBlank() -> "isbn:${book.isbn.trim().lowercase()}"
+        book.id.isNotBlank() -> "id:${book.id.trim().lowercase()}"
+        else -> "title:${book.titulo.trim().lowercase()}|author:${book.autor.trim().lowercase()}"
+    }
 }
 
 @Composable

@@ -1,17 +1,24 @@
 package com.example.kaishelvesapp.data.repository
 
 import com.example.kaishelvesapp.data.local.GuestLocalStore
+import com.example.kaishelvesapp.data.local.DiscoverCatalogLocalStore
 import com.example.kaishelvesapp.data.localization.BookMetadataLocalizer
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.remote.googlebooks.GoogleBooksClient
+import com.example.kaishelvesapp.data.remote.googlebooks.GoogleBooksResponse
 import com.example.kaishelvesapp.data.remote.googlebooks.LibraryGenres
 import com.example.kaishelvesapp.data.remote.googlebooks.toLibro
+import com.example.kaishelvesapp.data.remote.inventaire.InventaireClient
+import com.example.kaishelvesapp.data.remote.inventaire.inventaireBookFromResponse
+import com.example.kaishelvesapp.data.remote.openlibrary.OpenLibraryClient
+import com.example.kaishelvesapp.data.remote.openlibrary.toLibro
 import com.example.kaishelvesapp.ui.language.LanguageManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 import retrofit2.HttpException
@@ -19,7 +26,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.random.Random
 
 class BookRepository(
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -29,6 +35,9 @@ class BookRepository(
 
     private val api = GoogleBooksClient.api
     private val publicApi = GoogleBooksClient.publicApi
+    private val inventaireApi = InventaireClient.api
+    private val openLibraryApi = OpenLibraryClient.api
+    private val maxScanHistoryItems = 50
 
     data class BookSearchResult(
         val totalItems: Int,
@@ -39,6 +48,13 @@ class BookRepository(
     enum class BookSearchSort {
         NEWEST,
         RATING
+    }
+
+    enum class DiscoverCatalogMode(val cacheKey: String) {
+        SPECIAL("special"),
+        CURRENT("current"),
+        TOP_RATED("top_rated"),
+        KNOWN_AUTHORS("known_authors")
     }
 
     private fun safeBookDocId(rawId: String): String {
@@ -102,6 +118,20 @@ class BookRepository(
         }
     }
 
+    private fun bookKey(book: Libro): String {
+        val title = book.titulo.trim().lowercase(Locale.ROOT)
+        val author = book.autor.trim().lowercase(Locale.ROOT)
+        return book.id.ifBlank { book.isbn }
+            .ifBlank { "$title-$author" }
+    }
+
+    private fun scanHistoryBookKey(book: Libro): String {
+        return book.isbn.ifBlank { book.id.ifBlank { book.titulo } }
+            .trim()
+            .ifBlank { "unknown_book" }
+            .replace("/", "_")
+    }
+
     private fun searchResultComparator(sort: BookSearchSort): Comparator<Pair<Libro, Int>> {
         return when (sort) {
             BookSearchSort.NEWEST -> compareByDescending<Pair<Libro, Int>> { it.first.fechaPublicacion }
@@ -123,6 +153,40 @@ class BookRepository(
             "en" -> "en"
             else -> null
         }
+    }
+
+    fun getCachedDiscoverBooks(mode: DiscoverCatalogMode): List<Libro> {
+        val targetLanguage = LanguageManager.getCurrentLanguage()
+        return DiscoverCatalogLocalStore.read(
+            languageTag = targetLanguage,
+            modeKey = mode.cacheKey
+        ).map { book ->
+            book.preferKnownEdition(targetLanguage).withCoverFallback()
+        }
+    }
+
+    suspend fun preloadDiscoverBooks(): Result<Unit> {
+        return try {
+            // La precarga no debe consumir cuota de Google Books antes de que el usuario busque.
+            DiscoverCatalogMode.entries.forEach { mode ->
+                DiscoverCatalogLocalStore.read(
+                    languageTag = LanguageManager.getCurrentLanguage(),
+                    modeKey = mode.cacheKey
+                )
+            }
+
+            Result.success(Unit)
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    private fun persistDiscoverBooks(mode: DiscoverCatalogMode, books: List<Libro>) {
+        DiscoverCatalogLocalStore.write(
+            languageTag = LanguageManager.getCurrentLanguage(),
+            modeKey = mode.cacheKey,
+            books = books
+        )
     }
 
     private fun Throwable.shouldRetryGoogleBooksWithoutApiKey(): Boolean {
@@ -184,76 +248,298 @@ class BookRepository(
         }
     }
 
-    suspend fun obtenerLibros(): Result<List<Libro>> {
+    private suspend fun searchGoogleBooksPublicOnce(
+        query: String,
+        maxResults: Int,
+        startIndex: Int = 0,
+        orderBy: String? = null,
+        langRestrict: String? = currentGoogleBooksLanguage()
+    ) = publicApi.searchBooks(
+        query = query,
+        maxResults = maxResults,
+        startIndex = startIndex,
+        orderBy = orderBy,
+        langRestrict = langRestrict
+    )
+
+    private suspend fun searchOpenLibraryByIsbn(isbn: String): Libro? {
+        val normalizedIsbn = normalizeIsbnQuery(isbn)
+        if (normalizedIsbn.isBlank()) return null
+
+        val response = openLibraryApi.getBooksByBibkeys(
+            bibkeys = "ISBN:$normalizedIsbn"
+        )
+
+        return response["ISBN:$normalizedIsbn"]
+            ?.toLibro(normalizedIsbn)
+            ?.takeIf { book ->
+                book.titulo.isNotBlank() || book.autor.isNotBlank() || book.imagen.isNotBlank()
+            }
+    }
+
+    private suspend fun searchOpenLibraryByText(
+        query: String,
+        startIndex: Int,
+        maxResults: Int
+    ): BookSearchResult {
+        val response = openLibraryApi.searchBooks(
+            query = query,
+            limit = maxResults,
+            offset = startIndex
+        )
+        val books = response.docs
+            .map { it.toLibro() }
+            .filter { book -> book.titulo.isNotBlank() || book.autor.isNotBlank() }
+            .distinctBy(::searchResultKey)
+
+        return BookSearchResult(
+            totalItems = response.numFound,
+            books = books,
+            hasMore = startIndex + maxResults < response.numFound
+        )
+    }
+
+    private suspend fun searchInventaireByIsbn(isbn: String): Libro? {
+        val normalizedIsbn = normalizeIsbnQuery(isbn)
+        if (normalizedIsbn.isBlank()) return null
+
+        val response = inventaireApi.getEntitiesByUris(
+            uris = "isbn:$normalizedIsbn",
+            refresh = false
+        )
+
+        return inventaireBookFromResponse(response, normalizedIsbn)
+            ?.takeIf { book ->
+                book.titulo.isNotBlank() || book.autor.isNotBlank()
+            }
+    }
+
+    suspend fun getScannerHistory(): Result<List<Libro>> {
+        return try {
+            if (isGuestSessionActive()) {
+                return Result.success(
+                    GuestLocalStore.readState().scanHistory
+                        .map { book -> book.withCoverFallback() }
+                )
+            }
+
+            val uid = auth.currentUser?.uid
+                ?: return Result.success(emptyList())
+
+            val snapshot = firestore.collection("usuarios")
+                .document(uid)
+                .collection("historial_escaneos")
+                .orderBy("scannedAt", Query.Direction.DESCENDING)
+                .limit(maxScanHistoryItems.toLong())
+                .get()
+                .await()
+
+            val books = snapshot.documents
+                .mapNotNull { document ->
+                    document.toObject(Libro::class.java)
+                        ?.copy(id = document.getString("id").orEmpty().ifBlank { document.id })
+                }
+                .map { book -> book.withCoverFallback() }
+
+            Result.success(books)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveScannerHistoryBook(book: Libro): Result<List<Libro>> {
+        return try {
+            val normalizedBook = book.withCoverFallback()
+            val key = scanHistoryBookKey(normalizedBook)
+            if (key == "unknown_book") {
+                return Result.success(getScannerHistory().getOrDefault(emptyList()))
+            }
+
+            if (isGuestSessionActive()) {
+                val updatedState = GuestLocalStore.updateState { currentState ->
+                    val updatedHistory = (listOf(normalizedBook) + currentState.scanHistory.filter { existing ->
+                        scanHistoryBookKey(existing) != key
+                    }).take(maxScanHistoryItems)
+
+                    currentState.copy(scanHistory = updatedHistory)
+                }
+                return Result.success(updatedState.scanHistory)
+            }
+
+            val uid = auth.currentUser?.uid
+                ?: return Result.success(emptyList())
+
+            firestore.collection("usuarios")
+                .document(uid)
+                .collection("historial_escaneos")
+                .document(key)
+                .set(
+                    mapOf(
+                        "id" to normalizedBook.id.ifBlank { normalizedBook.isbn.ifBlank { key } },
+                        "isbn" to normalizedBook.isbn,
+                        "titulo" to normalizedBook.titulo,
+                        "autor" to normalizedBook.autor,
+                        "editorial" to normalizedBook.editorial,
+                        "genero" to normalizedBook.genero,
+                        "fechaPublicacion" to normalizedBook.fechaPublicacion,
+                        "paginas" to normalizedBook.paginas,
+                        "averageRating" to normalizedBook.averageRating,
+                        "ratingsCount" to normalizedBook.ratingsCount,
+                        "imagen" to normalizedBook.imagen,
+                        "pdf" to normalizedBook.pdf,
+                        "scannedAt" to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                )
+                .await()
+
+            getScannerHistory()
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun obtenerLibros(
+        mode: DiscoverCatalogMode = DiscoverCatalogMode.SPECIAL,
+        previousBooks: List<Libro> = emptyList()
+    ): Result<List<Libro>> {
         return try {
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-            val recentYear = currentYear - 1
-            val authorSeeds = listOf(
-                "inauthor:a",
-                "inauthor:e",
-                "inauthor:i",
-                "inauthor:o",
-                "inauthor:u",
-                "inauthor:an",
-                "inauthor:ma",
-                "inauthor:jo",
-                "inauthor:la",
-                "inauthor:ca"
-            ).shuffled().take(4)
-            val newestQueries = listOf(
-                currentYear.toString(),
-                "published $currentYear",
-                "$currentYear books",
-                "$currentYear novel",
-                "$currentYear literatura",
-                "$currentYear libro",
-                "$recentYear books",
-                "$recentYear novel",
-                "$recentYear literatura"
+            val recentYear = currentYear - 2
+            val previousKeys = previousBooks.map(::bookKey).toSet()
+            val refreshIndex = DiscoverCatalogLocalStore.nextRefreshIndex(
+                languageTag = LanguageManager.getCurrentLanguage(),
+                modeKey = mode.cacheKey
             )
-                .shuffled()
-                .take(5) + authorSeeds
+            val discoverQueries = buildDiscoverQueries(mode, currentYear, recentYear, refreshIndex)
 
-            val libros = newestQueries
-                .flatMap { query ->
-                    searchGoogleBooks(
-                        query = query,
-                        maxResults = 40,
-                        startIndex = listOf(0, 40, 80).random(),
-                        orderBy = "newest"
-                    ).items
+            val rawCandidates = discoverQueries
+                .flatMapIndexed { index, query ->
+                    runCatching {
+                        searchGoogleBooks(
+                            query = query.text,
+                            maxResults = 40,
+                            startIndex = discoverStartIndex(refreshIndex, index),
+                            orderBy = query.orderBy
+                        ).items
+                    }.getOrDefault(emptyList())
                 }
                 .map { it.toLibro() }
                 .filter { libro ->
                     libro.titulo.isNotBlank() &&
-                        libro.autor.isNotBlank() &&
-                        libro.fechaPublicacion in recentYear..currentYear
+                        libro.autor.isNotBlank()
                 }
                 .distinctBy { libro ->
-                    libro.id.ifBlank {
-                        libro.isbn.ifBlank {
-                            "${libro.titulo.lowercase()}-${libro.autor.lowercase()}"
-                        }
-                    }
+                    bookKey(libro)
                 }
-                .sortedWith(
-                    compareByDescending<Libro> { it.fechaPublicacion }
-                        .thenBy { it.titulo.lowercase() }
-                )
-                .let { sortedBooks ->
-                    val randomOffset = if (sortedBooks.size > 40) {
-                        Random.nextInt(0, (sortedBooks.size - 40).coerceAtMost(12) + 1)
-                    } else {
-                        0
-                    }
+                // La mezcla final evita que el refresco vuelva a enseñar siempre los mismos primeros libros.
+                .shuffled()
+            val candidates = rawCandidates
+                .filter { libro -> matchesDiscoverMode(libro, mode, recentYear, currentYear) }
+                .takeIf { filteredBooks -> filteredBooks.size >= 8 }
+                ?: rawCandidates
 
-                    sortedBooks.drop(randomOffset).take(40)
-                }
+            val refreshedBooks = candidates
+                .filterNot { libro -> bookKey(libro) in previousKeys }
+                .take(40)
+                .ifEmpty { candidates.drop((refreshIndex * 7) % candidates.size.coerceAtLeast(1)).take(40) }
                 .localizeForCurrentLanguage()
+                .map { book -> book.withCoverFallback() }
 
-            Result.success(libros)
+            persistDiscoverBooks(mode, refreshedBooks)
+            Result.success(refreshedBooks)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun buildDiscoverQueries(
+        mode: DiscoverCatalogMode,
+        currentYear: Int,
+        recentYear: Int,
+        refreshIndex: Int
+    ): List<DiscoverQuery> {
+        val spanish = LanguageManager.getCurrentLanguage() == "es"
+        val currentQueries = listOf(
+            DiscoverQuery(if (spanish) "$currentYear libros" else "$currentYear books", "newest"),
+            DiscoverQuery(if (spanish) "$currentYear novela" else "$currentYear novel", "newest"),
+            DiscoverQuery("$currentYear literatura", "newest"),
+            DiscoverQuery(if (spanish) "$recentYear libros" else "$recentYear books", "newest"),
+            DiscoverQuery(if (spanish) "$recentYear novela" else "$recentYear novel", "newest"),
+            DiscoverQuery(if (spanish) "publicado $currentYear" else "published $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "ficcion" else "subject:fiction"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "fantasia" else "subject:fantasy"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "misterio" else "subject:mystery"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "romance" else "subject:romance"} $currentYear", "newest"),
+            DiscoverQuery("${if (spanish) "thriller" else "subject:thriller"} $recentYear", "newest"),
+            DiscoverQuery("${if (spanish) "juvenil" else "subject:young adult"} $recentYear", "newest")
+        )
+
+        val topRatedQueries = listOf(
+            DiscoverQuery(if (spanish) "ficcion premiada" else "subject:fiction award winning"),
+            DiscoverQuery(if (spanish) "fantasia bestseller" else "subject:fantasy bestseller"),
+            DiscoverQuery(if (spanish) "misterio bestseller" else "subject:mystery bestseller"),
+            DiscoverQuery(if (spanish) "ciencia ficcion premio" else "subject:science fiction award"),
+            DiscoverQuery(if (spanish) "novela historica bestseller" else "subject:historical fiction bestseller"),
+            DiscoverQuery(if (spanish) "clasicos modernos novela" else "modern classics fiction"),
+            DiscoverQuery(if (spanish) "mejores novelas premiadas" else "goodreads choice awards fiction"),
+            DiscoverQuery(if (spanish) "novela fantasia popular" else "hugely popular fantasy novel"),
+            DiscoverQuery(if (spanish) "novela literaria aclamada" else "critically acclaimed literary fiction"),
+            DiscoverQuery(if (spanish) "mejores libros de la decada" else "best books of the decade")
+        )
+
+        val knownAuthorQueries = listOf(
+            "Brandon Sanderson",
+            "Stephen King",
+            "Agatha Christie",
+            "Haruki Murakami",
+            "Isabel Allende",
+            "Carlos Ruiz Zafón",
+            "Ursula K. Le Guin",
+            "Neil Gaiman",
+            "Jane Austen",
+            "Gabriel García Márquez"
+        ).map { author -> DiscoverQuery("inauthor:$author") }
+
+        val specialQueries = currentQueries.take(4) + topRatedQueries.take(4) + knownAuthorQueries.take(6)
+
+        val queries = when (mode) {
+            DiscoverCatalogMode.SPECIAL -> specialQueries
+            DiscoverCatalogMode.CURRENT -> currentQueries
+            DiscoverCatalogMode.TOP_RATED -> topRatedQueries
+            DiscoverCatalogMode.KNOWN_AUTHORS -> knownAuthorQueries
+        }
+
+        val offset = refreshIndex % queries.size.coerceAtLeast(1)
+        return (queries.drop(offset) + queries.take(offset)).take(8)
+    }
+
+    private fun discoverStartIndex(refreshIndex: Int, queryIndex: Int): Int {
+        val pages = listOf(0, 40, 80, 120, 160)
+        return pages[(refreshIndex + queryIndex) % pages.size]
+    }
+
+    private fun matchesDiscoverMode(
+        book: Libro,
+        mode: DiscoverCatalogMode,
+        recentYear: Int,
+        currentYear: Int
+    ): Boolean {
+        return when (mode) {
+            DiscoverCatalogMode.CURRENT ->
+                book.fechaPublicacion in recentYear..currentYear
+
+            DiscoverCatalogMode.TOP_RATED ->
+                book.averageRating >= 3.8 || book.ratingsCount >= 20
+
+            DiscoverCatalogMode.KNOWN_AUTHORS ->
+                book.autor.isNotBlank()
+
+            DiscoverCatalogMode.SPECIAL ->
+                book.fechaPublicacion in recentYear..currentYear ||
+                    book.averageRating >= 3.8 ||
+                    book.ratingsCount >= 20 ||
+                    book.genero.isNotBlank()
         }
     }
 
@@ -331,28 +617,33 @@ class BookRepository(
             val googleQueries = if (looksLikeIsbn(cleanQuery)) {
                 listOf("isbn:$isbnQuery")
             } else {
+                // La consulta general suele recuperar mejor títulos y autores que las búsquedas exactas.
                 val escapedQuery = cleanQuery.replace("\"", "")
                 listOf(
-                    "\"$escapedQuery\"",
+                    cleanQuery,
                     "inauthor:\"$escapedQuery\"",
-                    "intitle:\"$escapedQuery\"",
-                    cleanQuery
+                    "intitle:\"$escapedQuery\""
                 )
             }
 
-            val responses = coroutineScope {
-                googleQueries.map { googleQuery ->
-                    async {
-                        runCatching {
-                            searchGoogleBooks(
-                                query = googleQuery,
-                                maxResults = maxResults,
-                                startIndex = startIndex,
-                                orderBy = if (sort == BookSearchSort.NEWEST) "newest" else null
-                            )
-                        }.getOrNull()
-                    }
-                }.mapNotNull { it.await() }
+            val responses = mutableListOf<GoogleBooksResponse>()
+            var lastSearchError: Exception? = null
+
+            for (googleQuery in googleQueries) {
+                try {
+                    val response = searchGoogleBooks(
+                        query = googleQuery,
+                        maxResults = maxResults,
+                        startIndex = startIndex,
+                        orderBy = if (sort == BookSearchSort.NEWEST) "newest" else null
+                    )
+                    responses += response
+
+                    // Evita peticiones extra si la primera búsqueda ya trae una página completa.
+                    if (response.items.size >= maxResults && startIndex == 0) break
+                } catch (error: Exception) {
+                    lastSearchError = error
+                }
             }
 
             val queryTokens = cleanQuery
@@ -360,7 +651,7 @@ class BookRepository(
                 .split(Regex("\\s+"))
                 .filter { it.length > 1 }
 
-            val libros = responses
+            val googleBooks = responses
                 .flatMap { it.items }
                 .map { it.toLibro() }
                 .filter { it.titulo.isNotBlank() || it.autor.isNotBlank() }
@@ -371,13 +662,29 @@ class BookRepository(
                 .map { it.first }
                 .take(80)
 
+            if (googleBooks.isEmpty() && !looksLikeIsbn(cleanQuery)) {
+                val fallbackResult = searchOpenLibraryByText(
+                    query = cleanQuery,
+                    startIndex = startIndex,
+                    maxResults = maxResults
+                )
+
+                if (fallbackResult.books.isNotEmpty() || lastSearchError != null) {
+                    return Result.success(fallbackResult)
+                }
+            }
+
+            if (responses.isEmpty() && lastSearchError != null) {
+                throw lastSearchError
+            }
+
             val hasMore = responses.any { response ->
                 response.items.isNotEmpty() && startIndex + maxResults < response.totalItems
             }
             Result.success(
                 BookSearchResult(
-                    totalItems = libros.size,
-                    books = libros,
+                    totalItems = googleBooks.size,
+                    books = googleBooks,
                     hasMore = hasMore
                 )
             )
@@ -393,10 +700,27 @@ class BookRepository(
                 return Result.success(emptyList())
             }
 
-            val response = searchGoogleBooks(
-                query = "isbn:$normalizedIsbn",
-                maxResults = 10
-            )
+            searchInventaireByIsbn(normalizedIsbn)?.let { inventaireBook ->
+                return Result.success(listOf(inventaireBook))
+            }
+
+            searchOpenLibraryByIsbn(normalizedIsbn)?.let { openLibraryBook ->
+                return Result.success(listOf(openLibraryBook))
+            }
+
+            val response = if (GoogleBooksClient.hasApiKey) {
+                api.searchBooks(
+                    query = "isbn:$normalizedIsbn",
+                    maxResults = 10,
+                    startIndex = 0,
+                    langRestrict = currentGoogleBooksLanguage()
+                )
+            } else {
+                searchGoogleBooksPublicOnce(
+                    query = "isbn:$normalizedIsbn",
+                    maxResults = 10
+                )
+            }
 
             val libros = response.items
                 .map { it.toLibro() }
@@ -484,6 +808,62 @@ class BookRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun completarGenerosFaltantes(libros: List<Libro>): Result<List<Libro>> {
+        return try {
+            val enrichedBooks = libros.map { libro ->
+                if (libro.genero.isNotBlank()) {
+                    libro
+                } else {
+                    // Reutiliza las fuentes del catálogo para que las estadísticas no dependan de datos antiguos incompletos.
+                    resolveGenreForBook(libro)?.let { genre -> libro.copy(genero = genre) } ?: libro
+                }
+            }
+
+            Result.success(enrichedBooks)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun resolveGenreForBook(libro: Libro): String? {
+        val fromIsbn = libro.isbn
+            .takeIf { it.isNotBlank() }
+            ?.let { isbn ->
+                searchBooksByIsbn(isbn)
+                    .getOrDefault(emptyList())
+                    .firstNotBlankGenre()
+            }
+        if (!fromIsbn.isNullOrBlank()) return fromIsbn
+
+        val query = listOf(libro.titulo, libro.autor)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        if (query.isBlank()) return null
+
+        return searchBooksForResults(query = query, maxResults = 10)
+            .getOrDefault(BookSearchResult(totalItems = 0, books = emptyList()))
+            .books
+            .filter { candidate -> candidate.matchesBook(libro) }
+            .firstNotBlankGenre()
+    }
+
+    private fun List<Libro>.firstNotBlankGenre(): String? {
+        return firstOrNull { it.genero.isNotBlank() }?.genero
+    }
+
+    private fun Libro.matchesBook(other: Libro): Boolean {
+        val sameIsbn = isbn.isNotBlank() && other.isbn.isNotBlank() &&
+            isbn.equals(other.isbn, ignoreCase = true)
+        val sameTitle = titulo.isNotBlank() && other.titulo.isNotBlank() &&
+            titulo.trim().equals(other.titulo.trim(), ignoreCase = true)
+        val sameAuthor = autor.isBlank() || other.autor.isBlank() ||
+            autor.trim().equals(other.autor.trim(), ignoreCase = true) ||
+            autor.trim().contains(other.autor.trim(), ignoreCase = true) ||
+            other.autor.trim().contains(autor.trim(), ignoreCase = true)
+
+        return sameIsbn || (sameTitle && sameAuthor)
     }
 
     suspend fun actualizarPuntuacion(bookId: String, puntuacion: Int): Result<Unit> {
@@ -627,10 +1007,143 @@ class BookRepository(
         val targetLanguage = LanguageManager.getCurrentLanguage()
 
         return map { book ->
-            BookMetadataLocalizer.localize(
-                book = book,
-                targetLanguageTag = targetLanguage
-            )
+            val preferredBook = book.preferKnownEdition(targetLanguage)
+            if (preferredBook.titulo.isKnownDiscoverEditionTitle()) {
+                preferredBook
+            } else {
+                BookMetadataLocalizer.localize(
+                    book = preferredBook,
+                    targetLanguageTag = targetLanguage
+                )
+            }
         }
     }
+
+    private fun Libro.preferKnownEdition(targetLanguage: String): Libro {
+        val normalizedTitle = titulo.normalizedEditionKey()
+        val edition = knownDiscoverEditions[normalizedTitle] ?: return this
+        val preferred = if (targetLanguage == "es") edition.spanish else edition.english
+
+        return copy(
+            titulo = preferred.title,
+            genero = preferred.genre.ifBlank { genero },
+            imagen = preferred.coverUrl.ifBlank { imagen }
+        )
+    }
+
+    private fun Libro.withCoverFallback(): Libro {
+        if (imagen.isNotBlank()) return this
+
+        val fallback = when {
+            isbn.isNotBlank() -> "https://covers.openlibrary.org/b/isbn/${isbn.trim()}-L.jpg?default=false"
+            titulo.isNotBlank() -> "https://covers.openlibrary.org/b/title/${titulo.urlEncoded()}-L.jpg?default=false"
+            else -> ""
+        }
+
+        return if (fallback.isBlank()) this else copy(imagen = fallback)
+    }
+
+    private fun String.normalizedEditionKey(): String {
+        return trim()
+            .lowercase(Locale.ROOT)
+            .replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+            .replace("ü", "u")
+            .replace("ñ", "n")
+    }
+
+    private fun String.urlEncoded(): String {
+        return trim()
+            .replace(" ", "%20")
+            .replace(",", "%2C")
+            .replace("&", "%26")
+            .replace("'", "%27")
+    }
+
+    private fun String.isKnownDiscoverEditionTitle(): Boolean {
+        return knownDiscoverEditions.containsKey(normalizedEditionKey())
+    }
+}
+
+private data class DiscoverQuery(
+    val text: String,
+    val orderBy: String? = null
+)
+
+private data class KnownBookEdition(
+    val title: String,
+    val genre: String,
+    val coverUrl: String
+)
+
+private data class KnownBookEditionPair(
+    val spanish: KnownBookEdition,
+    val english: KnownBookEdition
+)
+
+private fun googleCover(volumeId: String): String {
+    return "https://books.google.com/books/content?id=$volumeId&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+}
+
+private fun openLibraryTitleCover(title: String): String {
+    return "https://covers.openlibrary.org/b/title/${title.replace(" ", "%20").replace(",", "%2C")}-L.jpg?default=false"
+}
+
+private val knownDiscoverEditions = listOf(
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El nombre del viento", "Fantasia", googleCover("QeYF9kTMypgC")),
+        english = KnownBookEdition("The Name of the Wind", "Fantasy", googleCover("TG5DXNXv2tAC"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Proyecto Hail Mary", "Ciencia ficcion", googleCover("t1slEAAAQBAJ")),
+        english = KnownBookEdition("Project Hail Mary", "Science fiction", googleCover("GrYsEAAAQBAJ"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El camino de los reyes", "Fantasia", googleCover("LcqipwAACAAJ")),
+        english = KnownBookEdition("The Way of Kings", "Fantasy", openLibraryTitleCover("The Way of Kings"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El hobbit", "Fantasia", openLibraryTitleCover("The Hobbit")),
+        english = KnownBookEdition("The Hobbit", "Fantasy", openLibraryTitleCover("The Hobbit"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("La ladrona de libros", "Historica", openLibraryTitleCover("The Book Thief")),
+        english = KnownBookEdition("The Book Thief", "Historical fiction", openLibraryTitleCover("The Book Thief"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("El resplandor", "Terror", openLibraryTitleCover("The Shining")),
+        english = KnownBookEdition("The Shining", "Horror", openLibraryTitleCover("The Shining"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Asesinato en el Orient Express", "Misterio", openLibraryTitleCover("Murder on the Orient Express")),
+        english = KnownBookEdition("Murder on the Orient Express", "Mystery", openLibraryTitleCover("Murder on the Orient Express"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("Kafka en la orilla", "Ficcion", openLibraryTitleCover("Kafka on the Shore")),
+        english = KnownBookEdition("Kafka on the Shore", "Fiction", openLibraryTitleCover("Kafka on the Shore"))
+    ),
+    KnownBookEditionPair(
+        spanish = KnownBookEdition("La mano izquierda de la oscuridad", "Ciencia ficcion", openLibraryTitleCover("The Left Hand of Darkness")),
+        english = KnownBookEdition("The Left Hand of Darkness", "Science fiction", openLibraryTitleCover("The Left Hand of Darkness"))
+    )
+).flatMap { pair ->
+    listOf(
+        pair.spanish.title.normalizedKnownEditionKey() to pair,
+        pair.english.title.normalizedKnownEditionKey() to pair
+    )
+}.toMap()
+
+private fun String.normalizedKnownEditionKey(): String {
+    return trim()
+        .lowercase(Locale.ROOT)
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ü", "u")
+        .replace("ñ", "n")
 }

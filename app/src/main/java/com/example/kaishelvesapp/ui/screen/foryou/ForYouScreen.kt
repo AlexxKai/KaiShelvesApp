@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.foryou
+﻿package com.example.kaishelvesapp.ui.screen.foryou
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -393,3 +393,4 @@ private fun ForYouMessageCard(
         }
     }
 }
+

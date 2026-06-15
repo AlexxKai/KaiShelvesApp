@@ -17,9 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,11 +38,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,15 +62,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Done
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
 import com.example.kaishelvesapp.data.model.LibroLeido
@@ -73,8 +74,8 @@ import com.example.kaishelvesapp.data.model.UserBookTag
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
 import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.UserListsRepository
-import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.ActivitySocialActions
+import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
 import com.example.kaishelvesapp.ui.components.KaiNavigationDrawerContent
 import com.example.kaishelvesapp.ui.components.KaiPrimaryTopBar
@@ -87,13 +88,14 @@ import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailUiState
 import com.example.kaishelvesapp.ui.viewmodel.BookDetailViewModel
 import com.example.kaishelvesapp.ui.viewmodel.HomeViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,6 +116,8 @@ fun HomeScreen(
     onLogout: () -> Unit,
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
+    hasAddedFriends: Boolean? = null,
+    onOpenFriendSuggestions: () -> Unit = {},
     onOpenFriendProfile: (String) -> Unit,
     onOpenBook: (Libro) -> Unit,
     onSectionSelected: (KaiSection) -> Unit
@@ -201,22 +205,33 @@ fun HomeScreen(
                         }
                     }
 
-                    uiState.errorMessage != null -> {
+                    uiState.errorMessageRes != null && !uiState.isOfflineError -> {
                         HomeMessageCard(
                             title = stringResource(R.string.home_recent_activity_title),
-                            message = uiState.errorMessage!!,
+                            message = stringResource(uiState.errorMessageRes!!),
                             actionLabel = stringResource(R.string.retry),
                             onAction = viewModel::loadFeed
                         )
                     }
 
                     uiState.activities.isEmpty() -> {
-                        HomeMessageCard(
-                            title = stringResource(R.string.home_empty_activity_title),
-                            message = stringResource(R.string.home_empty_activity_body),
-                            actionLabel = stringResource(R.string.retry),
-                            onAction = viewModel::loadFeed
-                        )
+                        // Mantiene el mensaje de actividad vacía cuando la lista de amigos aún no está confirmada.
+                        if (hasAddedFriends == false) {
+                            HomeMessageCard(
+                                title = stringResource(R.string.home_no_friends_title),
+                                message = stringResource(R.string.home_no_friends_body),
+                                actionLabel = stringResource(R.string.add_friend),
+                                primaryAction = true,
+                                onAction = onOpenFriendSuggestions
+                            )
+                        } else {
+                            HomeMessageCard(
+                                title = stringResource(R.string.home_empty_activity_title),
+                                message = stringResource(R.string.home_empty_activity_body),
+                                actionLabel = stringResource(R.string.retry),
+                                onAction = viewModel::loadFeed
+                            )
+                        }
                     }
 
                     else -> {
@@ -226,11 +241,24 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             item {
-                                Text(
-                                    text = stringResource(R.string.home_recent_activity_title),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = TarnishedGold
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.home_recent_activity_title),
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        color = TarnishedGold
+                                    )
+                                    if (uiState.isCheckingForUpdates) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(22.dp),
+                                            color = TarnishedGold,
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
                             }
 
                             items(
@@ -274,6 +302,7 @@ private fun HomeMessageCard(
     title: String,
     message: String,
     actionLabel: String,
+    primaryAction: Boolean = false,
     onAction: () -> Unit
 ) {
     Box(
@@ -308,8 +337,17 @@ private fun HomeMessageCard(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                TextButton(onClick = onAction) {
-                    Text(text = actionLabel, color = Color(0xFF66D6D6))
+                if (primaryAction) {
+                    Button(
+                        onClick = onAction,
+                        colors = KaiShelvesThemeDefaults.primaryButtonColors()
+                    ) {
+                        Text(text = actionLabel)
+                    }
+                } else {
+                    TextButton(onClick = onAction) {
+                        Text(text = actionLabel, color = Color(0xFF66D6D6))
+                    }
                 }
             }
         }
@@ -635,7 +673,7 @@ private fun FeedShelfActionRow(
     val selectedList = remember(uiState.availableLists, uiState.selectedListIds) {
         uiState.availableLists.firstOrNull { it.id in uiState.selectedListIds }
     }
-    val buttonLabel = selectedList?.name ?: stringResource(R.string.want_to_read)
+    val buttonLabel = selectedList?.localizedName() ?: stringResource(R.string.want_to_read)
     val isAddedToShelf = selectedList != null
     val buttonColor = if (isAddedToShelf) {
         BloodWine.copy(alpha = 0.72f)
@@ -970,7 +1008,7 @@ private fun FeedShelfOptionRow(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = list.name,
+                text = list.localizedName(),
                 color = OldIvory,
                 style = MaterialTheme.typography.titleMedium
             )

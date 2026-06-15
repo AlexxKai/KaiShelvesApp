@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -33,6 +35,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +50,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
+import com.example.kaishelvesapp.data.repository.BookRepository.DiscoverCatalogMode
 import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.BookShelfActions
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
@@ -89,7 +92,8 @@ fun CatalogScreen(
     onBookClick: (Libro) -> Unit = {},
     pendingRequestCount: Int = 0,
     onOpenNotifications: () -> Unit = {},
-    onSectionSelected: (KaiSection) -> Unit
+    onSectionSelected: (KaiSection) -> Unit,
+    onOpenScanner: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var viewMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(CatalogViewMode.DETAILED) }
@@ -136,6 +140,7 @@ fun CatalogScreen(
                         viewModel.ejecutarBusqueda()
                     },
                     onScanResult = viewModel::buscarPorIsbn,
+                    onOpenScanner = onOpenScanner,
                     onOpenMenu = { scope.launch { drawerState.open() } },
                     notificationCount = pendingRequestCount,
                     onOpenNotifications = onOpenNotifications
@@ -169,6 +174,13 @@ fun CatalogScreen(
                         .fillMaxSize()
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
+                    DiscoverModeSelector(
+                        selectedMode = uiState.discoverMode,
+                        onModeSelected = viewModel::onDiscoverModeSelected
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     when {
                         uiState.isLoading -> {
                             CatalogMessageBox {
@@ -179,7 +191,7 @@ fun CatalogScreen(
                         uiState.errorMessage != null -> {
                             CatalogMessageBox {
                                 Text(
-                                    text = uiState.errorMessage ?: "Error desconocido",
+                                    text = uiState.errorMessage ?: stringResource(R.string.catalog_unknown_error),
                                     color = MaterialTheme.colorScheme.error,
                                     textAlign = TextAlign.Center
                                 )
@@ -240,6 +252,41 @@ fun CatalogScreen(
 }
 
 @Composable
+private fun DiscoverModeSelector(
+    selectedMode: DiscoverCatalogMode,
+    onModeSelected: (DiscoverCatalogMode) -> Unit
+) {
+    val modes = listOf(
+        DiscoverCatalogMode.SPECIAL,
+        DiscoverCatalogMode.CURRENT,
+        DiscoverCatalogMode.TOP_RATED,
+        DiscoverCatalogMode.KNOWN_AUTHORS
+    )
+
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(modes, key = { mode -> mode.cacheKey }) { mode ->
+            FilterChip(
+                selected = selectedMode == mode,
+                onClick = { onModeSelected(mode) },
+                label = {
+                    Text(
+                        text = when (mode) {
+                            DiscoverCatalogMode.SPECIAL -> stringResource(R.string.discover_mode_special)
+                            DiscoverCatalogMode.CURRENT -> stringResource(R.string.discover_mode_current)
+                            DiscoverCatalogMode.TOP_RATED -> stringResource(R.string.discover_mode_top_rated)
+                            DiscoverCatalogMode.KNOWN_AUTHORS -> stringResource(R.string.discover_mode_known_authors)
+                        }
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
 private fun CatalogViewFab(
     compactSelected: Boolean,
     onToggleCompact: (Boolean) -> Unit
@@ -251,7 +298,11 @@ private fun CatalogViewFab(
     ) {
         Icon(
             imageVector = if (compactSelected) Icons.Filled.ViewModule else Icons.Filled.ViewAgenda,
-            contentDescription = if (compactSelected) "Cambiar a vista detalle" else "Cambiar a vista portadas",
+            contentDescription = if (compactSelected) {
+                stringResource(R.string.catalog_switch_to_detail_view)
+            } else {
+                stringResource(R.string.catalog_switch_to_cover_view)
+            },
             tint = TarnishedGold
         )
     }

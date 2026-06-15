@@ -7,6 +7,7 @@ import com.example.kaishelvesapp.data.help.HelpChatMessage
 import com.example.kaishelvesapp.data.help.HelpMessageAuthor
 import com.example.kaishelvesapp.data.help.HelpScreenContext
 import com.example.kaishelvesapp.data.repository.HelpChatRepository
+import com.example.kaishelvesapp.ui.language.LanguageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,7 +44,7 @@ class HelpChatViewModel(
                     HelpChatMessage(
                         id = nextMessageId++,
                         author = HelpMessageAuthor.ASSISTANT,
-                        text = "Hola, soy la ayuda de KaiShelves. Dime que necesitas hacer en esta pantalla y te guio paso a paso.",
+                        text = localizedInitialMessage(),
                         suggestedAction = state.screenContext.availableActions.firstOrNull(),
                         confidence = 1f
                     )
@@ -115,7 +116,7 @@ class HelpChatViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = error.message ?: "No se pudo conectar con la ayuda."
+                            errorMessage = error.message ?: localizedConnectionError()
                         )
                     }
                 }
@@ -140,10 +141,37 @@ class HelpChatViewModel(
 }
 
 fun defaultHelpScreenContext(): HelpScreenContext {
+    val spanish = LanguageManager.getCurrentLanguage() == "es"
     return HelpScreenContext(
         route = "unknown",
         screenName = "KaiShelves",
-        description = "Pantalla general de la aplicacion.",
-        availableActions = listOf("Abre el menu lateral para cambiar de seccion.")
+        description = if (spanish) {
+            "Pantalla general de la aplicación."
+        } else {
+            "General app screen."
+        },
+        availableActions = listOf(
+            if (spanish) {
+                "Abre el menú lateral para cambiar de sección."
+            } else {
+                "Open the side menu to change sections."
+            }
+        )
     )
+}
+
+private fun localizedInitialMessage(): String {
+    return if (LanguageManager.getCurrentLanguage() == "es") {
+        "Hola, soy la ayuda de Kai Shelves. Dime qué necesitas hacer en esta pantalla y te guío paso a paso."
+    } else {
+        "Hi, I'm Kai Shelves Help. Tell me what you need on this screen and I'll guide you step by step."
+    }
+}
+
+private fun localizedConnectionError(): String {
+    return if (LanguageManager.getCurrentLanguage() == "es") {
+        "No se pudo conectar con la ayuda."
+    } else {
+        "Could not connect to Help."
+    }
 }

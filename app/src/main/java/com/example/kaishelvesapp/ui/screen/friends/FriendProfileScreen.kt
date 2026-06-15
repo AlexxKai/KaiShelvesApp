@@ -1,12 +1,11 @@
-package com.example.kaishelvesapp.ui.screen.friends
+﻿package com.example.kaishelvesapp.ui.screen.friends
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,11 +25,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Groups
@@ -62,12 +63,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,27 +79,29 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.kaishelvesapp.R
 import com.example.kaishelvesapp.data.model.Libro
-import com.example.kaishelvesapp.data.model.LibroLeido
 import com.example.kaishelvesapp.data.model.Usuario
 import com.example.kaishelvesapp.data.repository.ActivityComment
 import com.example.kaishelvesapp.data.repository.FriendActivityItem
-import com.example.kaishelvesapp.data.repository.FriendShelfBookItem
-import com.example.kaishelvesapp.data.repository.FriendShelfPreview
 import com.example.kaishelvesapp.data.repository.FriendActivityType
 import com.example.kaishelvesapp.data.repository.FriendProfileData
-import com.example.kaishelvesapp.ui.components.BookCover
+import com.example.kaishelvesapp.data.repository.FriendShelfBookItem
+import com.example.kaishelvesapp.data.repository.FriendShelfPreview
+import com.example.kaishelvesapp.data.security.ProfileImageCodec
 import com.example.kaishelvesapp.ui.components.ActivitySocialActions
+import com.example.kaishelvesapp.ui.components.BookCover
 import com.example.kaishelvesapp.ui.components.GothicBackground
 import com.example.kaishelvesapp.ui.components.KaiBottomBar
-import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.components.KaiSection
-import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.components.KaiUserAvatar
+import com.example.kaishelvesapp.ui.components.LocalAdminUiAccess
+import com.example.kaishelvesapp.ui.components.RatingStars
 import com.example.kaishelvesapp.ui.theme.BloodWine
 import com.example.kaishelvesapp.ui.theme.DeepWalnut
+import com.example.kaishelvesapp.ui.theme.KaiShelvesThemeDefaults
 import com.example.kaishelvesapp.ui.theme.Obsidian
 import com.example.kaishelvesapp.ui.theme.OldIvory
 import com.example.kaishelvesapp.ui.theme.TarnishedGold
+import com.example.kaishelvesapp.ui.util.localizedName
 import com.example.kaishelvesapp.ui.viewmodel.FriendProfileViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -121,6 +125,7 @@ fun FriendProfileScreen(
     onSectionSelected: (KaiSection) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isAdminUser = LocalAdminUiAccess.current
 
     LaunchedEffect(friendUid) {
         viewModel.loadProfile(friendUid)
@@ -173,6 +178,7 @@ fun FriendProfileScreen(
                             isRespondingRequest = uiState.isRespondingRequest,
                             isBlockingMember = uiState.isBlockingMember,
                             isSubmittingReport = uiState.isSubmittingReport,
+                            isAdminUser = isAdminUser,
                             onRemoveFriend = {
                                 viewModel.removeFriend(friendUid) {
                                     onFriendshipChanged()
@@ -205,6 +211,7 @@ fun FriendProfileScreen(
                                 }
                             },
                             onSubmitReport = viewModel::submitReport,
+                            onOpenAdminReview = viewModel::openAdminReportReview,
                             onOpenFriendLists = onOpenFriendLists,
                             onOpenFriendProfile = onOpenFriendProfile,
                             onOpenBook = onOpenBook,
@@ -213,7 +220,9 @@ fun FriendProfileScreen(
                             socialActionIds = uiState.socialActionIds,
                             onToggleLike = viewModel::toggleLike,
                             onLoadComments = viewModel::loadComments,
-                            onAddComment = viewModel::addComment
+                            onAddComment = viewModel::addComment,
+                            onToggleCommentLike = viewModel::toggleCommentLike,
+                            onReplyToComment = viewModel::replyToComment
                         )
                     }
 
@@ -348,6 +357,7 @@ fun FriendProfileContent(
     isRespondingRequest: Boolean = false,
     isBlockingMember: Boolean = false,
     isSubmittingReport: Boolean = false,
+    isAdminUser: Boolean = false,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onCancelSentFriendRequest: () -> Unit = {},
@@ -355,6 +365,7 @@ fun FriendProfileContent(
     onRejectFriendRequest: () -> Unit = {},
     onBlockMember: () -> Unit = {},
     onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
+    onOpenAdminReview: (String, String, List<String>, () -> Unit) -> Unit = { _, _, _, _ -> },
     onOpenFriendLists: (String, String) -> Unit,
     onOpenFriendProfile: (String) -> Unit,
     onOpenBook: (Libro) -> Unit,
@@ -364,6 +375,8 @@ fun FriendProfileContent(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     deletingActivityIds: Set<String> = emptySet(),
     onDeleteActivityUpdate: (String) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -400,13 +413,15 @@ fun FriendProfileContent(
                 isRespondingRequest = isRespondingRequest,
                 isBlockingMember = isBlockingMember,
                 isSubmittingReport = isSubmittingReport,
+                isAdminUser = isAdminUser,
                 onRemoveFriend = onRemoveFriend,
                 onSendFriendRequest = onSendFriendRequest,
                 onCancelSentFriendRequest = onCancelSentFriendRequest,
                 onAcceptFriendRequest = onAcceptFriendRequest,
                 onRejectFriendRequest = onRejectFriendRequest,
                 onBlockMember = onBlockMember,
-                onSubmitReport = onSubmitReport
+                onSubmitReport = onSubmitReport,
+                onOpenAdminReview = onOpenAdminReview
             )
         }
         Spacer(modifier = Modifier.height(18.dp))
@@ -446,6 +461,8 @@ fun FriendProfileContent(
                 onToggleLike = onToggleLike,
                 onLoadComments = onLoadComments,
                 onAddComment = onAddComment,
+                onToggleCommentLike = onToggleCommentLike,
+                onReplyToComment = onReplyToComment,
                 deletingActivityIds = deletingActivityIds,
                 onDeleteActivityUpdate = onDeleteActivityUpdate,
                 showActivityDeleteActions = showActivityDeleteActions,
@@ -501,6 +518,11 @@ private fun FriendProfileHero(
                 color = OldIvory
             )
 
+            if (profile.user.isAdmin) {
+                Spacer(modifier = Modifier.height(10.dp))
+                AdminProfileBadge()
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
@@ -509,6 +531,38 @@ private fun FriendProfileHero(
                 color = OldIvory.copy(alpha = 0.9f)
             )
         }
+    }
+}
+
+@Composable
+private fun AdminProfileBadge() {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        TarnishedGold.copy(alpha = 0.28f),
+                        BloodWine.copy(alpha = 0.54f)
+                    )
+                )
+            )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.AdminPanelSettings,
+            contentDescription = null,
+            tint = TarnishedGold,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = stringResource(R.string.admin_badge),
+            style = MaterialTheme.typography.labelMedium,
+            color = TarnishedGold,
+            maxLines = 1
+        )
     }
 }
 
@@ -522,19 +576,23 @@ private fun FriendProfileMenuRow(
     isRespondingRequest: Boolean,
     isBlockingMember: Boolean,
     isSubmittingReport: Boolean,
+    isAdminUser: Boolean,
     onRemoveFriend: () -> Unit,
     onSendFriendRequest: () -> Unit,
     onCancelSentFriendRequest: () -> Unit,
     onAcceptFriendRequest: () -> Unit,
     onRejectFriendRequest: () -> Unit,
     onBlockMember: () -> Unit,
-    onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit
+    onSubmitReport: (String, String, List<String>, () -> Unit) -> Unit,
+    onOpenAdminReview: (String, String, List<String>, () -> Unit) -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
     var showRemoveDialog by remember { mutableStateOf(false) }
     var showBlockDialog by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
+    var showAdminReviewDialog by remember { mutableStateOf(false) }
     var showReportSuccessDialog by remember { mutableStateOf(false) }
+    var showAdminReviewSuccessDialog by remember { mutableStateOf(false) }
 
     if (showRemoveDialog) {
         AlertDialog(
@@ -614,12 +672,27 @@ private fun FriendProfileMenuRow(
 
     if (showReportDialog) {
         ReportAccountDialog(
+            title = stringResource(R.string.report_account),
             isSubmitting = isSubmittingReport,
             onDismiss = { showReportDialog = false },
             onSubmit = { subject, message, photoUris ->
                 onSubmitReport(subject, message, photoUris) {
                     showReportDialog = false
                     showReportSuccessDialog = true
+                }
+            }
+        )
+    }
+
+    if (showAdminReviewDialog) {
+        ReportAccountDialog(
+            title = stringResource(R.string.admin_open_review),
+            isSubmitting = isSubmittingReport,
+            onDismiss = { showAdminReviewDialog = false },
+            onSubmit = { subject, message, photoUris ->
+                onOpenAdminReview(subject, message, photoUris) {
+                    showAdminReviewDialog = false
+                    showAdminReviewSuccessDialog = true
                 }
             }
         )
@@ -644,6 +717,27 @@ private fun FriendProfileMenuRow(
             textContentColor = OldIvory.copy(alpha = 0.9f)
         )
     }
+
+    if (showAdminReviewSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdminReviewSuccessDialog = false },
+            title = {
+                Text(text = stringResource(R.string.admin_review_created_title))
+            },
+            text = {
+                Text(text = stringResource(R.string.admin_review_created_message))
+            },
+            confirmButton = {
+                TextButton(onClick = { showAdminReviewSuccessDialog = false }) {
+                    Text(text = stringResource(R.string.ok))
+                }
+            },
+            containerColor = Obsidian,
+            titleContentColor = OldIvory,
+            textContentColor = OldIvory.copy(alpha = 0.9f)
+        )
+    }
+
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -760,6 +854,20 @@ private fun FriendProfileMenuRow(
                 onDismissRequest = { showMoreMenu = false },
                 containerColor = Obsidian
             ) {
+                if (isAdminUser) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(R.string.admin_open_review),
+                                color = OldIvory
+                            )
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            showAdminReviewDialog = true
+                        }
+                    )
+                }
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -791,10 +899,12 @@ private fun FriendProfileMenuRow(
 
 @Composable
 private fun ReportAccountDialog(
+    title: String,
     isSubmitting: Boolean,
     onDismiss: () -> Unit,
     onSubmit: (String, String, List<String>) -> Unit
 ) {
+    val context = LocalContext.current
     var subject by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var photoUris by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -812,7 +922,7 @@ private fun ReportAccountDialog(
             }
         },
         title = {
-            Text(text = stringResource(R.string.report_account))
+            Text(text = title)
         },
         text = {
             Column(
@@ -852,7 +962,18 @@ private fun ReportAccountDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSubmit(subject, message, photoUris) },
+                onClick = {
+                    val encodedPhotos = photoUris.mapNotNull { photoUri ->
+                        runCatching {
+                            if (photoUri.startsWith("content://")) {
+                                ProfileImageCodec.encodeImageAsDataUri(context, Uri.parse(photoUri))
+                            } else {
+                                photoUri
+                            }
+                        }.getOrNull()
+                    }
+                    onSubmit(subject, message, encodedPhotos)
+                },
                 enabled = canSubmit
             ) {
                 Text(text = stringResource(R.string.send))
@@ -959,7 +1080,7 @@ private fun FriendShelfRow(
         modifier = Modifier.width(rowWidth)
     ) {
         Text(
-            text = shelf.title,
+            text = shelf.localizedName(),
             style = MaterialTheme.typography.titleMedium,
             color = OldIvory
         )
@@ -1208,6 +1329,8 @@ private fun UpdatesSection(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     deletingActivityIds: Set<String>,
     onDeleteActivityUpdate: (String) -> Unit,
     showActivityDeleteActions: Boolean,
@@ -1239,6 +1362,8 @@ private fun UpdatesSection(
                         onToggleLike = onToggleLike,
                         onLoadComments = onLoadComments,
                         onAddComment = onAddComment,
+                        onToggleCommentLike = onToggleCommentLike,
+                        onReplyToComment = onReplyToComment,
                         isDeleting = item.id in deletingActivityIds,
                         canDelete = showActivityDeleteActions,
                         onDeleteActivityUpdate = onDeleteActivityUpdate,
@@ -1259,6 +1384,8 @@ private fun UpdateItem(
     onToggleLike: (String) -> Unit,
     onLoadComments: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onToggleCommentLike: (String, String) -> Unit,
+    onReplyToComment: (String, String, String) -> Unit,
     isDeleting: Boolean,
     canDelete: Boolean,
     onDeleteActivityUpdate: (String) -> Unit,
@@ -1420,7 +1547,9 @@ private fun UpdateItem(
                     isSaving = isSocialActionRunning,
                     onToggleLike = onToggleLike,
                     onLoadComments = onLoadComments,
-                    onAddComment = onAddComment
+                    onAddComment = onAddComment,
+                    onToggleCommentLike = onToggleCommentLike,
+                    onReplyToComment = onReplyToComment
                 )
             }
         }
@@ -1582,3 +1711,4 @@ private fun formatActivityTimestamp(timestampMillis: Long?): String {
             }
     }
 }
+

@@ -1,4 +1,4 @@
-package com.example.kaishelvesapp.ui.screen.friends
+﻿package com.example.kaishelvesapp.ui.screen.friends
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -481,3 +481,4 @@ private fun friendMetadata(friend: FriendListItem): String {
     }
     return "$booksLabel • $friendsLabel"
 }
+

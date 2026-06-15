@@ -164,6 +164,27 @@ class UserListsViewModel(
         }
     }
 
+    fun deleteTag(tagId: String) {
+        _uiState.value = _uiState.value.copy(
+            isLoading = true,
+            errorMessageRes = null,
+            successMessageRes = null
+        )
+
+        viewModelScope.launch {
+            repository.deleteTag(tagId)
+                .onSuccess {
+                    fetchLists(successMessageRes = R.string.tag_deleted)
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessageRes = R.string.tag_delete_error
+                    )
+                }
+        }
+    }
+
     fun moveList(listId: String, moveUp: Boolean) {
         val currentLists = _uiState.value.lists
         val currentIndex = currentLists.indexOfFirst { it.id == listId }
